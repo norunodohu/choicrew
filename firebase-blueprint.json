@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "search_id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["manager", "staff"] },
+        "current_role": { "type": "string", "enum": ["manager", "staff"] },
+        "share_token": { "type": "string" },
+        "accept_requests": { "type": "boolean" },
+        "notification_pref": { "type": "string", "enum": ["none", "email", "line", "both"] },
+        "line_user_id": { "type": "string" },
+        "default_start": { "type": "string" },
+        "default_end": { "type": "string" }
+      },
+      "required": ["uid", "name", "role", "current_role"]
+    },
+    "Availability": {
+      "title": "Availability",
+      "description": "Staff availability slot",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "user_name": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "start_time": { "type": "string" },
+        "end_time": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "pending", "confirmed"] },
+        "note": { "type": "string" },
+        "is_private_note": { "type": "boolean" }
+      },
+      "required": ["user_id", "date", "start_time", "end_time", "status"]
+    },
+    "ShiftRequest": {
+      "title": "ShiftRequest",
+      "description": "Request for a shift",
+      "type": "object",
+      "properties": {
+        "staff_id": { "type": "string" },
+        "staff_name": { "type": "string" },
+        "manager_id": { "type": "string" },
+        "manager_name": { "type": "string" },
+        "availability_id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "start_time": { "type": "string" },
+        "end_time": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "canceled"] }
+      },
+      "required": ["staff_id", "manager_id", "date", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": { "schema": "UserProfile", "description": "User profiles" },
+    "/availabilities/{id}": { "schema": "Availability", "description": "Availability slots" },
+    "/requests/{id}": { "schema": "ShiftRequest", "description": "Shift requests" },
+    "/connections/{id}": { "schema": "object", "description": "User connections" },
+    "/notifications/{id}": { "schema": "object", "description": "User notifications" },
+    "/presets/{id}": { "schema": "object", "description": "User presets" }
+  }
+}

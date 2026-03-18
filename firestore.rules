@@ -1,0 +1,96 @@
+// ファイル名: firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.user_id;
+    }
+    function isManagerOf(staffId) {
+      return isAuthenticated() && (exists(/databases/$(database)/documents/connections/$(request.auth.uid + '_' + staffId)) || exists(/databases/$(database)/documents/connections/$(staffId + '_' + request.auth.uid)));
+    }
+
+    // Data Validation Helpers
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'name', 'role', 'current_role']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role in ['manager', 'staff'] &&
+             data.current_role in ['manager', 'staff'];
+    }
+
+    function isValidAvailability(data) {
+      return data.keys().hasAll(['user_id', 'date', 'start_time', 'end_time', 'status']) &&
+             data.user_id is string &&
+             data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
+             data.start_time is string && data.start_time.matches('^\\d{2}:\\d{2}$') &&
+             data.end_time is string && data.end_time.matches('^\\d{2}:\\d{2}$') &&
+             data.status in ['open', 'pending', 'confirmed'];
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "nekometaro@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // Helper to check if migration is authorized (both accounts linked to same LINE ID)
+    function isAuthorizedMigration(oldUid) {
+      return isAuthenticated() && 
+             get(/databases/$(database)/documents/users/$(oldUid)).data.line_user_id != null &&
+             get(/databases/$(database)/documents/users/$(oldUid)).data.line_user_id == 
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.line_user_id;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{uid} {
+      // Allow unauthenticated read for public view (searching by share_token)
+      allow read: if true; 
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin() || isAuthorizedMigration(uid);
+      allow delete: if isOwner(uid) || isAdmin() || isAuthorizedMigration(uid);
+    }
+
+    match /availabilities/{id} {
+      // Allow unauthenticated read for public view
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update: if isAuthenticated() && (resource.data.user_id == request.auth.uid || isManagerOf(resource.data.user_id) || isAdmin() || isAuthorizedMigration(resource.data.user_id));
+      allow delete: if isAuthenticated() && (resource.data.user_id == request.auth.uid || isAdmin());
+    }
+
+    match /requests/{id} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.manager_id || request.auth.uid == resource.data.staff_id || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.staff_id == request.auth.uid || request.resource.data.manager_id == request.auth.uid);
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.manager_id || request.auth.uid == resource.data.staff_id || isAdmin() || isAuthorizedMigration(resource.data.staff_id) || isAuthorizedMigration(resource.data.manager_id));
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.manager_id || request.auth.uid == resource.data.staff_id || isAdmin());
+    }
+
+    match /connections/{id} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.user1_id || request.auth.uid == resource.data.user2_id || isAdmin());
+      allow create: if isAuthenticated() && (request.resource.data.user1_id == request.auth.uid || request.resource.data.user2_id == request.auth.uid);
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.user1_id || request.auth.uid == resource.data.user2_id || isAdmin() || isAuthorizedMigration(resource.data.user1_id) || isAuthorizedMigration(resource.data.user2_id));
+    }
+
+    match /notifications/{id} {
+      allow read, update, delete: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin() || isAuthorizedMigration(resource.data.user_id));
+      allow create: if isAuthenticated();
+    }
+
+    match /presets/{id} {
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
+      allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin() || isAuthorizedMigration(resource.data.user_id));
+    }
+  }
+}
