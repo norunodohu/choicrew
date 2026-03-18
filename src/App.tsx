@@ -58,6 +58,7 @@ import firebaseConfig from '../firebase-applet-config.json';
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 const auth = getAuth(app);
+const CHOICREW_LOGO = "/choicrew-logo.svg";
 
 // Error Handling
 enum OperationType {
@@ -657,10 +658,11 @@ export default function App() {
           className="w-full max-w-md space-y-12 text-center"
         >
           <div className="space-y-4">
-            <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl shadow-blue-200 rotate-12">
-              <Calendar size={48} className="text-white" />
-            </div>
-            <h1 className="text-5xl font-black tracking-tighter text-gray-900">choicrew</h1>
+            <img
+              src={CHOICREW_LOGO}
+              alt="choicrew logo"
+              className="w-full max-w-[320px] mx-auto drop-shadow-[0_24px_40px_rgba(37,99,235,0.16)]"
+            />
 <p className="text-xl text-gray-500 font-medium">
 空き時間で、仲間をサポート。<br/>スキマ時間を楽しく活用
 </p>
@@ -695,9 +697,11 @@ export default function App() {
       <div className="min-h-screen bg-[#F8FAFC] p-6 lg:p-12">
         <div className="max-w-2xl mx-auto space-y-8">
           <div className="flex items-center gap-6">
-            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center shadow-xl shadow-blue-100">
-              <Calendar size={40} className="text-white" />
-            </div>
+            <img
+              src={CHOICREW_LOGO}
+              alt="choicrew logo"
+              className="w-28 shrink-0 drop-shadow-[0_18px_32px_rgba(37,99,235,0.14)]"
+            />
             <div>
               <h1 className="text-3xl font-black tracking-tight">{publicUser.name}さんの予定</h1>
               <p className="text-gray-500 font-medium">空き時間を確認して依頼を送りましょう</p>
@@ -747,11 +751,12 @@ export default function App() {
     <div className="min-h-screen bg-[#F8FAFC] text-gray-900 font-sans">
       {/* Sidebar Desktop */}
       <aside className="fixed left-0 top-0 bottom-0 w-72 bg-white border-r border-gray-100 hidden lg:flex flex-col p-8 z-20">
-        <div className="flex items-center gap-3 mb-12">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-100">
-            <Calendar size={20} className="text-white" />
-          </div>
-          <span className="text-2xl font-black tracking-tighter">choicrew</span>
+        <div className="mb-12">
+          <img
+            src={CHOICREW_LOGO}
+            alt="choicrew logo"
+            className="w-full max-w-[190px]"
+          />
         </div>
 
         <nav className="space-y-2 flex-1">
