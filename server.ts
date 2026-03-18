@@ -38,38 +38,33 @@ app.get("/api/health", (req, res) => {
 app.get("/api/auth/line/url", (req, res) => {
   const clientId = process.env.LINE_CLIENT_ID;
   const clientSecret = process.env.LINE_CLIENT_SECRET;
-  const appUrl = (process.env.APP_URL || "").replace(/\/$/, ""); // Normalize: remove trailing slash
+  const appUrl = (process.env.APP_URL || "").trim().replace(/\/$/, ""); 
 
   if (!clientId || !clientSecret || !appUrl) {
-    console.error("Environment variables missing:", { clientId: !!clientId, clientSecret: !!clientSecret, appUrl: !!appUrl });
-    return res.status(500).json({ 
-      error: "Environment variables are missing", 
-      debug: {
-        LINE_CLIENT_ID: clientId || "MISSING",
-        LINE_CLIENT_SECRET: clientSecret ? "SET (HIDDEN FOR SAFETY)" : "MISSING",
-        APP_URL: appUrl || "MISSING"
-      }
-    });
+    return res.status(500).json({ error: "Environment variables missing" });
   }
 
-  const baseUrl = appUrl;
-  const redirectUri = encodeURIComponent(`${baseUrl}/api/auth/line/callback`);
+  const redirectUri = `${appUrl}/api/auth/line/callback`;
   const state = Math.random().toString(36).substring(7);
-  const scope = "profile openid email";
+  const scope = "profile openid";
   
-  const url = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirectUri}&state=${state}&scope=${scope}`;
-  res.json({ url, debug: { clientId, appUrl, redirectUri: decodeURIComponent(redirectUri) } });
+  const url = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${scope}`;
+  res.json({ url });
 });
 
 app.get("/api/auth/line/callback", async (req, res) => {
   const { code } = req.query;
   const clientId = process.env.LINE_CLIENT_ID;
   const clientSecret = process.env.LINE_CLIENT_SECRET;
-  
-  const baseUrl = (process.env.APP_URL || "").replace(/\/$/, ""); // Normalize: remove trailing slash
-  const redirectUri = `${baseUrl}/api/auth/line/callback`;
+  const appUrl = (process.env.APP_URL || "").trim().replace(/\/$/, "");
+  const redirectUri = `${appUrl}/api/auth/line/callback`;
 
-  console.log("LINE Callback received:", { code: !!code, redirectUri });
+  console.log("LINE Callback Debug:", { 
+    hasCode: !!code, 
+    clientId, 
+    redirectUri,
+    appUrlFromEnv: process.env.APP_URL 
+  });
 
   try {
     if (!code) throw new Error("No code received from LINE");
