@@ -658,7 +658,7 @@ export default function App() {
         >
           <div className="space-y-4">
             <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl shadow-blue-200 rotate-12">
-a
+<img src="logo.png">
             </div>
             <h1 className="text-5xl font-black tracking-tighter text-gray-900">choicrew</h1>
 <p className="text-xl text-gray-500 font-medium">
