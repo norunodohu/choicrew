@@ -193,6 +193,24 @@ interface Preset {
   end: string;
 }
 
+type LineNotificationReason =
+  | "delivered"
+  | "config_missing"
+  | "line_user_missing"
+  | "invalid_token"
+  | "not_authorized"
+  | "not_following_or_blocked"
+  | "profile_not_found"
+  | "push_failed"
+  | "network_error";
+
+interface LineNotificationResult {
+  success: boolean;
+  reason: LineNotificationReason;
+  details?: string;
+  raw?: unknown;
+}
+
 // Components
 const Card = ({
   children,
@@ -334,18 +352,77 @@ export default function App() {
     });
   };
 
-  const sendLineNotification = async (lineUserId: string | undefined, message: string) => {
-    if (!lineUserId) return;
-    const response = await fetch("/api/notify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lineUserId, message })
-    });
-    if (!response.ok) {
-      const data = await response.json().catch(() => null);
-      console.warn("LINE notification failed:", JSON.stringify(data || { statusText: response.statusText }));
-      return;
+  const sendLineNotification = async (lineUserId: string | undefined, message: string): Promise<LineNotificationResult> => {
+    if (!lineUserId) {
+      return {
+        success: false,
+        reason: "line_user_missing",
+        details: "受信側がLINE未連携のため通知していません。",
+      };
     }
+
+    try {
+      const response = await fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lineUserId, message })
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || data?.success === false) {
+        const reason = (data?.reason as LineNotificationReason | undefined) || "push_failed";
+        const details = typeof data?.details === "string" ? data.details : response.statusText;
+        console.warn("LINE notification failed:", JSON.stringify(data || { statusText: response.statusText }));
+        return {
+          success: false,
+          reason,
+          details,
+          raw: data,
+        };
+      }
+      return {
+        success: true,
+        reason: (data?.reason as LineNotificationReason | undefined) || "delivered",
+        details: typeof data?.details === "string" ? data.details : "公式LINEから通知しました。",
+        raw: data,
+      };
+    } catch (error: unknown) {
+      console.warn("LINE notification failed:", error);
+      return {
+        success: false,
+        reason: "network_error",
+        details: "通知処理の通信に失敗したため送れませんでした。",
+        raw: error,
+      };
+    }
+  };
+
+  const describeLineNotificationResult = (result: LineNotificationResult) => {
+    switch (result.reason) {
+      case "delivered":
+        return "公式LINEから通知しました。";
+      case "config_missing":
+      case "invalid_token":
+        return "公式LINEの設定不足で通知できませんでした。";
+      case "line_user_missing":
+        return "受信側がLINE未連携のため通知していません。";
+      case "not_authorized":
+        return "公式LINEの権限不足で通知できませんでした。";
+      case "not_following_or_blocked":
+        return "公式LINEはありますが、友だち追加されていないか、ブロックされています。";
+      case "profile_not_found":
+        return "通知先のLINEユーザーが見つからないため送れませんでした。";
+      case "push_failed":
+        return "公式LINEから通知できませんでした。";
+      case "network_error":
+      default:
+        return "通知処理の通信に失敗したため送れませんでした。";
+    }
+  };
+
+  const buildLineNotificationAlert = (result: LineNotificationResult) => {
+    const statusLine = result.success ? "LINE通知: 送信できました。" : `LINE通知: ${describeLineNotificationResult(result)}`;
+    const detailsLine = result.details && !statusLine.includes(result.details) ? `\n${result.details}` : "";
+    return `${statusLine}${detailsLine}`;
   };
 
   useEffect(() => {
@@ -773,14 +850,18 @@ export default function App() {
       );
 
       if (staffData?.line_user_id) {
-        await sendLineNotification(
+        const lineResult = await sendLineNotification(
           staffData.line_user_id,
           `${currentUser.name}さんから依頼が届きました。\n${availability.date} ${availability.start_time}-${availability.end_time}`
         );
+        alert(`依頼を送信しました。\n${buildLineNotificationAlert(lineResult)}`);
+      } else {
+        alert(`依頼を送信しました。\nLINE通知: ${describeLineNotificationResult({
+          success: false,
+          reason: "line_user_missing",
+        })}`);
       }
-
       console.log("request created:", requestRef.id);
-      alert("依頼を送信しました。");
     } catch (e: unknown) {
       console.error(e);
     }
@@ -815,13 +896,17 @@ export default function App() {
       request.date
     );
 
+    let lineResult: LineNotificationResult = {
+      success: false,
+      reason: "line_user_missing",
+    };
     if (managerData?.line_user_id) {
-      await sendLineNotification(
+      lineResult = await sendLineNotification(
         managerData.line_user_id,
         `${currentUser.name}さんが依頼を承認しました。\n${request.date} ${request.start_time}-${request.end_time}`
       );
     }
-    alert("承認しました。");
+    alert(`承認しました。\n${buildLineNotificationAlert(lineResult)}`);
   };
 
   const handleRejectRequest = async (request: ShiftRequest) => {
@@ -838,13 +923,17 @@ export default function App() {
       request.date
     );
 
+    let lineResult: LineNotificationResult = {
+      success: false,
+      reason: "line_user_missing",
+    };
     if (managerData?.line_user_id) {
-      await sendLineNotification(
+      lineResult = await sendLineNotification(
         managerData.line_user_id,
         `${currentUser.name}さんが依頼を削除しました。\n${request.date} ${request.start_time}-${request.end_time}`
       );
     }
-    alert("削除しました。");
+    alert(`削除しました。\n${buildLineNotificationAlert(lineResult)}`);
   };
 
   const handleRefreshShareToken = async () => {
