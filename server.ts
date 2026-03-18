@@ -89,7 +89,7 @@ app.get("/api/auth/line/callback", async (req, res) => {
       headers: { Authorization: `Bearer ${tokenResponse.data.access_token}` }
     });
 
-    const profile = profileResponse.data;
+    const profile = profileResponse.data || {};
 
     res.send(`
       <html>

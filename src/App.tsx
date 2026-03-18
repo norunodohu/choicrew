@@ -392,11 +392,11 @@ export default function App() {
     }
 
     const lineUserParam = urlParams.get('line_user');
-    if (lineUserParam) {
+    if (lineUserParam && lineUserParam !== "undefined") {
       try {
         processLineProfile(JSON.parse(decodeURIComponent(lineUserParam)));
-      } catch {
-        // Ignore JSON parse error
+      } catch (err) {
+        console.error("Failed to parse line_user param:", err);
       }
     }
 
