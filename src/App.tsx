@@ -421,7 +421,7 @@ export default function App() {
             const newProfile: UserProfile = {
               uid: user.uid,
               search_id: user.uid.slice(0, 8),
-              name: user.displayName || (user.isAnonymous ? "繧ｲ繧ｹ繝医Θ繝ｼ繧ｶ繝ｼ" : "繧ｯ繝ｫ繝ｼ"),
+              name: user.displayName || (user.isAnonymous ? "ゲストユーザー" : "クルー"),
               email: user.email || "",
               role: "staff",
               current_role: "staff",
@@ -800,7 +800,7 @@ export default function App() {
               className="w-full max-w-[320px] mx-auto drop-shadow-[0_24px_40px_rgba(37,99,235,0.16)]"
             />
 <p className="text-xl text-gray-500 font-medium">
-遨ｺ縺肴凾髢薙〒縲∽ｻｲ髢薙ｒ繧ｵ繝昴・繝医・br/>繧ｹ繧ｭ繝樊凾髢薙ｒ讌ｽ縺励￥豢ｻ逕ｨ
+空いた時間で、予定をかんたんに共有できます。スケジュールを見やすく整理して使えます。
 </p>
           </div>
 
@@ -821,7 +821,7 @@ export default function App() {
           </div>
 
           <p className="text-sm text-gray-400">
-            繝ｭ繧ｰ繧､繝ｳ縺吶ｋ縺薙→縺ｧ縲・a href="#" className="underline">蛻ｩ逕ｨ隕冗ｴ・/a>縺ｨ<a href="#" className="underline">繝励Λ繧､繝舌す繝ｼ繝昴Μ繧ｷ繝ｼ</a>縺ｫ蜷梧э縺励◆縺薙→縺ｫ縺ｪ繧翫∪縺吶・
+            ログインすることで、利用規約とプライバシーポリシーに同意したことになります。
           </p>
         </motion.div>
       </div>
@@ -838,14 +838,14 @@ export default function App() {
               alt="ChoiCrew logo"
               className="w-28 shrink-0 drop-shadow-[0_18px_32px_rgba(37,99,235,0.14)]"
             />
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">{publicUser.name}縺輔ｓ縺ｮ莠亥ｮ・/h1>
-              <p className="text-gray-500 font-medium">遨ｺ縺肴凾髢薙ｒ遒ｺ隱阪＠縺ｦ萓晞ｼ繧帝√ｊ縺ｾ縺励ｇ縺・/p>
-            </div>
+              <div>
+                <h1 className="text-3xl font-black tracking-tight">{publicUser.name}さんの予定</h1>
+                <p className="text-gray-500 font-medium">空き時間を確認して、依頼を送れます。</p>
+              </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xl font-black">蜈ｬ髢倶ｸｭ縺ｮ遨ｺ縺肴凾髢・/h3>
+            <h3 className="text-xl font-black">公開中の空き時間</h3>
             <div className="grid gap-4">
               {availabilities.length > 0 ? (
                 availabilities.map(a => (
@@ -940,7 +940,7 @@ export default function App() {
               {view === "dashboard" ? "Overview" : view === "calendar" ? "Schedule" : "Preferences"}
             </h2>
             <h1 className="text-3xl font-black tracking-tight">
-              {view === "dashboard" ? "縺薙ｓ縺ｫ縺｡縺ｯ・・ : view === "calendar" ? "繧ｫ繝ｬ繝ｳ繝繝ｼ" : "險ｭ螳・}
+              {view === "dashboard" ? "ダッシュボード" : view === "calendar" ? "カレンダー" : "設定"}
             </h1>
           </div>
 
@@ -1097,7 +1097,7 @@ export default function App() {
                 {/* Today's Schedule */}
                 <div className="space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-2xl font-black tracking-tight">莉頑律縺ｮ莠亥ｮ・/h3>
+                    <h3 className="text-2xl font-black tracking-tight">今日の予定</h3>
                     <div className="flex gap-2">
                       {[0, 1, 2].map(offset => (
                         <button 
@@ -1135,9 +1135,9 @@ export default function App() {
                                       a.status === "pending" ? "bg-orange-500" : 
                                       a.status === "busy" ? "bg-red-900" : "bg-blue-500"
                                     }`}></span>
-                                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">
-                                      {a.status === "open" ? "遨ｺ縺・ : a.status === "pending" ? "繝ｪ繧ｯ繧ｨ繧ｹ繝井ｸｭ" : a.status === "confirmed" ? "遒ｺ螳・ : "莠亥ｮ壹≠繧・}
-                                    </p>
+                                  <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+                                    {a.status === "open" ? "空き" : a.status === "pending" ? "リクエスト中" : a.status === "confirmed" ? "確定" : "予定あり"}
+                                  </p>
                                     {a.note && <span className="text-xs text-gray-300 font-medium ml-2">| {a.note}</span>}
                                   </div>
                                 </div>
@@ -1171,7 +1171,7 @@ export default function App() {
               >
                 <Card className="lg:col-span-8 p-8">
                   <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-2xl font-black">{format(selectedDate, "yyyy蟷ｴ M譛・, { locale: ja })}</h3>
+                    <h3 className="text-2xl font-black">{format(selectedDate, "yyyy年 M月", { locale: ja })}</h3>
                     <div className="flex gap-2">
                       <button onClick={() => setSelectedDate(addDays(selectedDate, -7))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronLeft size={20}/></button>
                       <button onClick={() => setSelectedDate(addDays(selectedDate, 7))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronRight size={20}/></button>
@@ -1198,19 +1198,19 @@ export default function App() {
                         const hasPending = dayAvails.some(a => a.status === "pending");
                         const hasBusy = dayAvails.some(a => a.status === "busy");
                         
-                        if (hasConfirmed) {
-                          chipText = "遒ｺ螳・;
-                          chipColor = "bg-red-500";
-                        } else if (hasPending) {
-                          chipText = "萓晞ｼ荳ｭ";
-                          chipColor = "bg-orange-500";
-                        } else if (hasBusy) {
-                          chipText = "莠亥ｮ壽怏";
-                          chipColor = "bg-red-900";
-                        } else {
-                          chipText = "遨ｺ縺・;
-                          chipColor = "bg-gray-400";
-                        }
+                          if (hasConfirmed) {
+                            chipText = "確定";
+                            chipColor = "bg-red-500";
+                          } else if (hasPending) {
+                            chipText = "依頼中";
+                            chipColor = "bg-orange-500";
+                          } else if (hasBusy) {
+                            chipText = "予定有";
+                            chipColor = "bg-red-900";
+                          } else {
+                            chipText = "空き";
+                            chipColor = "bg-gray-400";
+                          }
                       }
 
                       return (
@@ -1233,7 +1233,7 @@ export default function App() {
 
                 <div className="lg:col-span-4 space-y-6">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black">{format(selectedDate, "M/d (E)", { locale: ja })}縺ｮ莠亥ｮ・/h3>
+                    <h3 className="text-xl font-black">{format(selectedDate, "M/d (E)", { locale: ja })}の予定</h3>
                     <Button onClick={() => openAvailabilityModal()} variant="outline" icon={Plus} className="p-2 h-10 w-10 rounded-full" />
                   </div>
                   
@@ -1275,14 +1275,14 @@ export default function App() {
                                   a.status === "pending" ? "text-orange-500" : 
                                   a.status === "busy" ? "text-red-900" : "text-gray-400"
                                 }`}>
-                                  {a.status === "open" ? "遨ｺ縺・ : a.status === "pending" ? "繝ｪ繧ｯ繧ｨ繧ｹ繝井ｸｭ" : a.status === "confirmed" ? "遒ｺ螳・ : "莠亥ｮ壹≠繧・}
+                                  {a.status === "open" ? "空き" : a.status === "pending" ? "リクエスト中" : a.status === "confirmed" ? "確定" : "予定あり"}
                                 </span>
                               </div>
                             </Card>
                           ))
                       ) : (
                         <div className="py-12 text-center space-y-4 bg-white rounded-3xl border border-dashed border-gray-200">
-                          <p className="text-gray-400 font-bold">莠亥ｮ壹′縺ゅｊ縺ｾ縺帙ｓ</p>
+                          <p className="text-gray-400 font-bold">予定がありません</p>
                         </div>
                       )}
                   </div>
@@ -1319,16 +1319,16 @@ export default function App() {
                               onChange={e => setNewName(e.target.value)}
                               className="flex-1 px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
-                            <Button onClick={async () => {
-                              if (!currentUser) return;
-                              await updateDoc(doc(db, "users", currentUser.uid), { name: newName });
-                              setIsEditingName(false);
-                            }} icon={Check}>菫晏ｭ・/Button>
+                              <Button onClick={async () => {
+                               if (!currentUser) return;
+                               await updateDoc(doc(db, "users", currentUser.uid), { name: newName });
+                               setIsEditingName(false);
+                            }} icon={Check}>保存</Button>
                           </div>
                         ) : (
                           <div className="flex items-center justify-between">
                             <p className="text-2xl font-black">{currentUser?.name}</p>
-                            <Button onClick={() => setIsEditingName(true)} variant="ghost">邱ｨ髮・/Button>
+                            <Button onClick={() => setIsEditingName(true)} variant="ghost">編集</Button>
                           </div>
                         )}
                         <p className="text-gray-400 font-medium">{accountLabel}</p>
@@ -1340,13 +1340,13 @@ export default function App() {
                   <section className="space-y-6 pt-8 border-t border-gray-100">
                     <h3 className="text-xl font-black flex items-center gap-3">
                       <Users size={24} className="text-blue-600" />
-                      繧ｳ繝阪け繧ｷ繝ｧ繝ｳ
+                      コネクション
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {connections.length > 0 ? (
-                        <p className="text-gray-600 font-bold">{connections.length}莉ｶ縺ｮ繧ｳ繝阪け繧ｷ繝ｧ繝ｳ縺後≠繧翫∪縺・/p>
+                        <p className="text-gray-600 font-bold">{connections.length}件のコネクションがあります</p>
                       ) : (
-                        <p className="text-gray-400 text-sm italic">繧ｳ繝阪け繧ｷ繝ｧ繝ｳ縺ｯ縺ゅｊ縺ｾ縺帙ｓ</p>
+                        <p className="text-gray-400 text-sm italic">コネクションはありません</p>
                       )}
                     </div>
                   </section>
@@ -1354,7 +1354,7 @@ export default function App() {
                   <section className="space-y-6 pt-8 border-t border-gray-100">
                     <h3 className="text-xl font-black flex items-center gap-3">
                       <Clock size={24} className="text-blue-600" />
-                      譎る俣繝励Μ繧ｻ繝・ヨ
+                      時間プリセット
                     </h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {presets.length > 0 ? (
@@ -1367,7 +1367,7 @@ export default function App() {
                           </div>
                         ))
                       ) : (
-                        <p className="text-gray-400 text-sm italic">逋ｻ骭ｲ縺輔ｌ縺ｦ縺・ｋ繝励Μ繧ｻ繝・ヨ縺ｯ縺ゅｊ縺ｾ縺帙ｓ</p>
+                        <p className="text-gray-400 text-sm italic">登録されているプリセットはありません</p>
                       )}
                     </div>
                   </section>
@@ -1375,7 +1375,7 @@ export default function App() {
                   <section className="space-y-6 pt-8 border-t border-gray-100">
                     <h3 className="text-xl font-black flex items-center gap-3">
                       <MessageCircle size={24} className="text-[#06C755]" />
-                      LINE騾｣謳ｺ
+                      LINE連携
                     </h3>
                     {currentUser?.line_user_id ? (
                       <div className="bg-emerald-50 p-6 rounded-3xl flex items-center justify-between">
@@ -1384,17 +1384,17 @@ export default function App() {
                             <Check size={24} />
                           </div>
                           <div>
-                            <p className="font-bold text-emerald-900">騾｣謳ｺ貂医∩</p>
-                            <p className="text-sm text-emerald-700">LINE縺ｧ騾夂衍繧貞女縺大叙繧後∪縺・/p>
+                            <p className="font-bold text-emerald-900">連携済み</p>
+                            <p className="text-sm text-emerald-700">LINEで通知を受け取れます</p>
                           </div>
                         </div>
-                        <Button variant="ghost" className="text-emerald-600">隗｣髯､</Button>
+                        <Button variant="ghost" className="text-emerald-600">解除</Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <p className="text-gray-500">LINE縺ｨ騾｣謳ｺ縺吶ｋ縺ｨ縲√す繝輔ヨ縺ｮ繝ｪ繧ｯ繧ｨ繧ｹ繝医ｄ謇ｿ隱阪ｒ繝ｪ繧｢繝ｫ繧ｿ繧､繝縺ｧ蜿励￠蜿悶ｋ縺薙→縺後〒縺阪∪縺吶・/p>
+                        <p className="text-gray-500">LINEと連携すると、リクエストや通知をリアルタイムで受け取れます。</p>
                         <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full">
-                          LINE縺ｨ騾｣謳ｺ縺吶ｋ
+                          LINEと連携する
                         </Button>
                       </div>
                     )}
