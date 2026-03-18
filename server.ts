@@ -121,15 +121,17 @@ app.get("/api/auth/line/callback", async (req, res) => {
       <html>
         <body>
           <script>
+            const profile = ${JSON.stringify(profile)};
+            const customToken = ${JSON.stringify(customToken)};
             if (window.opener) {
               window.opener.postMessage({ 
                 type: 'LINE_AUTH_SUCCESS', 
-                profile: ${JSON.stringify(profile)},
-                customToken: ${JSON.stringify(customToken)}
+                profile,
+                customToken
               }, '*');
               window.close();
             } else {
-              window.location.href = '/?line_user=' + encodeURIComponent(JSON.stringify(${JSON.stringify(profile)})) + '&custom_token=' + encodeURIComponent(${JSON.stringify(customToken)});
+              window.location.href = '/?line_user=' + encodeURIComponent(JSON.stringify(profile)) + '&custom_token=' + encodeURIComponent(customToken);
             }
           </script>
           <p>LINE連携が完了しました。このウィンドウを閉じてください。</p>

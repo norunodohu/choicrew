@@ -295,8 +295,9 @@ export default function App() {
     if (!profile) return;
     setIsProcessingLine(true);
     try {
-      if (customToken) {
-        await signInWithCustomToken(auth, customToken);
+      const normalizedToken = customToken?.replace(/^"+|"+$/g, "") || null;
+      if (normalizedToken) {
+        await signInWithCustomToken(auth, normalizedToken);
       }
       
       const firebaseUser = auth.currentUser;
