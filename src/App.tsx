@@ -304,6 +304,7 @@ export default function App() {
       if (!tokenRes.ok || !tokenData.customToken) {
         throw new Error(tokenData.error || "Failed to create custom token");
       }
+      console.log("LINE token debug:", tokenData.debug);
 
       await signInWithCustomToken(auth, tokenData.customToken);
       

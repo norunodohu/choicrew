@@ -36,11 +36,7 @@ const mintLineCustomToken = async (profile: { userId: string; displayName: strin
     throw new Error("Firebase Admin SDK is not configured");
   }
 
-  return getAdminAuth().createCustomToken(`line_${profile.userId}`, {
-    line_user_id: profile.userId,
-    line_display_name: profile.displayName,
-    line_picture: profile.pictureUrl || "",
-  });
+  return getAdminAuth().createCustomToken(`line_${profile.userId}`);
 };
 
 app.use(cors());
@@ -190,7 +186,15 @@ app.post("/api/auth/line/firebase-token", async (req, res) => {
     }
 
     const customToken = await mintLineCustomToken(profile);
-    res.json({ uid: `line_${profile.userId}`, customToken });
+    res.json({
+      uid: `line_${profile.userId}`,
+      customToken,
+      debug: {
+        projectId: adminProjectId,
+        tokenPrefix: customToken.slice(0, 12),
+        tokenLength: customToken.length,
+      },
+    });
   } catch (error: unknown) {
     const err = error as { message?: string };
     res.status(500).json({ error: err.message || "Failed to create custom token" });
