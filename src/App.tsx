@@ -425,6 +425,15 @@ export default function App() {
     return `${statusLine}${detailsLine}`;
   };
 
+  const handleTestLineNotification = async () => {
+    if (!currentUser) return;
+    const result = await sendLineNotification(
+      currentUser.line_user_id,
+      "ChoiCrewのLINE通知テストです。"
+    );
+    alert(`通知テスト結果\n${buildLineNotificationAlert(result)}`);
+  };
+
   useEffect(() => {
     if (!currentUser) return;
     setNewAvatarUrl(currentUser.avatar_url || currentUser.line_picture || "");
@@ -1701,7 +1710,12 @@ export default function App() {
                         <p className="text-sm text-emerald-700">LINEで通知を受け取れます。友だち追加済みの公式アカウント宛てに送信します。</p>
                           </div>
                         </div>
-                        <Button variant="ghost" className="text-emerald-600">解除</Button>
+                        <div className="flex flex-col gap-2">
+                          <Button onClick={handleTestLineNotification} variant="outline" className="border-emerald-200 text-emerald-700">
+                            通知テスト
+                          </Button>
+                          <Button variant="ghost" className="text-emerald-600">解除</Button>
+                        </div>
                       </div>
                     ) : (
                       <div className="space-y-4">
