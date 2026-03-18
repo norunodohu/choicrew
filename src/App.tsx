@@ -239,6 +239,8 @@ export default function App() {
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   
   const [view, setView] = useState<"dashboard" | "calendar" | "settings">("dashboard");
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -422,38 +424,62 @@ export default function App() {
       (err) => handleFirestoreError(err, OperationType.LIST, "availabilities")
     );
 
-    const unsubReq = onSnapshot(
+    const unsubStaffReq = onSnapshot(
       query(collection(db, "requests"), where("staff_id", "==", currentUser.uid)),
       (snap) => {
         const staffReqs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ShiftRequest));
-        onSnapshot(query(collection(db, "requests"), where("manager_id", "==", currentUser.uid)), (snap2) => {
-          const managerReqs = snap2.docs.map(d => ({ id: d.id, ...d.data() } as ShiftRequest));
-          setRequests([...staffReqs, ...managerReqs]);
+        setRequests(prev => {
+          const others = prev.filter(r => r.manager_id === currentUser.uid && r.staff_id !== currentUser.uid);
+          return [...staffReqs, ...others];
         });
       }
     );
-    console.log("Listening to requests:", unsubReq);
+
+    const unsubManagerReq = onSnapshot(
+      query(collection(db, "requests"), where("manager_id", "==", currentUser.uid)),
+      (snap) => {
+        const managerReqs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ShiftRequest));
+        setRequests(prev => {
+          const others = prev.filter(r => r.staff_id === currentUser.uid && r.manager_id !== currentUser.uid);
+          return [...others, ...managerReqs];
+        });
+      }
+    );
 
     const unsubNotif = onSnapshot(
       query(collection(db, "notifications"), where("user_id", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(20)),
-      (snap) => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)))
+      (snap) => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification))),
+      (err) => handleFirestoreError(err, OperationType.LIST, "notifications")
     );
 
-    const unsubConn = onSnapshot(
+    const unsubConn1 = onSnapshot(
       query(collection(db, "connections"), where("user1_id", "==", currentUser.uid)),
       (snap) => {
         const c1 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
-        onSnapshot(query(collection(db, "connections"), where("user2_id", "==", currentUser.uid)), (snap2) => {
-          const c2 = snap2.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
-          console.log("Connections updated:", [...c1, ...c2]);
+        setConnections(prev => {
+          const others = prev.filter(c => c.user2_id === currentUser.uid && c.user1_id !== currentUser.uid);
+          return [...c1, ...others];
         });
-      }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, "connections")
     );
-    console.log("Listening to connections:", unsubConn);
+
+    const unsubConn2 = onSnapshot(
+      query(collection(db, "connections"), where("user2_id", "==", currentUser.uid)),
+      (snap) => {
+        const c2 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
+        setConnections(prev => {
+          const others = prev.filter(c => c.user1_id === currentUser.uid && c.user2_id !== currentUser.uid);
+          return [...others, ...c2];
+        });
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, "connections")
+    );
 
     const unsubPreset = onSnapshot(
       query(collection(db, "presets"), where("user_id", "==", currentUser.uid)),
-      (snap) => setPresets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Preset)))
+      (snap) => setPresets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Preset))),
+      (err) => handleFirestoreError(err, OperationType.LIST, "presets")
     );
 
     const unsubUser = onSnapshot(
@@ -469,7 +495,11 @@ export default function App() {
 
     return () => {
       unsubAvail();
+      unsubStaffReq();
+      unsubManagerReq();
       unsubNotif();
+      unsubConn1();
+      unsubConn2();
       unsubPreset();
       unsubUser();
     };
@@ -1084,6 +1114,41 @@ export default function App() {
                         )}
                         <p className="text-gray-400 font-medium">{currentUser?.email || "ゲストユーザー"}</p>
                       </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-6 pt-8 border-t border-gray-100">
+                    <h3 className="text-xl font-black flex items-center gap-3">
+                      <Users size={24} className="text-blue-600" />
+                      コネクション
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {connections.length > 0 ? (
+                        <p className="text-gray-600 font-bold">{connections.length}件のコネクションがあります</p>
+                      ) : (
+                        <p className="text-gray-400 text-sm italic">コネクションはありません</p>
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="space-y-6 pt-8 border-t border-gray-100">
+                    <h3 className="text-xl font-black flex items-center gap-3">
+                      <Clock size={24} className="text-blue-600" />
+                      時間プリセット
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {presets.length > 0 ? (
+                        presets.map(p => (
+                          <div key={p.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                            <div>
+                              <p className="font-bold">{p.name}</p>
+                              <p className="text-sm text-gray-400">{p.start} - {p.end}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-gray-400 text-sm italic">登録されているプリセットはありません</p>
+                      )}
                     </div>
                   </section>
 
