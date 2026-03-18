@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { 
   Calendar, 
   Clock, 
@@ -14,12 +14,8 @@ import {
   Check, 
   X, 
   MessageCircle, 
-  Copy, 
-  Menu,
   LayoutDashboard,
   CalendarDays,
-  Link2,
-  AlertCircle,
   ArrowRight
 } from "lucide-react";
 import { 
@@ -31,8 +27,7 @@ import {
   signInWithPopup, 
   GoogleAuthProvider, 
   signOut, 
-  signInAnonymously,
-  deleteUser
+  signInAnonymously
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -52,9 +47,9 @@ import {
   limit,
   writeBatch
 } from "firebase/firestore";
-import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, parseISO, startOfDay } from "date-fns";
+import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 
 // Firebase Config
 import firebaseConfig from '../firebase-applet-config.json';
@@ -92,7 +87,7 @@ interface FirestoreErrorInfo {
   }
 }
 
-const handleFirestoreError = (error: any, operationType: OperationType, path: string | null) => {
+const handleFirestoreError = (error: Error | unknown, operationType: OperationType, path: string | null) => {
   const errorMessage = error instanceof Error ? error.message : String(error);
   
   if (errorMessage.includes("Quota exceeded")) {
@@ -145,10 +140,10 @@ interface Availability {
   date: string;
   start_time: string;
   end_time: string;
-  status: "open" | "pending" | "confirmed";
+  status: "open" | "pending" | "confirmed" | "busy";
   note?: string;
   is_private_note?: boolean;
-  created_at?: any;
+  created_at?: unknown;
 }
 
 interface ShiftRequest {
@@ -162,7 +157,7 @@ interface ShiftRequest {
   start_time: string;
   end_time: string;
   status: "pending" | "approved" | "canceled";
-  created_at?: any;
+  created_at?: unknown;
 }
 
 interface Notification {
@@ -171,7 +166,7 @@ interface Notification {
   type: "request" | "approval" | "decline" | "system";
   message: string;
   date?: string;
-  timestamp: any;
+  timestamp: unknown;
   read: boolean;
 }
 
@@ -210,8 +205,8 @@ const Button = ({
   variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "line",
   className?: string,
   disabled?: boolean,
-  icon?: any
-}) => {
+  icon?: React.ElementType
+}): JSX.Element => {
   const variants = {
     primary: "bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700",
     secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
@@ -244,8 +239,6 @@ export default function App() {
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [connections, setConnections] = useState<Connection[]>([]);
-  const [presets, setPresets] = useState<Preset[]>([]);
   
   const [view, setView] = useState<"dashboard" | "calendar" | "settings">("dashboard");
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -254,19 +247,19 @@ export default function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
   const [dashboardDateOffset, setDashboardDateOffset] = useState(0);
-  const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newAvailTime, setNewAvailTime] = useState({ start: "10:00", end: "15:00" });
-
+  const [newAvailNote, setNewAvailNote] = useState("");
+  
   useEffect(() => {
-    const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
+    const handleResize = () => {}; // No longer needed for isDesktop
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Data Migration
-  const migrateUserData = async (oldUid: string, newUid: string) => {
+  const migrateUserData = useCallback(async (oldUid: string, newUid: string) => {
     console.log(`Migrating data from ${oldUid} to ${newUid}`);
     const collectionsToMigrate = [
       { name: "availabilities", field: "user_id" },
@@ -291,33 +284,39 @@ export default function App() {
         console.error(`Failed to migrate collection ${colInfo.name}:`, err);
       }
     }
-  };
+  }, []);
 
-  const processLineProfile = async (profile: any) => {
+  const processLineProfile = useCallback(async (profile: { userId: string, displayName: string, pictureUrl?: string }) => {
     if (!profile) return;
     setIsProcessingLine(true);
     try {
-      const firebaseUser = auth.currentUser;
+      let firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        const res = await signInAnonymously(auth);
+        firebaseUser = res.user;
+      }
+      
       const q = query(collection(db, "users"), where("line_user_id", "==", profile.userId));
       const snap = await getDocs(q);
       
       if (!snap.empty) {
         const userData = snap.docs[0].data() as UserProfile;
-        if (firebaseUser) {
-          if (userData.uid !== firebaseUser.uid) {
-            await migrateUserData(userData.uid, firebaseUser.uid);
-            const updatedProfile = { ...userData, uid: firebaseUser.uid, name: profile.displayName || userData.name };
-            await setDoc(doc(db, "users", firebaseUser.uid), updatedProfile);
-            if (!userData.email) await deleteDoc(doc(db, "users", userData.uid));
-            setCurrentUser(updatedProfile);
-          } else {
-            setCurrentUser(userData);
-          }
+        if (userData.uid !== firebaseUser.uid) {
+          await migrateUserData(userData.uid, firebaseUser.uid);
+          const updatedProfile = { 
+            ...userData, 
+            uid: firebaseUser.uid, 
+            name: profile.displayName || userData.name,
+            line_name: profile.displayName,
+            line_picture: profile.pictureUrl
+          };
+          await setDoc(doc(db, "users", firebaseUser.uid), updatedProfile);
+          if (!userData.email) await deleteDoc(doc(db, "users", userData.uid));
+          setCurrentUser(updatedProfile);
         } else {
           setCurrentUser(userData);
-          setIsLoggedIn(true);
         }
-      } else if (firebaseUser) {
+      } else {
         const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
         if (userDoc.exists()) {
           const existingData = userDoc.data() as UserProfile;
@@ -340,17 +339,15 @@ export default function App() {
           await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
           setCurrentUser(newProfile);
         }
-        setIsLoggedIn(true);
-      } else {
-        alert("LINE連携するには、まずログインしてください。");
       }
-    } catch (error: any) {
+      setIsLoggedIn(true);
+    } catch (error: unknown) {
       console.error("LINE login processing error:", error);
     } finally {
       setIsProcessingLine(false);
       setIsAuthReady(true);
     }
-  };
+  }, [migrateUserData]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -380,7 +377,7 @@ export default function App() {
           setCurrentUser(null);
           setIsLoggedIn(false);
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error("Auth error:", error);
       } finally {
         setIsAuthReady(true);
@@ -398,7 +395,9 @@ export default function App() {
     if (lineUserParam) {
       try {
         processLineProfile(JSON.parse(decodeURIComponent(lineUserParam)));
-      } catch (e) {}
+      } catch {
+        // Ignore JSON parse error
+      }
     }
 
     const handleMessage = (event: MessageEvent) => {
@@ -411,11 +410,11 @@ export default function App() {
       unsubscribe();
       window.removeEventListener('message', handleMessage);
     };
-  }, [isProcessingLine]);
+  }, [isProcessingLine, processLineProfile]);
 
   // Real-time Listeners
   useEffect(() => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid || !auth.currentUser) return;
 
     const unsubAvail = onSnapshot(
       query(collection(db, "availabilities"), where("user_id", "==", currentUser.uid), orderBy("date", "asc")),
@@ -433,6 +432,7 @@ export default function App() {
         });
       }
     );
+    console.log("Listening to requests:", unsubReq);
 
     const unsubNotif = onSnapshot(
       query(collection(db, "notifications"), where("user_id", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(20)),
@@ -445,10 +445,11 @@ export default function App() {
         const c1 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
         onSnapshot(query(collection(db, "connections"), where("user2_id", "==", currentUser.uid)), (snap2) => {
           const c2 = snap2.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
-          setConnections([...c1, ...c2]);
+          console.log("Connections updated:", [...c1, ...c2]);
         });
       }
     );
+    console.log("Listening to connections:", unsubConn);
 
     const unsubPreset = onSnapshot(
       query(collection(db, "presets"), where("user_id", "==", currentUser.uid)),
@@ -463,8 +464,20 @@ export default function App() {
   }, [currentUser?.uid]);
 
   // Handlers
-  const handleGoogleLogin = () => signInWithPopup(auth, new GoogleAuthProvider());
-  const handleGuestLogin = () => signInAnonymously(auth);
+  const handleGoogleLogin = async () => {
+    try {
+      await signInWithPopup(auth, new GoogleAuthProvider());
+    } catch (err) {
+      console.error("Google login error:", err);
+    }
+  };
+  const handleGuestLogin = async () => {
+    try {
+      await signInAnonymously(auth);
+    } catch (err) {
+      console.error("Guest login error:", err);
+    }
+  };
   const handleLineLogin = async () => {
     try {
       const res = await fetch("/api/auth/line/url");
@@ -491,7 +504,7 @@ export default function App() {
     } catch (e) { console.error(e); }
   };
 
-  const handleAddAvailability = async () => {
+  const handleAddAvailability = async (status: "open" | "busy") => {
     if (!currentUser) return;
     setIsSaving(true);
     try {
@@ -501,16 +514,22 @@ export default function App() {
         date: format(selectedDate, "yyyy-MM-dd"),
         start_time: newAvailTime.start,
         end_time: newAvailTime.end,
-        status: "open",
+        status: status,
+        note: newAvailNote,
         created_at: serverTimestamp()
       });
       setShowAddModal(false);
-    } catch (e) { console.error(e); }
+      setNewAvailNote("");
+    } catch (e: unknown) { console.error(e); }
     finally { setIsSaving(false); }
   };
 
   const handleDeleteAvailability = async (id: string) => {
-    await deleteDoc(doc(db, "availabilities", id));
+    try {
+      await deleteDoc(doc(db, "availabilities", id));
+    } catch (err: unknown) {
+      console.error("Delete availability error:", err);
+    }
   };
 
   const handleSendRequest = async (availability: Availability) => {
@@ -545,7 +564,7 @@ export default function App() {
       }
       
       alert("依頼を送信しました！");
-    } catch (e) { console.error(e); }
+    } catch (e: unknown) { console.error(e); }
   };
 
   const copyShareLink = () => {
@@ -678,7 +697,7 @@ export default function App() {
           ].map(item => (
             <button
               key={item.id}
-              onClick={() => setView(item.id as any)}
+              onClick={() => setView(item.id as "dashboard" | "calendar" | "settings")}
               className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${view === item.id ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"}`}
             >
               <item.icon size={22} />
@@ -781,6 +800,30 @@ export default function App() {
                     </div>
                     <p className="text-4xl font-black">{requests.filter(r => r.status === "pending").length}<span className="text-lg font-bold ml-1">件</span></p>
                   </Card>
+
+                  <Card className="p-8 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+                        <Settings size={24} />
+                      </div>
+                      <button 
+                        onClick={async () => {
+                          if (!currentUser) return;
+                          const newVal = !currentUser.accept_requests;
+                          await updateDoc(doc(db, "users", currentUser.uid), { accept_requests: newVal });
+                          setCurrentUser({ ...currentUser, accept_requests: newVal });
+                        }}
+                        className={`w-12 h-6 rounded-full transition-all relative ${currentUser?.accept_requests ? "bg-blue-600" : "bg-gray-200"}`}
+                      >
+                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${currentUser?.accept_requests ? "left-7" : "left-1"}`} />
+                      </button>
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">依頼受付</h3>
+                      <p className="text-gray-400 text-sm">新規リクエストの許可</p>
+                    </div>
+                    <p className="text-lg font-black text-gray-700">{currentUser?.accept_requests ? "受付中" : "停止中"}</p>
+                  </Card>
                 </div>
 
                 {/* Today's Schedule */}
@@ -809,14 +852,25 @@ export default function App() {
                           .map(a => (
                             <Card key={a.id} className="p-6 flex items-center justify-between group">
                               <div className="flex items-center gap-6">
-                                <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center ${a.status === "confirmed" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                                <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center ${
+                                  a.status === "confirmed" ? "bg-red-50 text-red-600" : 
+                                  a.status === "pending" ? "bg-orange-50 text-orange-600" : 
+                                  a.status === "busy" ? "bg-red-900/10 text-red-900" : "bg-blue-50 text-blue-600"
+                                }`}>
                                   <Clock size={20} />
                                 </div>
                                 <div>
                                   <p className="text-xl font-black">{a.start_time} - {a.end_time}</p>
                                   <div className="flex items-center gap-2 mt-1">
-                                    <span className={`w-2 h-2 rounded-full ${a.status === "confirmed" ? "bg-emerald-500" : "bg-blue-500"}`}></span>
-                                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">{a.status}</p>
+                                    <span className={`w-2 h-2 rounded-full ${
+                                      a.status === "confirmed" ? "bg-red-500" : 
+                                      a.status === "pending" ? "bg-orange-500" : 
+                                      a.status === "busy" ? "bg-red-900" : "bg-blue-500"
+                                    }`}></span>
+                                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">
+                                      {a.status === "open" ? "空き" : a.status === "pending" ? "リクエスト中" : a.status === "confirmed" ? "確定" : "予定あり"}
+                                    </p>
+                                    {a.note && <span className="text-xs text-gray-300 font-medium ml-2">| {a.note}</span>}
                                   </div>
                                 </div>
                               </div>
@@ -845,8 +899,9 @@ export default function App() {
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
+                className="grid grid-cols-1 lg:grid-cols-12 gap-8"
               >
-                <Card className="p-8">
+                <Card className="lg:col-span-8 p-8">
                   <div className="flex items-center justify-between mb-8">
                     <h3 className="text-2xl font-black">{format(selectedDate, "yyyy年 M月", { locale: ja })}</h3>
                     <div className="flex gap-2">
@@ -855,7 +910,7 @@ export default function App() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-7 gap-4">
+                  <div className="grid grid-cols-7 gap-2 sm:gap-4">
                     {["日", "月", "火", "水", "木", "金", "土"].map(d => (
                       <div key={d} className="text-center text-xs font-black text-gray-400 uppercase pb-4">{d}</div>
                     ))}
@@ -867,23 +922,93 @@ export default function App() {
                       const isSelected = isSameDay(day, selectedDate);
                       const isToday = isSameDay(day, new Date());
 
+                      // Determine chip text and color
+                      let chipText = "";
+                      let chipColor = "";
+                      if (dayAvails.length > 0) {
+                        const hasConfirmed = dayAvails.some(a => a.status === "confirmed");
+                        const hasPending = dayAvails.some(a => a.status === "pending");
+                        const hasBusy = dayAvails.some(a => a.status === "busy");
+                        
+                        if (hasConfirmed) {
+                          chipText = "確定";
+                          chipColor = "bg-red-500";
+                        } else if (hasPending) {
+                          chipText = "依頼中";
+                          chipColor = "bg-orange-500";
+                        } else if (hasBusy) {
+                          chipText = "予定有";
+                          chipColor = "bg-red-900";
+                        } else {
+                          chipText = "空き";
+                          chipColor = "bg-gray-400";
+                        }
+                      }
+
                       return (
                         <button 
                           key={day.toString()}
-                          onClick={() => { setSelectedDate(day); setShowAddModal(true); }}
+                          onClick={() => setSelectedDate(day)}
                           className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-1 transition-all relative ${isSelected ? "bg-blue-600 text-white shadow-xl shadow-blue-200" : "hover:bg-gray-50"}`}
                         >
                           <span className={`text-lg font-black ${isToday && !isSelected ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
-                          <div className="flex gap-0.5">
-                            {dayAvails.slice(0, 3).map(a => (
-                              <span key={a.id} className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white/40" : "bg-blue-400"}`}></span>
-                            ))}
-                          </div>
+                          {chipText && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full text-white font-bold ${isSelected ? "bg-white/20" : chipColor}`}>
+                              {chipText}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
                   </div>
                 </Card>
+
+                <div className="lg:col-span-4 space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-black">{format(selectedDate, "M/d (E)", { locale: ja })}の予定</h3>
+                    <Button onClick={() => setShowAddModal(true)} variant="outline" icon={Plus} className="p-2 h-10 w-10 rounded-full" />
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {availabilities
+                      .filter(a => isSameDay(parseISO(a.date), selectedDate))
+                      .length > 0 ? (
+                        availabilities
+                          .filter(a => isSameDay(parseISO(a.date), selectedDate))
+                          .map(a => (
+                            <Card key={a.id} className="p-5 space-y-3 group relative">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-2 h-2 rounded-full ${
+                                    a.status === "confirmed" ? "bg-red-500" : 
+                                    a.status === "pending" ? "bg-orange-500" : 
+                                    a.status === "busy" ? "bg-red-900" : "bg-gray-400"
+                                  }`}></div>
+                                  <p className="text-lg font-black">{a.start_time} - {a.end_time}</p>
+                                </div>
+                                <button onClick={() => handleDeleteAvailability(a.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                              {a.note && <p className="text-sm text-gray-500 font-medium">{a.note}</p>}
+                              <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+                                <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                                  a.status === "confirmed" ? "text-red-500" : 
+                                  a.status === "pending" ? "text-orange-500" : 
+                                  a.status === "busy" ? "text-red-900" : "text-gray-400"
+                                }`}>
+                                  {a.status === "open" ? "空き" : a.status === "pending" ? "リクエスト中" : a.status === "confirmed" ? "確定" : "予定あり"}
+                                </span>
+                              </div>
+                            </Card>
+                          ))
+                      ) : (
+                        <div className="py-12 text-center space-y-4 bg-white rounded-3xl border border-dashed border-gray-200">
+                          <p className="text-gray-400 font-bold">予定がありません</p>
+                        </div>
+                      )}
+                  </div>
+                </div>
               </motion.div>
             )}
 
@@ -978,7 +1103,7 @@ export default function App() {
             onClick={() => {
               if (item.id === "add") setShowAddModal(true);
               else if (item.id === "share") copyShareLink();
-              else setView(item.id as any);
+              else setView(item.id as "dashboard" | "calendar" | "settings");
             }}
             className={`p-4 rounded-2xl transition-all ${item.special ? "bg-blue-600 text-white shadow-xl shadow-blue-200 -mt-12" : view === item.id ? "text-blue-600" : "text-gray-400"}`}
           >
@@ -996,53 +1121,100 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowAddModal(false)}
-              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div 
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              className="relative w-full max-w-lg bg-white rounded-t-[3rem] sm:rounded-[3rem] p-10 shadow-2xl"
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 sm:p-10 shadow-2xl overflow-hidden"
             >
-              <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-8 sm:hidden" />
+              <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-6 sm:hidden" />
               <div className="flex items-center justify-between mb-8">
-                <h3 className="text-3xl font-black tracking-tight">予定を追加</h3>
-                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X/></button>
+                <h3 className="text-2xl font-black tracking-tight">予定を追加</h3>
+                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X/></button>
               </div>
 
-              <div className="space-y-8">
-                <div className="space-y-3">
-                  <label className="text-sm font-black text-gray-400 uppercase tracking-widest">日付</label>
-                  <div className="p-6 bg-gray-50 rounded-3xl flex items-center justify-between">
-                    <span className="text-xl font-bold">{format(selectedDate, "yyyy年 M月 d日 (E)", { locale: ja })}</span>
-                    <Calendar className="text-gray-300" />
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">日付</label>
+                  <div className="p-4 bg-gray-50 rounded-2xl flex items-center justify-between">
+                    <span className="font-bold">{format(selectedDate, "yyyy/MM/dd (E)", { locale: ja })}</span>
+                    <Calendar size={18} className="text-gray-300" />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-3">
-                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">開始</label>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">プリセット</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: "朝 (9-13)", start: "09:00", end: "13:00" },
+                      { label: "昼 (13-17)", start: "13:00", end: "17:00" },
+                      { label: "夕 (17-21)", start: "17:00", end: "21:00" },
+                      { label: "夜 (21-24)", start: "21:00", end: "00:00" },
+                      { label: "フル (9-21)", start: "09:00", end: "21:00" },
+                    ].map(p => (
+                      <button
+                        key={p.label}
+                        onClick={() => setNewAvailTime({ start: p.start, end: p.end })}
+                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">開始</label>
                     <input 
                       type="time" 
                       value={newAvailTime.start}
                       onChange={e => setNewAvailTime({...newAvailTime, start: e.target.value})}
-                      className="w-full p-6 bg-gray-50 rounded-3xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
-                  <div className="space-y-3">
-                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">終了</label>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">終了</label>
                     <input 
                       type="time" 
                       value={newAvailTime.end}
                       onChange={e => setNewAvailTime({...newAvailTime, end: e.target.value})}
-                      className="w-full p-6 bg-gray-50 rounded-3xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
-                <Button onClick={handleAddAvailability} className="w-full py-5 text-xl" disabled={isSaving}>
-                  {isSaving ? "保存中..." : "この内容で登録する"}
-                </Button>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">予定名 (任意)</label>
+                  <input 
+                    type="text" 
+                    placeholder="例: 授業、サークルなど"
+                    value={newAvailNote}
+                    onChange={e => setNewAvailNote(e.target.value)}
+                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button 
+                    onClick={() => handleAddAvailability("open")} 
+                    className="flex-1 py-4 font-black" 
+                    disabled={isSaving}
+                  >
+                    空きとして登録
+                  </Button>
+                  <Button 
+                    onClick={() => handleAddAvailability("busy")} 
+                    variant="outline"
+                    className="flex-1 py-4 font-black border-red-100 text-red-500 hover:bg-red-50" 
+                    disabled={isSaving}
+                  >
+                    予定あり(不可)
+                  </Button>
+                </div>
               </div>
             </motion.div>
           </div>

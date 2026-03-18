@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+path.dirname(__filename);
 
 const app = express();
 export default app; // Export for Vercel
@@ -109,8 +109,9 @@ app.get("/api/auth/line/callback", async (req, res) => {
         </body>
       </html>
     `);
-  } catch (error: any) {
-    const errorData = error.response?.data || { message: error.message };
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: Record<string, unknown> }, message?: string };
+    const errorData = err.response?.data || { message: err.message };
     console.error("LINE Auth Error Details:", JSON.stringify(errorData));
     res.status(500).send(`
       <html>
@@ -145,8 +146,9 @@ app.post("/api/notify", async (req, res) => {
       }
     });
     res.json({ success: true });
-  } catch (error: any) {
-    console.error("LINE Messaging Error:", error.response?.data || error.message);
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: Record<string, unknown> }, message?: string };
+    console.error("LINE Messaging Error:", err.response?.data || err.message);
     res.status(500).json({ error: "Failed to send LINE message" });
   }
 });

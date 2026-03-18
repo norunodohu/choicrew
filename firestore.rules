@@ -32,7 +32,7 @@ service cloud.firestore {
              data.date is string && data.date.matches('^\\d{4}-\\d{2}-\\d{2}$') &&
              data.start_time is string && data.start_time.matches('^\\d{2}:\\d{2}$') &&
              data.end_time is string && data.end_time.matches('^\\d{2}:\\d{2}$') &&
-             data.status in ['open', 'pending', 'confirmed'];
+             data.status in ['open', 'pending', 'confirmed', 'busy'];
     }
 
     function isAdmin() {
