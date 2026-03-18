@@ -456,12 +456,48 @@ export default function App() {
       (snap) => setPresets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Preset)))
     );
 
+    const unsubUser = onSnapshot(
+      doc(db, "users", currentUser.uid),
+      (snap) => {
+        if (snap.exists()) {
+          const profile = snap.data() as UserProfile;
+          setCurrentUser(profile);
+          setNewName(profile.name);
+        }
+      }
+    );
+
     return () => {
       unsubAvail();
       unsubNotif();
       unsubPreset();
+      unsubUser();
     };
   }, [currentUser?.uid]);
+
+  // Public View Listeners
+  useEffect(() => {
+    if (!isPublicView || !publicUser?.uid) return;
+
+    const unsubPublicUser = onSnapshot(
+      doc(db, "users", publicUser.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setPublicUser(snap.data() as UserProfile);
+        }
+      }
+    );
+
+    const unsubPublicAvail = onSnapshot(
+      query(collection(db, "availabilities"), where("user_id", "==", publicUser.uid), orderBy("date", "asc")),
+      (snap) => setAvailabilities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Availability)))
+    );
+
+    return () => {
+      unsubPublicUser();
+      unsubPublicAvail();
+    };
+  }, [isPublicView, publicUser?.uid]);
 
   // Handlers
   const handleGoogleLogin = async () => {
@@ -496,10 +532,6 @@ export default function App() {
       if (!snap.empty) {
         const userData = snap.docs[0].data() as UserProfile;
         setPublicUser(userData);
-        
-        const qAvail = query(collection(db, "availabilities"), where("user_id", "==", userData.uid));
-        const snapAvail = await getDocs(qAvail);
-        setAvailabilities(snapAvail.docs.map(d => ({ id: d.id, ...d.data() } as Availability)));
       }
     } catch (e) { console.error(e); }
   };
