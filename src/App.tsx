@@ -343,7 +343,7 @@ export default function App() {
     });
     if (!response.ok) {
       const data = await response.json().catch(() => null);
-      console.warn("LINE notification failed:", data || response.statusText);
+      console.warn("LINE notification failed:", JSON.stringify(data || { statusText: response.statusText }));
       return;
     }
   };
