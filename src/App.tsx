@@ -860,9 +860,9 @@ export default function App() {
                       </div>
                     </div>
                     {isLoggedIn ? (
-                      <Button onClick={() => handleSendRequest(a)} variant="outline">萓晞ｼ縺吶ｋ</Button>
+                      <Button onClick={() => handleSendRequest(a)} variant="outline">依頼する</Button>
                     ) : (
-                      <Button onClick={() => alert("萓晞ｼ繧帝√ｋ縺ｫ縺ｯ繝ｭ繧ｰ繧､繝ｳ縺悟ｿ・ｦ√〒縺吶・)} variant="outline">萓晞ｼ縺吶ｋ</Button>
+                      <Button onClick={() => alert("依頼を送るにはログインが必要です。")} variant="outline">依頼する</Button>
                     )}
                   </Card>
                 ))
