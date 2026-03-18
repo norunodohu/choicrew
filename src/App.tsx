@@ -1050,7 +1050,7 @@ export default function App() {
           {[
             { id: "dashboard", label: "ダッシュボード", icon: LayoutDashboard },
             { id: "calendar", label: "カレンダー", icon: CalendarDays },
-            { id: "settings", label: "險ｭ螳・, icon: Settings },
+            { id: "settings", label: "設定", icon: Settings },
           ].map(item => (
             <button
               key={item.id}
