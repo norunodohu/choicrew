@@ -940,8 +940,9 @@ export default function App() {
               alt="ChoiCrew logo"
               className="w-full max-w-[320px] mx-auto drop-shadow-[0_24px_40px_rgba(37,99,235,0.16)]"
             />
-<p className="text-xl text-gray-500 font-medium">
-空いた時間で、予定をかんたんに共有できます。スケジュールを見やすく整理して使えます。
+            <p className="text-xl text-gray-500 font-medium">
+              空いた時間で、予定をかんたんに共有できます。スケジュールを見やすく整理して使えます。
+            </p>
           </div>
 
           <div className="grid gap-4">
@@ -957,10 +958,12 @@ export default function App() {
             </div>
             <Button onClick={handleGuestLoginSafe} variant="secondary" icon={ArrowRight} className="py-5 text-lg">
               ゲストで続ける
+            </Button>
           </div>
 
           <p className="text-sm text-gray-400">
             ログインすることで、利用規約とプライバシーポリシーに同意したことになります。
+          </p>
         </motion.div>
       </div>
     );
