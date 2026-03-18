@@ -806,17 +806,17 @@ export default function App() {
 
           <div className="grid gap-4">
             <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="py-5 text-lg">
-              LINE縺ｧ繝ｭ繧ｰ繧､繝ｳ
+              LINEログイン
             </Button>
             <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="py-5 text-lg">
-              Google縺ｧ繝ｭ繧ｰ繧､繝ｳ
+              Googleログイン
             </Button>
             <div className="relative py-4">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
               <div className="relative flex justify-center text-sm"><span className="px-4 bg-[#F8FAFC] text-gray-400">縺ｾ縺溘・</span></div>
             </div>
             <Button onClick={handleGuestLoginSafe} variant="secondary" icon={ArrowRight} className="py-5 text-lg">
-              繧ｲ繧ｹ繝医→縺励※莉翫☆縺宣幕蟋・
+              ゲストで続ける
             </Button>
           </div>
 
@@ -868,7 +868,7 @@ export default function App() {
                 ))
               ) : (
                 <div className="py-12 text-center bg-white rounded-3xl border border-dashed border-gray-200 text-gray-400 font-bold">
-                  蜈ｬ髢倶ｸｭ縺ｮ莠亥ｮ壹・縺ゅｊ縺ｾ縺帙ｓ
+                  予定はまだありません
                 </div>
               )}
             </div>
@@ -926,7 +926,7 @@ export default function App() {
             </div>
           </div>
           <Button onClick={() => signOut(auth)} variant="danger" className="w-full" icon={LogOut}>
-            繝ｭ繧ｰ繧｢繧ｦ繝・
+            ログアウト
           </Button>
         </div>
       </aside>
@@ -973,7 +973,7 @@ export default function App() {
               </div>
             )}
             <Button onClick={() => openAvailabilityModal()} icon={Plus} className="hidden sm:flex">
-              莠亥ｮ壹ｒ霑ｽ蜉
+              予定を追加
             </Button>
           </div>
         </header>
@@ -1016,10 +1016,10 @@ export default function App() {
                       <Check size={24} />
                     </div>
                     <div>
-                      <h3 className="text-xl font-bold">遒ｺ螳壽ｸ医∩</h3>
-                      <p className="text-gray-400 text-sm">莉企ｱ縺ｮ遒ｺ螳壹す繝輔ヨ</p>
+                      <h3 className="text-xl font-bold">確定件数</h3>
+                      <p className="text-gray-400 text-sm">確定している予定の数</p>
                     </div>
-                    <p className="text-4xl font-black">{availabilities.filter(a => a.status === "confirmed").length}<span className="text-lg font-bold ml-1">莉ｶ</span></p>
+                      <p className="text-4xl font-black">{availabilities.filter(a => a.status === "confirmed").length}<span className="text-lg font-bold ml-1">件</span></p>
                   </Card>
 
                   <Card className="p-8 space-y-4">
@@ -1152,8 +1152,8 @@ export default function App() {
                           <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-300">
                             <Calendar size={32} />
                           </div>
-                          <p className="text-gray-400 font-bold">莠亥ｮ壹′縺ゅｊ縺ｾ縺帙ｓ</p>
-                          <Button onClick={() => openAvailabilityModal()} variant="outline" icon={Plus}>莠亥ｮ壹ｒ霑ｽ蜉縺吶ｋ</Button>
+                          <p className="text-gray-400 font-bold">予定がありません</p>
+                          <Button onClick={() => openAvailabilityModal()} variant="outline" icon={Plus}>予定を追加する</Button>
                         </div>
                       )}
                   </div>
@@ -1302,7 +1302,7 @@ export default function App() {
                   <section className="space-y-6">
                     <h3 className="text-xl font-black flex items-center gap-3">
                       <User size={24} className="text-blue-600" />
-                      繝励Ο繝輔ぅ繝ｼ繝ｫ
+                      プロフィール
                     </h3>
                     <div className="flex items-center gap-6">
                       <div className="w-20 h-20 bg-gray-100 rounded-3xl overflow-hidden">
