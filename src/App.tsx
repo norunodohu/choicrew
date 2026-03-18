@@ -1609,14 +1609,14 @@ export default function App() {
                           </div>
                           <div>
                             <p className="font-bold text-emerald-900">連携済み</p>
-                            <p className="text-sm text-emerald-700">LINEで通知を受け取れます</p>
+                        <p className="text-sm text-emerald-700">LINEで通知を受け取れます。友だち追加済みの公式アカウント宛てに送信します。</p>
                           </div>
                         </div>
                         <Button variant="ghost" className="text-emerald-600">解除</Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <p className="text-gray-500">LINEと連携すると、リクエストや通知をリアルタイムで受け取れます。</p>
+                        <p className="text-gray-500">LINEと連携すると、リクエストや通知をリアルタイムで受け取れます。通知を使うには公式アカウントの友だち追加が必要です。</p>
                         <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full">
                           LINEと連携する
                         </Button>

@@ -72,7 +72,7 @@ app.get("/api/auth/line/url", (req, res) => {
   const state = Math.random().toString(36).substring(7);
   const scope = "profile openid";
   
-  const url = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${scope}`;
+  const url = `https://access.line.me/oauth2/v2.1/authorize?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${scope}&bot_prompt=aggressive`;
   res.json({ url });
 });
 
