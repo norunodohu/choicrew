@@ -125,6 +125,32 @@ app.get("/api/auth/line/callback", async (req, res) => {
   }
 });
 
+// LINE Messaging API
+app.post("/api/notify", async (req, res) => {
+  const { lineUserId, message } = req.body;
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+
+  if (!accessToken) {
+    return res.status(503).json({ error: "LINE_CHANNEL_ACCESS_TOKEN not configured" });
+  }
+
+  try {
+    await axios.post("https://api.line.me/v2/bot/message/push", {
+      to: lineUserId,
+      messages: [{ type: "text", text: message }]
+    }, {
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`
+      }
+    });
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("LINE Messaging Error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Failed to send LINE message" });
+  }
+});
+
 // Vite middleware for development
 if (process.env.NODE_ENV !== "production") {
   try {

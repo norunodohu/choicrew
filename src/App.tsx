@@ -1,63 +1,69 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import React, { useState, useEffect } from "react";
-import "react/jsx-runtime";
+import React, { useState, useEffect, useMemo } from "react";
 import { 
   Calendar, 
   Clock, 
-  User as UserIcon, 
-  CheckCircle2, 
-  XCircle, 
+  Settings, 
+  Share2, 
   Plus, 
-  ChevronRight, 
+  Trash2, 
   Bell, 
-  Settings,
-  LogOut,
-  ChevronLeft,
-  CalendarDays,
-  Flag,
+  ChevronRight, 
+  ChevronLeft, 
+  LogOut, 
+  User, 
+  Check, 
+  X, 
+  MessageCircle, 
+  Copy, 
+  Menu,
   LayoutDashboard,
-  Share2,
-  Trash2,
-  UserPlus,
-  Search,
-  MessageCircle,
-  AlertCircle
+  CalendarDays,
+  Link2,
+  AlertCircle,
+  ArrowRight
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { format, addDays, startOfWeek, isSameDay, addMonths, isBefore, startOfDay, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, endOfWeek } from "date-fns";
-import { ja } from "date-fns/locale";
-
-// Firebase
 import { 
-  GoogleAuthProvider, 
-  signInAnonymously,
+  initializeApp 
+} from "firebase/app";
+import { 
+  getAuth, 
   onAuthStateChanged, 
-  signOut,
-  signInWithPopup
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  signOut, 
+  signInAnonymously,
+  deleteUser
 } from "firebase/auth";
 import { 
+  getFirestore, 
   collection, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  getDocs, 
-  onSnapshot, 
+  addDoc, 
   query, 
   where, 
-  orderBy, 
-  addDoc, 
+  onSnapshot, 
+  deleteDoc, 
+  doc, 
   updateDoc, 
-  deleteDoc,
+  getDoc, 
+  setDoc,
+  getDocs,
   serverTimestamp,
+  orderBy,
+  limit,
   writeBatch
 } from "firebase/firestore";
-import { auth, db } from "./firebase";
-import firebaseConfig from "../firebase-applet-config.json";
+import { format, addDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, parseISO, startOfDay } from "date-fns";
+import { ja } from "date-fns/locale";
+import { motion, AnimatePresence } from "motion/react";
 
+// Firebase Config
+import firebaseConfig from '../firebase-applet-config.json';
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+const auth = getAuth(app);
+
+// Error Handling
 enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -90,7 +96,7 @@ const handleFirestoreError = (error: any, operationType: OperationType, path: st
   const errorMessage = error instanceof Error ? error.message : String(error);
   
   if (errorMessage.includes("Quota exceeded")) {
-    alert("Firebaseの無料枠の制限（クォータ）を超えました。しばらく時間をおいてから再度お試しください。通常、24時間以内にリセットされます。");
+    alert("Firebaseの無料枠の制限を超えました。しばらく時間をおいてから再度お試しください。");
   }
 
   const errInfo: FirestoreErrorInfo = {
@@ -142,7 +148,7 @@ interface Availability {
   status: "open" | "pending" | "confirmed";
   note?: string;
   is_private_note?: boolean;
-  created_at?: string;
+  created_at?: any;
 }
 
 interface ShiftRequest {
@@ -156,14 +162,15 @@ interface ShiftRequest {
   start_time: string;
   end_time: string;
   status: "pending" | "approved" | "canceled";
+  created_at?: any;
 }
 
 interface Notification {
   id: string;
   user_id: string;
-  type: string;
+  type: "request" | "approval" | "decline" | "system";
   message: string;
-  date: string;
+  date?: string;
   timestamp: any;
   read: boolean;
 }
@@ -172,33 +179,67 @@ interface Connection {
   id: string;
   user1_id: string;
   user2_id: string;
-  status: "pending" | "active";
-  visibility: string;
-  is_hidden: boolean;
-  other_visibility?: string;
-  other_is_hidden?: boolean;
-  other_user?: UserProfile;
+  status: "active";
 }
 
 interface Preset {
   id: string;
   user_id: string;
-  start_time: string;
-  end_time: string;
+  name: string;
+  start: string;
+  end: string;
 }
 
+// Components
+const Card = ({ children, className = "" }: { children: React.ReactNode, className?: string }) => (
+  <div className={`bg-white/80 backdrop-blur-xl border border-white/20 rounded-3xl shadow-sm ${className}`}>
+    {children}
+  </div>
+);
+
+const Button = ({ 
+  children, 
+  onClick, 
+  variant = "primary", 
+  className = "",
+  disabled = false,
+  icon: Icon
+}: { 
+  children: React.ReactNode, 
+  onClick?: () => void, 
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "danger" | "line",
+  className?: string,
+  disabled?: boolean,
+  icon?: any
+}) => {
+  const variants = {
+    primary: "bg-blue-600 text-white shadow-lg shadow-blue-200 hover:bg-blue-700",
+    secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200",
+    outline: "bg-transparent border-2 border-gray-100 text-gray-600 hover:bg-gray-50",
+    ghost: "bg-transparent text-gray-500 hover:bg-gray-100",
+    danger: "bg-red-50 text-red-600 hover:bg-red-100",
+    line: "bg-[#06C755] text-white hover:brightness-110"
+  };
+
+  return (
+    <button 
+      onClick={onClick} 
+      disabled={disabled}
+      className={`px-6 py-3 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50 ${variants[variant]} ${className}`}
+    >
+      {Icon && <Icon size={18} />}
+      {children}
+    </button>
+  );
+};
+
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [quotaExceeded, setQuotaExceeded] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<UserProfile[]>([]);
-  
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isPublicView, setIsPublicView] = useState(false);
   const [publicUser, setPublicUser] = useState<UserProfile | null>(null);
-  const [publicAvailabilities, setPublicAvailabilities] = useState<Availability[]>([]);
-  const [publicRequests, setPublicRequests] = useState<ShiftRequest[]>([]);
+  const [isProcessingLine, setIsProcessingLine] = useState(false);
 
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
@@ -211,11 +252,12 @@ export default function App() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
   const [dashboardDateOffset, setDashboardDateOffset] = useState(0);
   const [isDesktop, setIsDesktop] = useState(window.innerWidth >= 1024);
-  const [isProcessingLine, setIsProcessingLine] = useState(false);
+
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newAvailTime, setNewAvailTime] = useState({ start: "10:00", end: "15:00" });
 
   useEffect(() => {
     const handleResize = () => setIsDesktop(window.innerWidth >= 1024);
@@ -223,22 +265,9 @@ export default function App() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const [showDefaultTimeModal, setShowDefaultTimeModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
-  const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
-  const [showRequestConfirm, setShowRequestConfirm] = useState<{ aid: string, sid: string } | null>(null);
-  const [showApproveConfirm, setShowApproveConfirm] = useState<string | null>(null);
-  const [showDeclineConfirm, setShowDeclineConfirm] = useState<string | null>(null);
-  const [showCancelRequestConfirm, setShowCancelRequestConfirm] = useState<string | null>(null);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newAvailTime, setNewAvailTime] = useState({ start: "10:00", end: "15:00" });
-
+  // Data Migration
   const migrateUserData = async (oldUid: string, newUid: string) => {
     console.log(`Migrating data from ${oldUid} to ${newUid}`);
-    
     const collectionsToMigrate = [
       { name: "availabilities", field: "user_id" },
       { name: "requests", field: "staff_id" },
@@ -253,26 +282,15 @@ export default function App() {
       try {
         const snap = await getDocs(query(collection(db, colInfo.name), where(colInfo.field, "==", oldUid)));
         if (snap.empty) continue;
-
-        console.log(`Migrating ${snap.docs.length} docs from ${colInfo.name}`);
-
-        const chunks = [];
-        for (let i = 0; i < snap.docs.length; i += 500) {
-          chunks.push(snap.docs.slice(i, i + 500));
-        }
-
-        for (const chunk of chunks) {
-          const batch = writeBatch(db);
-          chunk.forEach(d => {
-            batch.update(doc(db, colInfo.name, d.id), { [colInfo.field]: newUid });
-          });
-          await batch.commit();
-        }
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => {
+          batch.update(doc(db, colInfo.name, d.id), { [colInfo.field]: newUid });
+        });
+        await batch.commit();
       } catch (err) {
         console.error(`Failed to migrate collection ${colInfo.name}:`, err);
       }
     }
-    console.log("Migration complete");
   };
 
   const processLineProfile = async (profile: any) => {
@@ -280,91 +298,54 @@ export default function App() {
     setIsProcessingLine(true);
     try {
       const firebaseUser = auth.currentUser;
-      
-      // LINE IDで既存ユーザーを探す
       const q = query(collection(db, "users"), where("line_user_id", "==", profile.userId));
       const snap = await getDocs(q);
       
       if (!snap.empty) {
-        // 既存ユーザーが見つかった場合
         const userData = snap.docs[0].data() as UserProfile;
-        
         if (firebaseUser) {
-          // ログイン中なら、UIDが違えば移行処理
           if (userData.uid !== firebaseUser.uid) {
-            const oldUid = userData.uid;
-            const newUid = firebaseUser.uid;
-            
-            const updatedProfile = { 
-              ...userData, 
-              uid: newUid,
-              name: profile.displayName || userData.name 
-            };
-            await setDoc(doc(db, "users", newUid), updatedProfile);
-            await migrateUserData(oldUid, newUid);
-            
-            if (!userData.email) {
-              await deleteDoc(doc(db, "users", oldUid));
-            }
-            
-            const freshDoc = await getDoc(doc(db, "users", newUid));
-            setCurrentUser(freshDoc.data() as UserProfile);
+            await migrateUserData(userData.uid, firebaseUser.uid);
+            const updatedProfile = { ...userData, uid: firebaseUser.uid, name: profile.displayName || userData.name };
+            await setDoc(doc(db, "users", firebaseUser.uid), updatedProfile);
+            if (!userData.email) await deleteDoc(doc(db, "users", userData.uid));
+            setCurrentUser(updatedProfile);
           } else {
             setCurrentUser(userData);
           }
         } else {
-          // ログインしていない場合（ユーザーの指示により signInAnonymously は呼ばない）
-          // UI表示のためにステートだけ更新するが、Firebaseの権限はない状態になる
           setCurrentUser(userData);
           setIsLoggedIn(true);
         }
-      } else {
-        // 新規ユーザー（LINE IDが登録されていない）
-        if (firebaseUser) {
-          // ログイン中なら、現在のユーザーにLINE IDを紐付ける
-          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (userDoc.exists()) {
-            const existingData = userDoc.data() as UserProfile;
-            const updatedProfile = {
-              ...existingData,
-              line_user_id: profile.userId,
-              notification_pref: existingData.notification_pref || "line"
-            };
-            await updateDoc(doc(db, "users", firebaseUser.uid), {
-              line_user_id: profile.userId,
-              notification_pref: updatedProfile.notification_pref
-            });
-            setCurrentUser(updatedProfile);
-          } else {
-            const newProfile: UserProfile = {
-              uid: firebaseUser.uid,
-              search_id: firebaseUser.uid.slice(0, 8),
-              name: profile.displayName || "User",
-              email: "",
-              role: "staff",
-              current_role: "staff",
-              share_token: Math.random().toString(36).substring(2, 15),
-              accept_requests: true,
-              line_user_id: profile.userId,
-              notification_pref: "line"
-            };
-            await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
-            setCurrentUser(newProfile);
-          }
-          setIsLoggedIn(true);
+      } else if (firebaseUser) {
+        const userDoc = await getDoc(doc(db, "users", firebaseUser.uid));
+        if (userDoc.exists()) {
+          const existingData = userDoc.data() as UserProfile;
+          const updatedProfile = { ...existingData, line_user_id: profile.userId, notification_pref: "line" };
+          await updateDoc(doc(db, "users", firebaseUser.uid), { line_user_id: profile.userId, notification_pref: "line" });
+          setCurrentUser(updatedProfile);
         } else {
-          // ログインしておらず、LINE IDも未登録の場合
-          alert("LINEで新規登録するには、まずGoogleログインまたはゲスト利用を開始してから、設定画面でLINEを連携してください。");
+          const newProfile: UserProfile = {
+            uid: firebaseUser.uid,
+            search_id: firebaseUser.uid.slice(0, 8),
+            name: profile.displayName || "User",
+            email: "",
+            role: "staff",
+            current_role: "staff",
+            share_token: Math.random().toString(36).substring(2, 15),
+            accept_requests: true,
+            line_user_id: profile.userId,
+            notification_pref: "line"
+          };
+          await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
+          setCurrentUser(newProfile);
         }
+        setIsLoggedIn(true);
+      } else {
+        alert("LINE連携するには、まずログインしてください。");
       }
     } catch (error: any) {
-      console.error("Error during LINE login processing:", error);
-      // 権限エラーなどの場合はユーザーに通知
-      if (error.code === 'permission-denied' || error.message?.includes('permissions')) {
-        alert("認証エラーが発生しました。一度ログアウトしてから再度お試しください。");
-      } else {
-        handleFirestoreError(error, OperationType.WRITE, "users");
-      }
+      console.error("LINE login processing error:", error);
     } finally {
       setIsProcessingLine(false);
       setIsAuthReady(true);
@@ -374,19 +355,14 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       try {
-        console.log("Auth state changed...");
         if (user) {
           if (isProcessingLine) return;
-
-          const urlParams = new URLSearchParams(window.location.search);
-          if (urlParams.get('line_user')) return;
-
           let userDoc = await getDoc(doc(db, "users", user.uid));
           if (!userDoc.exists()) {
             const newProfile: UserProfile = {
               uid: user.uid,
               search_id: user.uid.slice(0, 8),
-              name: user.displayName || (user.isAnonymous ? "ゲストユーザー" : "ユーザー"),
+              name: user.displayName || (user.isAnonymous ? "ゲスト" : "ユーザー"),
               email: user.email || "",
               role: "staff",
               current_role: "staff",
@@ -405,10 +381,7 @@ export default function App() {
           setIsLoggedIn(false);
         }
       } catch (error: any) {
-        console.error("Auth initialization error:", error);
-        if (error.message?.includes("Quota exceeded")) {
-          setQuotaExceeded(true);
-        }
+        console.error("Auth error:", error);
       } finally {
         setIsAuthReady(true);
       }
@@ -424,11 +397,8 @@ export default function App() {
     const lineUserParam = urlParams.get('line_user');
     if (lineUserParam) {
       try {
-        const profile = JSON.parse(decodeURIComponent(lineUserParam));
-        processLineProfile(profile);
-      } catch (e) {
-        console.error("Failed to parse line_user param", e);
-      }
+        processLineProfile(JSON.parse(decodeURIComponent(lineUserParam)));
+      } catch (e) {}
     }
 
     const handleMessage = (event: MessageEvent) => {
@@ -436,13 +406,75 @@ export default function App() {
         processLineProfile(event.data.profile);
       }
     };
-
     window.addEventListener('message', handleMessage);
     return () => {
       unsubscribe();
       window.removeEventListener('message', handleMessage);
     };
   }, [isProcessingLine]);
+
+  // Real-time Listeners
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+
+    const unsubAvail = onSnapshot(
+      query(collection(db, "availabilities"), where("user_id", "==", currentUser.uid), orderBy("date", "asc")),
+      (snap) => setAvailabilities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Availability))),
+      (err) => handleFirestoreError(err, OperationType.LIST, "availabilities")
+    );
+
+    const unsubReq = onSnapshot(
+      query(collection(db, "requests"), where("staff_id", "==", currentUser.uid)),
+      (snap) => {
+        const staffReqs = snap.docs.map(d => ({ id: d.id, ...d.data() } as ShiftRequest));
+        onSnapshot(query(collection(db, "requests"), where("manager_id", "==", currentUser.uid)), (snap2) => {
+          const managerReqs = snap2.docs.map(d => ({ id: d.id, ...d.data() } as ShiftRequest));
+          setRequests([...staffReqs, ...managerReqs]);
+        });
+      }
+    );
+
+    const unsubNotif = onSnapshot(
+      query(collection(db, "notifications"), where("user_id", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(20)),
+      (snap) => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)))
+    );
+
+    const unsubConn = onSnapshot(
+      query(collection(db, "connections"), where("user1_id", "==", currentUser.uid)),
+      (snap) => {
+        const c1 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
+        onSnapshot(query(collection(db, "connections"), where("user2_id", "==", currentUser.uid)), (snap2) => {
+          const c2 = snap2.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
+          setConnections([...c1, ...c2]);
+        });
+      }
+    );
+
+    const unsubPreset = onSnapshot(
+      query(collection(db, "presets"), where("user_id", "==", currentUser.uid)),
+      (snap) => setPresets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Preset)))
+    );
+
+    return () => {
+      unsubAvail();
+      unsubNotif();
+      unsubPreset();
+    };
+  }, [currentUser?.uid]);
+
+  // Handlers
+  const handleGoogleLogin = () => signInWithPopup(auth, new GoogleAuthProvider());
+  const handleGuestLogin = () => signInAnonymously(auth);
+  const handleLineLogin = async () => {
+    try {
+      const res = await fetch("/api/auth/line/url");
+      const data = await res.json();
+      if (data.url) {
+        if (window.innerWidth < 768) window.location.href = data.url;
+        else window.open(data.url, "line_auth", "width=500,height=600");
+      }
+    } catch (e) { console.error(e); }
+  };
 
   const fetchPublicData = async (token: string) => {
     try {
@@ -454,249 +486,173 @@ export default function App() {
         
         const qAvail = query(collection(db, "availabilities"), where("user_id", "==", userData.uid));
         const snapAvail = await getDocs(qAvail);
-        setPublicAvailabilities(snapAvail.docs.map(d => ({ id: d.id, ...d.data() } as Availability)));
-
-        const qReq = query(collection(db, "requests"), where("manager_id", "==", userData.uid));
-        const snapReq = await getDocs(qReq);
-        setPublicRequests(snapReq.docs.map(d => ({ id: d.id, ...d.data() } as ShiftRequest)));
+        setAvailabilities(snapAvail.docs.map(d => ({ id: d.id, ...d.data() } as Availability)));
       }
-    } catch (error) {
-      console.error("Error fetching public data:", error);
-    }
-  };
-
-  // Data Listeners
-  useEffect(() => {
-    if (!currentUser) return;
-
-    const activeStaffUids = connections
-      .filter(c => c.status === 'active')
-      .map(c => c.user1_id === currentUser.uid ? c.user2_id : c.user1_id);
-    const allRelevantUids = [currentUser.uid, ...activeStaffUids];
-
-    const chunks = [];
-    for (let i = 0; i < allRelevantUids.length; i += 30) {
-      chunks.push(allRelevantUids.slice(i, i + 30));
-    }
-
-    const unsubsAvail = chunks.map(chunk => {
-      const q = query(collection(db, "availabilities"), where("user_id", "in", chunk));
-      return onSnapshot(q, (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Availability));
-        setAvailabilities(prev => {
-          const filtered = prev.filter(a => !chunk.includes(a.user_id));
-          const merged = [...filtered, ...data];
-          // Remove duplicates
-          return Array.from(new Map(merged.map(item => [item.id, item])).values());
-        });
-      });
-    });
-
-    const qReqManager = query(collection(db, "requests"), where("manager_id", "==", currentUser.uid));
-    const unsubReqManager = onSnapshot(qReqManager, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShiftRequest));
-      setRequests(prev => {
-        const filtered = prev.filter(r => r.manager_id !== currentUser.uid);
-        const merged = [...filtered, ...data];
-        return Array.from(new Map(merged.map(item => [item.id, item])).values());
-      });
-    });
-
-    const qReqStaff = query(collection(db, "requests"), where("staff_id", "==", currentUser.uid));
-    const unsubReqStaff = onSnapshot(qReqStaff, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ShiftRequest));
-      setRequests(prev => {
-        const filtered = prev.filter(r => r.staff_id !== currentUser.uid);
-        const merged = [...filtered, ...data];
-        return Array.from(new Map(merged.map(item => [item.id, item])).values());
-      });
-    });
-
-    const qConn1 = query(collection(db, "connections"), where("user1_id", "==", currentUser.uid));
-    const unsubConn1 = onSnapshot(qConn1, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Connection));
-      setConnections(prev => {
-        const filtered = prev.filter(c => c.user1_id !== currentUser.uid);
-        const merged = [...filtered, ...data];
-        return Array.from(new Map(merged.map(item => [item.id, item])).values());
-      });
-    });
-
-    const qConn2 = query(collection(db, "connections"), where("user2_id", "==", currentUser.uid));
-    const unsubConn2 = onSnapshot(qConn2, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Connection));
-      setConnections(prev => {
-        const filtered = prev.filter(c => c.user2_id !== currentUser.uid);
-        const merged = [...filtered, ...data];
-        return Array.from(new Map(merged.map(item => [item.id, item])).values());
-      });
-    });
-
-    const qNotif = query(collection(db, "notifications"), where("user_id", "==", currentUser.uid), orderBy("timestamp", "desc"));
-    const unsubNotif = onSnapshot(qNotif, (snapshot) => {
-      setNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Notification)));
-    });
-
-    const qPreset = query(collection(db, "presets"), where("user_id", "==", currentUser.uid));
-    const unsubPreset = onSnapshot(qPreset, (snapshot) => {
-      setPresets(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Preset)));
-    });
-
-    return () => {
-      unsubsAvail.forEach(unsub => unsub());
-      unsubReqManager();
-      unsubReqStaff();
-      unsubConn1();
-      unsubConn2();
-      unsubNotif();
-      unsubPreset();
-    };
-  }, [currentUser?.uid, connections.length]);
-
-  const handleLineLogin = async () => {
-    try {
-      const response = await fetch("/api/auth/line/url");
-      const data = await response.json();
-      if (data.url) {
-        if (window.innerWidth < 768) {
-          window.location.href = data.url;
-        } else {
-          window.open(data.url, "line_auth", "width=500,height=600");
-        }
-      }
-    } catch (error) {
-      console.error("LINE login error:", error);
-    }
-  };
-
-  const handleGuestLogin = async () => {
-    try {
-      await signInAnonymously(auth);
-    } catch (error) {
-      console.error("Guest login error:", error);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login error:", error);
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    setView("dashboard");
-    window.location.href = window.location.origin;
+    } catch (e) { console.error(e); }
   };
 
   const handleAddAvailability = async () => {
     if (!currentUser) return;
-    const dateStr = format(selectedDate, "yyyy-MM-dd");
-    const newAvail: Omit<Availability, "id"> = {
-      user_id: currentUser.uid,
-      user_name: currentUser.name,
-      date: dateStr,
-      start_time: newAvailTime.start,
-      end_time: newAvailTime.end,
-      status: "open",
-      created_at: new Date().toISOString()
-    };
-    await addDoc(collection(db, "availabilities"), newAvail);
-    setShowAddModal(false);
+    setIsSaving(true);
+    try {
+      await addDoc(collection(db, "availabilities"), {
+        user_id: currentUser.uid,
+        user_name: currentUser.name,
+        date: format(selectedDate, "yyyy-MM-dd"),
+        start_time: newAvailTime.start,
+        end_time: newAvailTime.end,
+        status: "open",
+        created_at: serverTimestamp()
+      });
+      setShowAddModal(false);
+    } catch (e) { console.error(e); }
+    finally { setIsSaving(false); }
   };
 
-  const handleRequestShift = async (aid: string, sid: string) => {
+  const handleDeleteAvailability = async (id: string) => {
+    await deleteDoc(doc(db, "availabilities", id));
+  };
+
+  const handleSendRequest = async (availability: Availability) => {
     if (!currentUser) return;
-    const avail = availabilities.find(a => a.id === aid);
-    if (!avail) return;
-
-    const newRequest: Omit<ShiftRequest, "id"> = {
-      staff_id: sid,
-      staff_name: avail.user_name || "Staff",
-      manager_id: currentUser.uid,
-      manager_name: currentUser.name,
-      availability_id: aid,
-      date: avail.date,
-      start_time: avail.start_time,
-      end_time: avail.end_time,
-      status: "pending"
-    };
-
-    await addDoc(collection(db, "requests"), newRequest);
-    await updateDoc(doc(db, "availabilities", aid), { status: "pending" });
-    
-    await addDoc(collection(db, "notifications"), {
-      user_id: sid,
-      type: "request",
-      message: `${currentUser.name}さんからシフトリクエストが届きました`,
-      date: avail.date,
-      timestamp: serverTimestamp(),
-      read: false
-    });
+    try {
+      const reqData = {
+        staff_id: availability.user_id,
+        staff_name: availability.user_name,
+        manager_id: currentUser.uid,
+        manager_name: currentUser.name,
+        availability_id: availability.id,
+        date: availability.date,
+        start_time: availability.start_time,
+        end_time: availability.end_time,
+        status: "pending",
+        created_at: serverTimestamp()
+      };
+      await addDoc(collection(db, "requests"), reqData);
+      
+      // Notify via LINE if possible
+      const staffDoc = await getDoc(doc(db, "users", availability.user_id));
+      const staffData = staffDoc.data() as UserProfile;
+      if (staffData?.line_user_id) {
+        await fetch("/api/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            lineUserId: staffData.line_user_id,
+            message: `${currentUser.name}さんからシフト依頼が届きました！\n日時: ${availability.date} ${availability.start_time}-${availability.end_time}`
+          })
+        });
+      }
+      
+      alert("依頼を送信しました！");
+    } catch (e) { console.error(e); }
   };
 
-  const handleApproveRequest = async (rid: string) => {
-    const req = requests.find(r => r.id === rid);
-    if (!req) return;
-    await updateDoc(doc(db, "requests", rid), { status: "approved" });
-    await updateDoc(doc(db, "availabilities", req.availability_id), { status: "confirmed" });
-    
-    await addDoc(collection(db, "notifications"), {
-      user_id: req.manager_id,
-      type: "approval",
-      message: `${req.staff_name}さんがシフトリクエストを承認しました`,
-      date: req.date,
-      timestamp: serverTimestamp(),
-      read: false
-    });
+  const copyShareLink = () => {
+    if (!currentUser) return;
+    const link = `${window.location.origin}?share=${currentUser.share_token}`;
+    navigator.clipboard.writeText(link);
+    alert("共有リンクをコピーしました！");
   };
 
-  const handleDeclineRequest = async (rid: string) => {
-    const req = requests.find(r => r.id === rid);
-    if (!req) return;
-    await updateDoc(doc(db, "requests", rid), { status: "canceled" });
-    await updateDoc(doc(db, "availabilities", req.availability_id), { status: "open" });
-    
-    await addDoc(collection(db, "notifications"), {
-      user_id: req.manager_id,
-      type: "decline",
-      message: `${req.staff_name}さんがシフトリクエストを辞退しました`,
-      date: req.date,
-      timestamp: serverTimestamp(),
-      read: false
-    });
-  };
-
-  if (!isAuthReady) return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  // Renderers
+  if (!isAuthReady) return (
+    <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+      <motion.div 
+        animate={{ rotate: 360 }} 
+        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+        className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full"
+      />
+    </div>
+  );
 
   if (!isLoggedIn && !isPublicView) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-6">
-        <div className="w-full max-w-sm space-y-8">
-          <div className="text-center space-y-2">
-            <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mx-auto mb-6 transform rotate-12 shadow-xl shadow-blue-100">
-              <Calendar size={40} className="text-[#3b82f6]" />
+      <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md space-y-12 text-center"
+        >
+          <div className="space-y-4">
+            <div className="w-24 h-24 bg-blue-600 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl shadow-blue-200 rotate-12">
+              <Calendar size={48} className="text-white" />
             </div>
-            <h1 className="text-4xl font-bold tracking-tighter font-righteous text-[#3b82f6]">SukiMach</h1>
-            <p className="text-black/40 font-medium">スマートなシフト管理と共有</p>
+            <h1 className="text-5xl font-black tracking-tighter text-gray-900">SukiMach</h1>
+            <p className="text-xl text-gray-500 font-medium">スキマ時間を価値に変える、<br/>次世代シフト管理ツール</p>
           </div>
-          <div className="space-y-4 pt-8">
-            <button onClick={handleGoogleLogin} className="w-full py-4 bg-white border-2 border-black/5 text-black font-bold rounded-xl shadow-sm flex items-center justify-center gap-3 hover:bg-black/5 transition-all">
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-              Googleでログイン
-            </button>
-            <button onClick={handleLineLogin} className="w-full py-4 bg-[#06C755] text-white font-bold rounded-xl shadow-sm flex items-center justify-center gap-3 hover:brightness-110 transition-all">
-              <MessageCircle size={20} fill="white" />
+
+          <div className="grid gap-4">
+            <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="py-5 text-lg">
               LINEでログイン
-            </button>
-            <button onClick={handleGuestLogin} className="w-full py-4 bg-black/5 text-black/60 font-bold rounded-xl shadow-sm flex items-center justify-center gap-3 hover:bg-black/10 transition-all">
-              ゲストとして利用
-            </button>
+            </Button>
+            <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="py-5 text-lg">
+              Googleでログイン
+            </Button>
+            <div className="relative py-4">
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+              <div className="relative flex justify-center text-sm"><span className="px-4 bg-[#F8FAFC] text-gray-400">または</span></div>
+            </div>
+            <Button onClick={handleGuestLogin} variant="secondary" icon={ArrowRight} className="py-5 text-lg">
+              ゲストとして今すぐ開始
+            </Button>
+          </div>
+
+          <p className="text-sm text-gray-400">
+            ログインすることで、<a href="#" className="underline">利用規約</a>と<a href="#" className="underline">プライバシーポリシー</a>に同意したことになります。
+          </p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  if (isPublicView && publicUser) {
+    return (
+      <div className="min-h-screen bg-[#F8FAFC] p-6 lg:p-12">
+        <div className="max-w-2xl mx-auto space-y-8">
+          <div className="flex items-center gap-6">
+            <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center shadow-xl shadow-blue-100">
+              <Calendar size={40} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black tracking-tight">{publicUser.name}さんの予定</h1>
+              <p className="text-gray-500 font-medium">空き時間を確認して依頼を送りましょう</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-xl font-black">公開中の空き時間</h3>
+            <div className="grid gap-4">
+              {availabilities.length > 0 ? (
+                availabilities.map(a => (
+                  <Card key={a.id} className="p-6 flex items-center justify-between">
+                    <div className="flex items-center gap-6">
+                      <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                        <Clock size={24} />
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold">{format(parseISO(a.date), "M月d日 (E)", { locale: ja })}</p>
+                        <p className="text-2xl font-black">{a.start_time} - {a.end_time}</p>
+                      </div>
+                    </div>
+                    {isLoggedIn ? (
+                      <Button onClick={() => handleSendRequest(a)} variant="outline">依頼する</Button>
+                    ) : (
+                      <Button onClick={() => alert("依頼を送るにはログインが必要です。")} variant="outline">依頼する</Button>
+                    )}
+                  </Card>
+                ))
+              ) : (
+                <div className="py-12 text-center bg-white rounded-3xl border border-dashed border-gray-200 text-gray-400 font-bold">
+                  公開中の予定はありません
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-8 border-t border-gray-100 text-center">
+            <p className="text-gray-400 mb-4 font-medium">あなたもSukiMachで予定を管理しませんか？</p>
+            <Button onClick={() => window.location.href = window.location.origin} variant="primary">自分も使ってみる</Button>
           </div>
         </div>
       </div>
@@ -704,167 +660,389 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-[#111111] font-sans lg:flex">
-      {/* Sidebar */}
-      <aside className="hidden lg:flex flex-col w-64 bg-black/5 border-r border-black/5 h-screen sticky top-0 p-6 space-y-8">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-[#3b82f6] rounded-2xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
-            <LayoutDashboard size={24} />
+    <div className="min-h-screen bg-[#F8FAFC] text-gray-900 font-sans">
+      {/* Sidebar Desktop */}
+      <aside className="fixed left-0 top-0 bottom-0 w-72 bg-white border-r border-gray-100 hidden lg:flex flex-col p-8 z-20">
+        <div className="flex items-center gap-3 mb-12">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-100">
+            <Calendar size={20} className="text-white" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight text-[#3b82f6]">SukiMach</h1>
+          <span className="text-2xl font-black tracking-tighter">SukiMach</span>
         </div>
-        <nav className="flex flex-col gap-2">
-          <button onClick={() => setView("dashboard")} className={`flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${view === "dashboard" ? "bg-[#3b82f6] text-white shadow-lg shadow-blue-200" : "text-black/40 hover:bg-black/5"}`}>
-            <LayoutDashboard size={20} /> <span>ホーム</span>
-          </button>
-          <button onClick={() => setView("calendar")} className={`flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${view === "calendar" ? "bg-[#3b82f6] text-white shadow-lg shadow-blue-200" : "text-black/40 hover:bg-black/5"}`}>
-            <Calendar size={20} /> <span>カレンダー</span>
-          </button>
-          <button onClick={() => setView("settings")} className={`flex items-center gap-3 px-4 py-3 rounded-2xl font-bold transition-all ${view === "settings" ? "bg-[#3b82f6] text-white shadow-lg shadow-blue-200" : "text-black/40 hover:bg-black/5"}`}>
-            <Settings size={20} /> <span>設定</span>
-          </button>
+
+        <nav className="space-y-2 flex-1">
+          {[
+            { id: "dashboard", label: "ダッシュボード", icon: LayoutDashboard },
+            { id: "calendar", label: "カレンダー", icon: CalendarDays },
+            { id: "settings", label: "設定", icon: Settings },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => setView(item.id as any)}
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${view === item.id ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"}`}
+            >
+              <item.icon size={22} />
+              {item.label}
+            </button>
+          ))}
         </nav>
-        <div className="mt-auto pt-6 border-t border-black/5">
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-bold text-red-500 hover:bg-red-50 transition-all">
-            <LogOut size={20} /> <span>ログアウト</span>
-          </button>
+
+        <div className="pt-8 border-t border-gray-100">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden">
+              <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser?.name}`} alt="avatar" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold truncate">{currentUser?.name}</p>
+              <p className="text-xs text-gray-400 truncate">{currentUser?.email || "ゲストユーザー"}</p>
+            </div>
+          </div>
+          <Button onClick={() => signOut(auth)} variant="danger" className="w-full" icon={LogOut}>
+            ログアウト
+          </Button>
         </div>
       </aside>
 
-      <div className="flex-1 flex flex-col min-h-screen pb-20 lg:pb-0">
-        <header className="px-6 py-4 flex items-center justify-between border-b border-black/5 sticky top-0 bg-white/80 backdrop-blur-md z-10 lg:bg-white lg:px-12">
-          <div className="lg:hidden">
-            <h1 className="text-xl font-bold tracking-tight text-[#3b82f6]">SukiMach</h1>
+      {/* Main Content */}
+      <main className={`lg:ml-72 min-h-screen pb-32 lg:pb-12`}>
+        {/* Header */}
+        <header className="sticky top-0 z-10 bg-[#F8FAFC]/80 backdrop-blur-md px-6 py-6 lg:px-12 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest">
+              {view === "dashboard" ? "Overview" : view === "calendar" ? "Schedule" : "Preferences"}
+            </h2>
+            <h1 className="text-3xl font-black tracking-tight">
+              {view === "dashboard" ? "こんにちは！" : view === "calendar" ? "カレンダー" : "設定"}
+            </h1>
           </div>
-          <div className="flex gap-4 relative ml-auto">
-            <button onClick={() => setShowBellDropdown(!showBellDropdown)} className="p-2 rounded-full hover:bg-black/5 transition-colors relative">
+
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setShowBellDropdown(!showBellDropdown)}
+              className="w-12 h-12 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-50 relative"
+            >
               <Bell size={20} />
-              {notifications.length > 0 && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
+              {notifications.some(n => !n.read) && (
+                <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+              )}
             </button>
+            <Button onClick={() => setShowAddModal(true)} icon={Plus} className="hidden sm:flex">
+              予定を追加
+            </Button>
           </div>
         </header>
 
-        <main className="px-6 py-6 max-w-md mx-auto lg:max-w-none lg:px-12 lg:flex-1">
-          {view === "dashboard" && (
-            <div className="space-y-8">
-              <div className="flex items-center justify-between">
-                <div className="flex gap-2">
-                  {[0, 1, 2, 3].map(offset => (
-                    <button key={offset} onClick={() => setDashboardDateOffset(offset)} className={`px-4 py-2 rounded-full text-xs font-bold transition-all ${dashboardDateOffset === offset ? "bg-[#3b82f6] text-white shadow-md shadow-[#3b82f6]/20" : "bg-black/5 text-black/40 hover:bg-black/10"}`}>
-                      {offset === 0 ? "今日" : offset === 1 ? "明日" : format(addDays(new Date(), offset), "M/d")}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="bg-white border border-black/5 rounded-3xl p-6 shadow-sm">
-                <h3 className="text-sm font-bold mb-4">{format(addDays(new Date(), dashboardDateOffset), "M月d日 (E)", { locale: ja })} の状況</h3>
-                <div className="space-y-4">
-                  {availabilities.filter(a => a.date === format(addDays(new Date(), dashboardDateOffset), "yyyy-MM-dd")).map(a => (
-                    <div key={a.id} className="flex items-center justify-between py-2 border-b border-black/5 last:border-0">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${a.status === 'confirmed' ? 'bg-emerald-50 text-emerald-500' : 'bg-black/5 text-black/40'}`}>
-                          <Clock size={16} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold">{a.user_name || "User"}</p>
-                          <p className="text-[10px] text-black/40">{a.start_time}-{a.end_time}</p>
-                        </div>
+        <div className="px-6 lg:px-12">
+          <AnimatePresence mode="wait">
+            {view === "dashboard" && (
+              <motion.div 
+                key="dashboard"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8"
+              >
+                {/* Quick Actions */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card className="p-8 bg-blue-600 text-white border-none relative overflow-hidden group">
+                    <div className="relative z-10 space-y-4">
+                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                        <Share2 size={24} />
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${a.status === 'confirmed' ? 'bg-emerald-50 text-emerald-500' : 'bg-black/5 text-black/40'}`}>
-                        {a.status === 'confirmed' ? '確定' : '空き'}
-                      </span>
+                      <div>
+                        <h3 className="text-xl font-bold">予定を共有</h3>
+                        <p className="text-blue-100 text-sm">リンクを送るだけで調整完了</p>
+                      </div>
+                      <Button onClick={copyShareLink} variant="secondary" className="w-full bg-white text-blue-600">
+                        リンクをコピー
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+                    <Share2 size={120} className="absolute -right-8 -bottom-8 text-white/10 group-hover:scale-110 transition-transform" />
+                  </Card>
 
-          {view === "calendar" && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-bold">{format(selectedDate, "yyyy年 M月", { locale: ja })}</h2>
-                <div className="flex gap-2">
-                  <button onClick={() => setSelectedDate(addMonths(selectedDate, -1))} className="p-2 hover:bg-black/5 rounded-full"><ChevronLeft size={20} /></button>
-                  <button onClick={() => setSelectedDate(addMonths(selectedDate, 1))} className="p-2 hover:bg-black/5 rounded-full"><ChevronRight size={20} /></button>
-                </div>
-              </div>
-              <div className="bg-white border border-black/5 rounded-3xl p-4 shadow-sm">
-                <div className="grid grid-cols-7 gap-2">
-                  {["日", "月", "火", "水", "木", "金", "土"].map((d, i) => (
-                    <div key={d} className={`text-center text-[10px] font-bold py-2 ${i === 0 ? "text-red-500" : i === 6 ? "text-blue-500" : "text-black/40"}`}>{d}</div>
-                  ))}
-                  {eachDayOfInterval({ start: startOfWeek(startOfMonth(selectedDate)), end: endOfWeek(endOfMonth(selectedDate)) }).map((day, i) => {
-                    const isSelected = isSameDay(day, selectedDate);
-                    const isCurrentMonth = isSameMonth(day, selectedDate);
-                    return (
-                      <button key={i} onClick={() => setSelectedDate(day)} className={`aspect-square flex flex-col items-center justify-center rounded-xl transition-all ${isSelected ? "bg-blue-100 ring-2 ring-blue-500 ring-offset-2" : "hover:bg-black/5"} ${!isCurrentMonth ? "opacity-20" : ""}`}>
-                        <span className="text-sm font-bold">{format(day, "d")}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="space-y-4">
-                <h3 className="font-bold">{format(selectedDate, "M月d日")}の予定</h3>
-                <button onClick={() => setShowAddModal(true)} className="w-full py-4 border-2 border-dashed border-black/5 rounded-2xl text-black/40 text-sm font-medium hover:border-[#3b82f6]/20 hover:text-[#3b82f6] transition-all flex items-center justify-center gap-2">
-                  <Plus size={18} /> 新しい空き時間を追加
-                </button>
-              </div>
-            </div>
-          )}
+                  <Card className="p-8 space-y-4">
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                      <Check size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">確定済み</h3>
+                      <p className="text-gray-400 text-sm">今週の確定シフト</p>
+                    </div>
+                    <p className="text-4xl font-black">{availabilities.filter(a => a.status === "confirmed").length}<span className="text-lg font-bold ml-1">件</span></p>
+                  </Card>
 
-          {view === "settings" && (
-            <div className="space-y-8">
-              <h2 className="text-2xl font-bold">設定</h2>
-              <div className="bg-white border border-black/5 rounded-2xl overflow-hidden">
-                <div className="p-6 border-b border-black/5">
-                  <p className="text-sm font-bold">{currentUser.name}</p>
-                  <p className="text-xs text-black/40">{currentUser.email}</p>
+                  <Card className="p-8 space-y-4">
+                    <div className="w-12 h-12 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center">
+                      <Clock size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-bold">リクエスト</h3>
+                      <p className="text-gray-400 text-sm">承認待ちの依頼</p>
+                    </div>
+                    <p className="text-4xl font-black">{requests.filter(r => r.status === "pending").length}<span className="text-lg font-bold ml-1">件</span></p>
+                  </Card>
                 </div>
-                <button onClick={handleLogout} className="w-full px-6 py-4 flex items-center gap-3 text-red-500 font-bold hover:bg-red-50 transition-colors">
-                  <LogOut size={18} /> <span>ログアウト</span>
-                </button>
-              </div>
-            </div>
-          )}
-        </main>
 
-        {/* Mobile Nav */}
-        <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-lg border-t border-black/5 px-6 py-3 flex justify-around items-center z-10 lg:hidden">
-          <button onClick={() => setView("dashboard")} className={`flex flex-col items-center gap-1 ${view === "dashboard" ? "text-[#3b82f6]" : "text-black/30"}`}>
-            <LayoutDashboard size={24} /> <span className="text-[10px] font-bold">ホーム</span>
+                {/* Today's Schedule */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-2xl font-black tracking-tight">今日の予定</h3>
+                    <div className="flex gap-2">
+                      {[0, 1, 2].map(offset => (
+                        <button 
+                          key={offset}
+                          onClick={() => setDashboardDateOffset(offset)}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${dashboardDateOffset === offset ? "bg-gray-900 text-white" : "bg-white text-gray-400 border border-gray-100"}`}
+                        >
+                          {offset === 0 ? "今日" : offset === 1 ? "明日" : format(addDays(new Date(), offset), "M/d")}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4">
+                    {availabilities
+                      .filter(a => isSameDay(parseISO(a.date), addDays(new Date(), dashboardDateOffset)))
+                      .length > 0 ? (
+                        availabilities
+                          .filter(a => isSameDay(parseISO(a.date), addDays(new Date(), dashboardDateOffset)))
+                          .map(a => (
+                            <Card key={a.id} className="p-6 flex items-center justify-between group">
+                              <div className="flex items-center gap-6">
+                                <div className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center ${a.status === "confirmed" ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600"}`}>
+                                  <Clock size={20} />
+                                </div>
+                                <div>
+                                  <p className="text-xl font-black">{a.start_time} - {a.end_time}</p>
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <span className={`w-2 h-2 rounded-full ${a.status === "confirmed" ? "bg-emerald-500" : "bg-blue-500"}`}></span>
+                                    <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">{a.status}</p>
+                                  </div>
+                                </div>
+                              </div>
+                              <button onClick={() => handleDeleteAvailability(a.id)} className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100">
+                                <Trash2 size={20} />
+                              </button>
+                            </Card>
+                          ))
+                      ) : (
+                        <div className="py-12 text-center space-y-4 bg-white rounded-3xl border border-dashed border-gray-200">
+                          <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto text-gray-300">
+                            <Calendar size={32} />
+                          </div>
+                          <p className="text-gray-400 font-bold">予定がありません</p>
+                          <Button onClick={() => setShowAddModal(true)} variant="outline" icon={Plus}>予定を追加する</Button>
+                        </div>
+                      )}
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {view === "calendar" && (
+              <motion.div 
+                key="calendar"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Card className="p-8">
+                  <div className="flex items-center justify-between mb-8">
+                    <h3 className="text-2xl font-black">{format(selectedDate, "yyyy年 M月", { locale: ja })}</h3>
+                    <div className="flex gap-2">
+                      <button onClick={() => setSelectedDate(addDays(selectedDate, -7))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronLeft size={20}/></button>
+                      <button onClick={() => setSelectedDate(addDays(selectedDate, 7))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronRight size={20}/></button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-7 gap-4">
+                    {["日", "月", "火", "水", "木", "金", "土"].map(d => (
+                      <div key={d} className="text-center text-xs font-black text-gray-400 uppercase pb-4">{d}</div>
+                    ))}
+                    {eachDayOfInterval({
+                      start: startOfWeek(selectedDate),
+                      end: endOfWeek(selectedDate)
+                    }).map(day => {
+                      const dayAvails = availabilities.filter(a => isSameDay(parseISO(a.date), day));
+                      const isSelected = isSameDay(day, selectedDate);
+                      const isToday = isSameDay(day, new Date());
+
+                      return (
+                        <button 
+                          key={day.toString()}
+                          onClick={() => { setSelectedDate(day); setShowAddModal(true); }}
+                          className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-1 transition-all relative ${isSelected ? "bg-blue-600 text-white shadow-xl shadow-blue-200" : "hover:bg-gray-50"}`}
+                        >
+                          <span className={`text-lg font-black ${isToday && !isSelected ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
+                          <div className="flex gap-0.5">
+                            {dayAvails.slice(0, 3).map(a => (
+                              <span key={a.id} className={`w-1.5 h-1.5 rounded-full ${isSelected ? "bg-white/40" : "bg-blue-400"}`}></span>
+                            ))}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Card>
+              </motion.div>
+            )}
+
+            {view === "settings" && (
+              <motion.div 
+                key="settings"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="max-w-2xl space-y-8"
+              >
+                <Card className="p-8 space-y-8">
+                  <section className="space-y-6">
+                    <h3 className="text-xl font-black flex items-center gap-3">
+                      <User size={24} className="text-blue-600" />
+                      プロフィール
+                    </h3>
+                    <div className="flex items-center gap-6">
+                      <div className="w-20 h-20 bg-gray-100 rounded-3xl overflow-hidden">
+                        <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser?.name}`} alt="avatar" />
+                      </div>
+                      <div className="flex-1 space-y-2">
+                        {isEditingName ? (
+                          <div className="flex gap-2">
+                            <input 
+                              value={newName} 
+                              onChange={e => setNewName(e.target.value)}
+                              className="flex-1 px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <Button onClick={async () => {
+                              if (!currentUser) return;
+                              await updateDoc(doc(db, "users", currentUser.uid), { name: newName });
+                              setIsEditingName(false);
+                            }} icon={Check}>保存</Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between">
+                            <p className="text-2xl font-black">{currentUser?.name}</p>
+                            <Button onClick={() => setIsEditingName(true)} variant="ghost">編集</Button>
+                          </div>
+                        )}
+                        <p className="text-gray-400 font-medium">{currentUser?.email || "ゲストユーザー"}</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-6 pt-8 border-t border-gray-100">
+                    <h3 className="text-xl font-black flex items-center gap-3">
+                      <MessageCircle size={24} className="text-[#06C755]" />
+                      LINE連携
+                    </h3>
+                    {currentUser?.line_user_id ? (
+                      <div className="bg-emerald-50 p-6 rounded-3xl flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#06C755]">
+                            <Check size={24} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-emerald-900">連携済み</p>
+                            <p className="text-sm text-emerald-700">LINEで通知を受け取れます</p>
+                          </div>
+                        </div>
+                        <Button variant="ghost" className="text-emerald-600">解除</Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <p className="text-gray-500">LINEと連携すると、シフトのリクエストや承認をリアルタイムで受け取ることができます。</p>
+                        <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full">
+                          LINEと連携する
+                        </Button>
+                      </div>
+                    )}
+                  </section>
+                </Card>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </main>
+
+      {/* Mobile Nav */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-100 px-6 py-4 flex items-center justify-between lg:hidden z-30">
+        {[
+          { id: "dashboard", icon: LayoutDashboard },
+          { id: "calendar", icon: CalendarDays },
+          { id: "add", icon: Plus, special: true },
+          { id: "share", icon: Share2 },
+          { id: "settings", icon: Settings },
+        ].map(item => (
+          <button
+            key={item.id}
+            onClick={() => {
+              if (item.id === "add") setShowAddModal(true);
+              else if (item.id === "share") copyShareLink();
+              else setView(item.id as any);
+            }}
+            className={`p-4 rounded-2xl transition-all ${item.special ? "bg-blue-600 text-white shadow-xl shadow-blue-200 -mt-12" : view === item.id ? "text-blue-600" : "text-gray-400"}`}
+          >
+            <item.icon size={24} />
           </button>
-          <button onClick={() => setView("calendar")} className={`flex flex-col items-center gap-1 ${view === "calendar" ? "text-[#3b82f6]" : "text-black/30"}`}>
-            <Calendar size={24} /> <span className="text-[10px] font-bold">カレンダー</span>
-          </button>
-          <button onClick={() => setView("settings")} className={`flex flex-col items-center gap-1 ${view === "settings" ? "text-[#3b82f6]" : "text-black/30"}`}>
-            <Settings size={24} /> <span className="text-[10px] font-bold">設定</span>
-          </button>
-        </nav>
-      </div>
+        ))}
+      </nav>
 
-      {/* Modals */}
+      {/* Add Modal */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl">
-              <h3 className="text-lg font-bold mb-4">空き時間を追加</h3>
-              <div className="space-y-4 mb-6">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-black/40 uppercase">開始</label>
-                    <input type="time" value={newAvailTime.start} onChange={(e) => setNewAvailTime(prev => ({ ...prev, start: e.target.value }))} className="w-full p-3 bg-black/5 border-0 rounded-xl text-sm font-bold" />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-black/40 uppercase">終了</label>
-                    <input type="time" value={newAvailTime.end} onChange={(e) => setNewAvailTime(prev => ({ ...prev, end: e.target.value }))} className="w-full p-3 bg-black/5 border-0 rounded-xl text-sm font-bold" />
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAddModal(false)}
+              className="absolute inset-0 bg-black/20 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              className="relative w-full max-w-lg bg-white rounded-t-[3rem] sm:rounded-[3rem] p-10 shadow-2xl"
+            >
+              <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-8 sm:hidden" />
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-3xl font-black tracking-tight">予定を追加</h3>
+                <button onClick={() => setShowAddModal(false)} className="p-2 hover:bg-gray-100 rounded-full"><X/></button>
+              </div>
+
+              <div className="space-y-8">
+                <div className="space-y-3">
+                  <label className="text-sm font-black text-gray-400 uppercase tracking-widest">日付</label>
+                  <div className="p-6 bg-gray-50 rounded-3xl flex items-center justify-between">
+                    <span className="text-xl font-bold">{format(selectedDate, "yyyy年 M月 d日 (E)", { locale: ja })}</span>
+                    <Calendar className="text-gray-300" />
                   </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={handleAddAvailability} className="flex-1 py-3 bg-[#3b82f6] text-white text-xs font-bold rounded-xl">追加する</button>
-                <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 bg-black/5 text-black/60 text-xs font-bold rounded-xl">キャンセル</button>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">開始</label>
+                    <input 
+                      type="time" 
+                      value={newAvailTime.start}
+                      onChange={e => setNewAvailTime({...newAvailTime, start: e.target.value})}
+                      className="w-full p-6 bg-gray-50 rounded-3xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-sm font-black text-gray-400 uppercase tracking-widest">終了</label>
+                    <input 
+                      type="time" 
+                      value={newAvailTime.end}
+                      onChange={e => setNewAvailTime({...newAvailTime, end: e.target.value})}
+                      className="w-full p-6 bg-gray-50 rounded-3xl text-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <Button onClick={handleAddAvailability} className="w-full py-5 text-xl" disabled={isSaving}>
+                  {isSaving ? "保存中..." : "この内容で登録する"}
+                </Button>
               </div>
             </motion.div>
           </div>
