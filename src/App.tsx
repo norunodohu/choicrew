@@ -2236,7 +2236,7 @@ export default function App() {
       {/* Add Modal */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6">
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -2248,7 +2248,7 @@ export default function App() {
               initial={false}
               animate={false}
               exit={false}
-              className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 sm:p-10 shadow-2xl overflow-hidden"
+              className="relative w-full max-w-lg bg-white rounded-t-[2rem] sm:rounded-[2rem] p-6 sm:p-7 shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto"
             >
               <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-6 sm:hidden" />
               <div className="flex items-center justify-between mb-8">
