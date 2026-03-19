@@ -68,6 +68,13 @@ const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 const auth = getAuth(app);
 const CHOICREW_LOGO = "/choicrew-logo.svg";
 const AUTH_ID_DOMAIN = "choicrew.local";
+const presetAvatars = [
+  "https://api.dicebear.com/7.x/avataaars/svg?seed=crew1",
+  "https://api.dicebear.com/7.x/avataaars/svg?seed=crew2",
+  "https://api.dicebear.com/7.x/avataaars/svg?seed=crew3",
+  "https://api.dicebear.com/7.x/avataaars/svg?seed=crew4",
+  "https://api.dicebear.com/7.x/avataaars/svg?seed=crew5"
+];
 
 // Error Handling
 enum OperationType {
@@ -321,7 +328,7 @@ export default function App() {
     status: "open" as Availability["status"],
     isRecurring: false,
   });
-  const [newAvatarUrl, setNewAvatarUrl] = useState("");
+  const [selectedAvatar, setSelectedAvatar] = useState("");
   const [showPastCalendarItems, setShowPastCalendarItems] = useState(false);
   const [notificationFeedback, setNotificationFeedback] = useState("");
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -514,7 +521,7 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
-    setNewAvatarUrl(currentUser.avatar_url || currentUser.line_picture || "");
+    setSelectedAvatar(currentUser.avatar_url || currentUser.line_picture || presetAvatars[0]);
   }, [currentUser?.uid, currentUser?.avatar_url, currentUser?.line_picture]);
   
   useEffect(() => {
@@ -1113,11 +1120,17 @@ export default function App() {
     alert("招待URLを更新しました。");
   };
 
-  const handleSaveAvatar = async () => {
+  const handleSaveAvatar = async (avatarUrl: string) => {
     if (!currentUser) return;
-    await updateDoc(doc(db, "users", currentUser.uid), { avatar_url: newAvatarUrl.trim() });
-    setCurrentUser({ ...currentUser, avatar_url: newAvatarUrl.trim() });
-    alert("プロフィール画像を更新しました。");
+    await updateDoc(doc(db, "users", currentUser.uid), { avatar_url: avatarUrl });
+    setCurrentUser({ ...currentUser, avatar_url: avatarUrl });
+    setSelectedAvatar(avatarUrl);
+  };
+
+  const handleUpdateSharePeriod = async (days: 7 | 14 | 30) => {
+    if (!currentUser) return;
+    await updateDoc(doc(db, "users", currentUser.uid), { share_period_days: days });
+    setCurrentUser({ ...currentUser, share_period_days: days });
   };
 
   const scrollToSection = (target: React.RefObject<HTMLDivElement | null>) => {
@@ -1699,6 +1712,21 @@ export default function App() {
                   <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl px-4 py-3 text-sm font-mono break-all text-gray-700">
                     {shareLink || "ログインすると招待リンクが表示されます"}
                   </div>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">共有期間</span>
+                    <div className="flex gap-2">
+                      {[7, 14, 30].map(days => (
+                        <button
+                          key={days}
+                          onClick={() => handleUpdateSharePeriod(days as 7 | 14 | 30)}
+                          className={`px-4 py-2 rounded-xl text-sm font-black ${currentUser?.share_period_days === days ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600"}`}
+                        >
+                          {days === 7 ? "1週間" : days === 14 ? "2週間" : "1か月"}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-400">共有リンクで表示される日数を切り替えられます。</span>
+                  </div>
                 </Card>
 
                 <Card className="p-6 sm:p-8 space-y-4">
@@ -1779,73 +1807,60 @@ export default function App() {
                       <User size={24} className="text-blue-600" />
                       プロフィール
                     </h3>
-                    <div className="flex items-center gap-6">
-                      <div className="w-20 h-20 bg-gray-100 rounded-3xl overflow-hidden">
-                        {avatarSrc ? <img src={avatarSrc} alt="avatar" /> : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <User size={38} className="text-gray-400" />
-                          </div>
-                        )}
+                    <div className="p-5 bg-gray-50 border border-gray-100 rounded-2xl flex items-center gap-4 flex-wrap">
+                      <div className="w-20 h-20 rounded-3xl overflow-hidden bg-white border border-gray-100">
+                        <img src={selectedAvatar || avatarSrc || presetAvatars[0]} alt="avatar" className="w-full h-full object-cover" />
                       </div>
-                      <div className="flex-1 space-y-2">
+                      <div className="flex-1 min-w-[12rem] space-y-2">
                         {isEditingName ? (
                           <div className="flex gap-2">
                             <input 
                               value={newName} 
                               onChange={e => setNewName(e.target.value)}
-                              className="flex-1 px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="flex-1 px-4 py-3 bg-white border border-gray-200 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
-                              <Button onClick={async () => {
-                               if (!currentUser) return;
-                               const nextName = newName.trim();
-                               await setDoc(doc(db, "users", currentUser.uid), { name: nextName }, { merge: true });
-                               setCurrentUser({ ...currentUser, name: nextName });
-                               setNewName(nextName);
-                               setIsEditingName(false);
+                            <Button onClick={async () => {
+                              if (!currentUser) return;
+                              const nextName = newName.trim();
+                              await setDoc(doc(db, "users", currentUser.uid), { name: nextName }, { merge: true });
+                              setCurrentUser({ ...currentUser, name: nextName });
+                              setNewName(nextName);
+                              setIsEditingName(false);
                             }} icon={Check}>保存</Button>
                           </div>
                         ) : (
-                          <div className="flex items-center justify-between">
-                            <p className="text-2xl font-black">{currentUser?.name}</p>
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-2xl font-black truncate flex items-center gap-3">
+                              <span className="inline-flex items-center justify-center w-10 h-10 rounded-2xl overflow-hidden bg-white border border-gray-100">
+                                <img src={selectedAvatar || avatarSrc || presetAvatars[0]} alt="avatar" className="w-full h-full object-cover" />
+                              </span>
+                              {currentUser?.name}
+                            </p>
                             <Button onClick={() => setIsEditingName(true)} variant="ghost">編集</Button>
                           </div>
                         )}
                         <p className="text-gray-400 font-medium">{accountLabel}</p>
-                        <div className="pt-3 space-y-2">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">プロフィール画像URL</label>
-                          <div className="flex gap-2">
-                            <input
-                              value={newAvatarUrl}
-                              onChange={e => setNewAvatarUrl(e.target.value)}
-                              placeholder="https://..."
-                              className="flex-1 px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                            <Button onClick={handleSaveAvatar} variant="outline">保存</Button>
-                          </div>
-                        </div>
-                        <div className="pt-3 space-y-2">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">共有期間</label>
-                          <div className="flex gap-2">
-                            {[7, 14, 30].map(days => (
-                              <button
-                                key={days}
-                                onClick={async () => {
-                                  if (!currentUser) return;
-                                  await updateDoc(doc(db, "users", currentUser.uid), { share_period_days: days });
-                                  setCurrentUser({ ...currentUser, share_period_days: days as 7 | 14 | 30 });
-                                }}
-                                className={`px-4 py-3 rounded-xl text-sm font-black ${currentUser?.share_period_days === days ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600"}`}
-                              >
-                                {days === 7 ? "1週間" : days === 14 ? "2週間" : "1か月"}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="pt-3 space-y-2">
-                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">予定追加の考え方</label>
-                          <p className="text-xs text-gray-500">予定追加時に「毎週ループさせる」を選ぶと、ループ予定として保存されます。</p>
-                        </div>
                       </div>
+                    </div>
+
+                    <div className="pt-3 space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">アバターを選ぶ</label>
+                      <div className="flex flex-wrap gap-3">
+                        {presetAvatars.map(url => (
+                          <button
+                            key={url}
+                            onClick={() => handleSaveAvatar(url)}
+                            className={`w-14 h-14 rounded-2xl border-2 overflow-hidden ${selectedAvatar === url ? "border-blue-500 ring-2 ring-blue-200" : "border-gray-100"}`}
+                          >
+                            <img src={url} alt="avatar option" className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">予定追加の考え方</label>
+                      <p className="text-xs text-gray-500">予定追加時に「毎週ループさせる」を選ぶと、ループ予定として保存されます。</p>
                     </div>
                   </section>
 
