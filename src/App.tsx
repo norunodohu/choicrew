@@ -914,7 +914,14 @@ export default function App() {
     }
   };
 
-  const handleSendRequest = async (availability: Availability) => {
+  const openRequestModal = (availability: Availability) => {
+    setRequestTarget(availability);
+    setRequestStart(availability.start_time);
+    setRequestEnd(availability.end_time);
+    setShowRequestModal(true);
+  };
+
+  const handleSendRequest = async (availability: Availability, startTime: string, endTime: string) => {
     if (!currentUser) return;
     try {
       const reqData = {
@@ -926,6 +933,8 @@ export default function App() {
         date: availability.date,
         start_time: availability.start_time,
         end_time: availability.end_time,
+        requested_start_time: startTime,
+        requested_end_time: endTime,
         status: "pending",
         created_at: serverTimestamp()
       };
