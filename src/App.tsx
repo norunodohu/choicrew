@@ -1411,9 +1411,6 @@ export default function App() {
                                   </div>
                                 </div>
                               </div>
-                              <button onClick={() => handleDeleteAvailability(a.id)} className="p-3 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100">
-                                <Trash2 size={20} />
-                              </button>
                             </Card>
                           ))
                       ) : (
