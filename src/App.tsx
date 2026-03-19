@@ -1851,73 +1851,20 @@ export default function App() {
 
                   <section className="space-y-6 pt-8 border-t border-gray-100">
                     <h3 className="text-xl font-black flex items-center gap-3">
-                      <Users size={24} className="text-blue-600" />
-                      フォロー / フォロワー
-                    </h3>
-                    <div className="space-y-4">
-                      <p className="text-gray-600 font-bold">
-                        フォロー {connections.filter(c => c.user1_id === currentUser?.uid).length}件 / フォロワー {connections.filter(c => c.user2_id === currentUser?.uid).length}件
-                      </p>
-                      <p className="text-sm text-gray-400">フォロワーはあなたの予定を見られます。招待URLから自動でフォローされます。</p>
-                      {connectionUsers.length > 0 ? (
-                        <div className="space-y-3">
-                          {connectionUsers.map(peer => (
-                            <div key={peer.uid} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-10 h-10 rounded-full overflow-hidden bg-white">
-                                  <img
-                                    src={peer.avatar_url || peer.line_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${peer.name}`}
-                                    alt={peer.name}
-                                  />
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="font-bold truncate">{peer.name}</p>
-                                  <p className="text-xs text-gray-400 truncate">{peer.current_role === "manager" ? "マネージャー" : "クルー"}</p>
-                                </div>
-                              </div>
-                              <Button
-                                onClick={() => window.location.href = `${window.location.origin}?share=${peer.share_token}`}
-                                variant="outline"
-                                icon={CalendarDays}
-                                className="shrink-0"
-                              >
-                                予定を見る
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-400 text-sm italic">フォローはまだありません</p>
-                      )}
-                    </div>
-                  </section>
-
-                  <section className="space-y-6 pt-8 border-t border-gray-100">
-                    <h3 className="text-xl font-black flex items-center gap-3">
                       <MessageCircle size={24} className="text-[#06C755]" />
-                      LINE連携
+                      サインイン方法
                     </h3>
-                    {currentUser?.line_user_id ? (
-                      <div className="bg-emerald-50 p-6 rounded-3xl flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-[#06C755]">
-                            <Check size={24} />
-                          </div>
-                          <div>
-                            <p className="font-bold text-emerald-900">連携済み</p>
-                        <p className="text-sm text-emerald-700">連携済みです。</p>
-                          </div>
-                        </div>
-                        <Button variant="ghost" className="text-emerald-600">解除</Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <p className="text-gray-500">設定からLINE連携やGoogle連携を案内します。</p>
-                        <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full">
-                          LINEと連携する
-                        </Button>
-                      </div>
-                    )}
+                    <p className="text-sm text-gray-500">
+                      ID/パスワードに加えて、LINEまたはGoogleでもサインインできます。どれで入っても同じアカウントに紐づきます。
+                    </p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full py-4">
+                        LINEでサインイン
+                      </Button>
+                      <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="w-full py-4">
+                        Googleでサインイン
+                      </Button>
+                    </div>
                   </section>
 
                   <section className="space-y-4 pt-8 border-t border-gray-100">
