@@ -312,7 +312,6 @@ export default function App() {
   });
   const [newAvatarUrl, setNewAvatarUrl] = useState("");
   const [showPastCalendarItems, setShowPastCalendarItems] = useState(false);
-  const [dashboardTab, setDashboardTab] = useState<"confirmed" | "requests" | "open" | "all">("confirmed");
   const [notificationFeedback, setNotificationFeedback] = useState("");
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestTarget, setRequestTarget] = useState<Availability | null>(null);
@@ -333,24 +332,14 @@ export default function App() {
   const incomingRequests = currentUser
     ? requests.filter(r => r.staff_id === currentUser.uid && r.status === "pending")
     : [];
-  const confirmedAvailabilities = availabilities
-    .filter(a => a.status === "confirmed")
-    .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
   const monthlyAvailabilities = availabilities
     .filter(a => {
       const d = parseISO(a.date);
       return d.getFullYear() === selectedDate.getFullYear() && d.getMonth() === selectedDate.getMonth();
     })
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
-  const confirmedCount = availabilities.filter(a => a.status === "confirmed").length;
-  const requestCount = incomingRequests.length;
   const today = new Date();
   const nextFiveDays = Array.from({ length: 5 }, (_, i) => addDays(today, i));
-  const dashboardItems = {
-    confirmed: availabilities.filter(a => a.status === "confirmed"),
-    requests: incomingRequests,
-    all: availabilities,
-  }[dashboardTab];
   const groupedUpcomingDays = nextFiveDays.map(day => ({
     day,
     items: availabilities
@@ -1296,7 +1285,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="px-6 lg:px-12">
+        <div className="px-4 sm:px-6 lg:px-12 max-w-5xl mx-auto">
           <AnimatePresence mode="wait">
             {view === "dashboard" && (
               <motion.div 
@@ -1306,126 +1295,32 @@ export default function App() {
                 exit={false}
                 className="space-y-8"
               >
-                {/* Quick Actions */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <div className="h-10 px-4 rounded-2xl bg-blue-600 text-white flex items-center justify-between gap-3">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <Share2 size={16} className="shrink-0" />
-                        <span className="text-sm font-black truncate">スケジュール共有リンク</span>
-                      </div>
-                      <button onClick={copyShareLink} className="text-xs font-bold px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25">
-                        コピー
-                      </button>
+                <div className="space-y-2">
+                  <div className="h-10 px-4 rounded-2xl bg-blue-600 text-white flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <Share2 size={16} className="shrink-0" />
+                      <span className="text-sm font-black truncate">スケジュール共有リンク</span>
                     </div>
-                    <p className="text-xs text-blue-700 font-semibold">注意: 1週間分が表示されます。設定から共有期間を確認できます。</p>
+                    <button onClick={copyShareLink} className="text-xs font-bold px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25">
+                      コピー
+                    </button>
                   </div>
-
-                  <Card className="p-4 sm:p-8 space-y-4">
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { id: "confirmed", label: `確定（${confirmedCount}）`, icon: Check },
-                        { id: "requests", label: `リクエスト（${requestCount}）`, icon: Clock },
-                        { id: "all", label: `まとめて（${availabilities.length}）`, icon: Settings },
-                      ].map(tab => (
-                        <button
-                          key={tab.id}
-                          onClick={() => setDashboardTab(tab.id as typeof dashboardTab)}
-                          className={`flex-1 min-w-[calc(50%-0.25rem)] sm:min-w-0 px-3 py-3 rounded-2xl text-sm font-black flex items-center justify-center gap-2 ${dashboardTab === tab.id ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600"}`}
-                        >
-                          <tab.icon size={16} />
-                          <span className="whitespace-nowrap">{tab.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                    <div className="pt-2 space-y-3">
-                      {dashboardItems.slice(0, 3).map(a => (
-                        <div key={a.id} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50">
-                          <div className="min-w-0">
-                            <p className="font-bold truncate">{format(parseISO(a.date), "M/d", { locale: ja })} {a.start_time}-{a.end_time}</p>
-                            <p className="text-xs text-gray-400 truncate">{a.note || statusLabel(a.status)}</p>
-                          </div>
-                          <span className={`text-sm font-black ${a.status === "confirmed" ? "text-red-500" : "text-gray-500"}`}>{a.status === "confirmed" ? "確" : "空"}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </Card>
+                  <p className="text-xs text-blue-700 font-semibold">注意: 1週間分が表示されます。設定から共有期間を確認できます。</p>
                 </div>
 
-                {isGuestUser && (
-                  <Card className="p-6 border-amber-100 bg-amber-50/70">
-                    <p className="font-bold text-amber-900">ゲストは予定の追加・編集と共有リンクの表示だけ使えます。今日の予定は2番目に表示されます。</p>
-                  </Card>
-                )}
-
-                {dashboardTab !== "all" && (
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-xl font-black">{dashboardTab === "confirmed" ? "確定" : "リクエスト"}</h3>
-                      <span className="text-sm text-gray-400 font-bold">{dashboardItems.length}件</span>
-                    </div>
-                    <div className="space-y-3">
-                      {dashboardItems.length > 0 ? dashboardItems.slice(0, 5).map(a => (
-                        <div key={a.id} className="p-4 rounded-2xl bg-gray-50 flex items-center justify-between gap-3">
-                          <div className="min-w-0">
-                            <p className="font-bold truncate">{format(parseISO(a.date), "M月d日(E)", { locale: ja })} {a.start_time}-{a.end_time}</p>
-                            <p className="text-xs text-gray-400 truncate">{a.note || statusLabel(a.status)}</p>
-                          </div>
-                          <span className="text-sm font-black text-gray-500">{a.status === "confirmed" ? "確" : "空"}</span>
-                        </div>
-                      )) : (
-                        <p className="text-sm text-gray-400">データがありません</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {dashboardTab === "all" ? (
-                  <div className="space-y-4">
-                    {groupedUpcomingDays.map(({ day, items }) => (
-                      <Card key={day.toISOString()} className="p-4 sm:p-5">
-                        <div className="flex items-center justify-between gap-3 mb-3">
-                          <div>
-                            <p className={`font-black ${day.getDay() === 0 ? "text-red-500" : day.getDay() === 6 ? "text-blue-500" : "text-gray-900"}`}>
-                              {format(day, "M月d日(E)", { locale: ja })}
-                            </p>
-                            <p className="text-xs text-gray-400">{day.toDateString()}</p>
-                          </div>
-                          <Button onClick={() => openAvailabilityModal(undefined, day)} variant="outline" className="px-3 py-2 h-9 text-xs">
-                            予定の登録
-                          </Button>
-                        </div>
-                        {items.length > 0 ? (
-                          <div className="space-y-2">
-                            {items.map(item => (
-                              <div key={item.id} className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2">
-                                <div className="min-w-0">
-                                  <p className="font-bold text-sm truncate">{item.start_time}-{item.end_time}</p>
-                                  <p className="text-[11px] text-gray-400 truncate">{item.note || statusLabel(item.status)}</p>
-                                </div>
-                                <span className={`text-sm font-black ${item.status === "confirmed" ? "text-red-500" : "text-gray-500"}`}>{item.status === "confirmed" ? "確" : "空"}</span>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-400">予定の登録なし</p>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
+                {incomingRequests.length > 0 && (
                   <div className="space-y-4" ref={requestSectionRef}>
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xl font-black">リクエスト</h3>
+                      <h3 className="text-xl font-black">リクエスト通知</h3>
                       <span className="text-sm text-gray-400 font-bold">{incomingRequests.length}件</span>
                     </div>
                     <div className="grid gap-4">
                       {incomingRequests.map(request => (
                         <Card key={request.id} className="p-6 space-y-4">
                           <div className="flex items-start justify-between gap-4">
-                            <div>
-                              <p className="text-lg font-black">{format(parseISO(request.date), "M月d日(E)", { locale: ja })}</p>
-                              <p className="text-sm text-gray-400 font-medium">{request.manager_name}さんから</p>
+                            <div className="min-w-0">
+                              <p className="text-lg font-black truncate">{format(parseISO(request.date), "M月d日(E)", { locale: ja })}</p>
+                              <p className="text-sm text-gray-400 font-medium truncate">{request.manager_name}さんから</p>
                               <p className="text-sm font-bold">{request.requested_start_time || request.start_time}-{request.requested_end_time || request.end_time}</p>
                               {(request.requested_start_time && request.requested_start_time !== request.start_time) && (
                                 <p className="text-xs text-blue-600 font-semibold">時間変更でリクエストを受けています</p>
@@ -1442,6 +1337,38 @@ export default function App() {
                     </div>
                   </div>
                 )}
+
+                <div className="space-y-4">
+                  {groupedUpcomingDays.map(({ day, items }) => (
+                    <div key={day.toISOString()} className="pb-5 border-b border-gray-200 last:border-b-0 last:pb-0">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                          <p className={`font-black ${day.getDay() === 0 ? "text-red-500" : day.getDay() === 6 ? "text-blue-500" : "text-gray-900"}`}>
+                            {format(day, "M月d日(E)", { locale: ja })}
+                          </p>
+                        </div>
+                        <Button onClick={() => openAvailabilityModal(undefined, day)} variant="outline" className="px-3 py-2 h-9 text-xs">
+                          予定の登録
+                        </Button>
+                      </div>
+                      {items.length > 0 ? (
+                        <div className="space-y-2">
+                          {items.map(item => (
+                            <div key={item.id} className="flex items-center justify-between rounded-2xl bg-gray-50 px-3 py-2">
+                              <div className="min-w-0">
+                                <p className="font-bold text-sm truncate">{item.start_time}-{item.end_time}</p>
+                                <p className="text-[11px] text-gray-400 truncate">{item.note || statusLabel(item.status)}</p>
+                              </div>
+                              <span className={`text-sm font-black ${item.status === "confirmed" ? "text-red-500" : "text-gray-500"}`}>{item.status === "confirmed" ? "確" : "空"}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400">予定の登録なし</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </motion.div>
             )}
 
