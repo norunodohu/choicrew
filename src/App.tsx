@@ -1628,11 +1628,15 @@ export default function App() {
                     {eachDayOfInterval(
                       calendarMode === "week"
                         ? { start: startOfWeek(selectedDate, { weekStartsOn: 0 }), end: endOfWeek(selectedDate, { weekStartsOn: 0 }) }
-                        : { start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) }
+                        : {
+                            start: startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 0 }),
+                            end: endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 0 })
+                          }
                     ).map(day => {
                       const dayAvails = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day));
                       const isSelected = isSameDay(day, selectedDate);
                       const isToday = isSameDay(day, new Date());
+                      const isOutsideCurrentMonth = day.getMonth() !== selectedDate.getMonth();
 
                       // Determine chip text and color
                       let chipText = "";
@@ -1661,14 +1665,14 @@ export default function App() {
                         <button 
                           key={day.toString()}
                           onClick={() => setSelectedDate(day)}
-                          className={`rounded-2xl flex flex-col items-center justify-start transition-all relative ${calendarMode === "week" ? "h-10 sm:h-14 px-1 py-0.5" : "aspect-square justify-center gap-1"} ${isSelected ? "bg-blue-600 text-white shadow-xl shadow-blue-200" : "hover:bg-gray-50"}`}
+                          className={`rounded-2xl flex flex-col items-center justify-start transition-all relative ${calendarMode === "week" ? "h-10 sm:h-14 px-1 py-0.5" : "aspect-square justify-center gap-1"} ${isSelected ? "bg-blue-600 text-white shadow-xl shadow-blue-200" : "hover:bg-gray-50"} ${isOutsideCurrentMonth && !isSelected ? "text-gray-300" : ""}`}
                         >
                           <div className="w-full flex items-center justify-between">
-                            <span className={`text-lg sm:text-xl font-black ${isToday && !isSelected ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
+                            <span className={`text-lg sm:text-xl font-black ${isToday && !isSelected ? "text-blue-600" : ""} ${isOutsideCurrentMonth && !isSelected ? "opacity-40" : ""}`}>{format(day, "d")}</span>
                           </div>
                           <div className="mt-auto flex items-center justify-center gap-0.5 sm:gap-1">
                             {dayAvails.slice(0, 3).map((a, idx) => (
-                              <span key={idx} className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${a.status === "confirmed" ? "bg-red-500" : a.status === "busy" ? "bg-red-900" : a.status === "pending" ? "bg-orange-500" : "bg-gray-400"}`} />
+                              <span key={idx} className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${a.status === "confirmed" ? "bg-red-500" : a.status === "busy" ? "bg-red-900" : a.status === "pending" ? "bg-orange-500" : "bg-gray-400"} ${isOutsideCurrentMonth && !isSelected ? "opacity-40" : ""}`} />
                             ))}
                           </div>
                         </button>
