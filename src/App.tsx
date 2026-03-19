@@ -1493,9 +1493,9 @@ export default function App() {
           </div>
         </header>
 
-        <div className="px-4 sm:px-6 lg:px-12 max-w-5xl mx-auto">
+        <div className="px-4 sm:px-6 lg:px-12 max-w-[96rem] mx-auto">
           <AnimatePresence mode="wait">
-            {view === "dashboard" && (
+            {view === "myboard" && (
               <motion.div 
                 key="dashboard"
                 initial={false}
@@ -1617,7 +1617,7 @@ export default function App() {
               </motion.div>
             )}
 
-            {view === "calendar" && (
+            {view === "myboard" && (
               <motion.div 
                 key="calendar"
                 initial={false}
@@ -1632,12 +1632,15 @@ export default function App() {
                       <h3 className="text-xl sm:text-2xl font-black leading-none">{calendarMode === "week" ? format(selectedDate, "M月", { locale: ja }) : format(selectedDate, "yyyy年M月", { locale: ja })}</h3>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setCalendarMode("week")} className={`p-3 rounded-xl ${calendarMode === "week" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}>
-                        <Calendar size={18} />
-                      </button>
-                      <button onClick={() => setCalendarMode("month")} className={`p-3 rounded-xl ${calendarMode === "month" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}>
-                        <CalendarDays size={18} />
-                      </button>
+                      {["day", "week", "month"].map(mode => (
+                        <button
+                          key={mode}
+                          onClick={() => setCalendarMode(mode as "day" | "week" | "month")}
+                          className={`px-4 py-2 rounded-xl font-black ${calendarMode === mode ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}
+                        >
+                          {mode === "day" ? "日" : mode === "week" ? "週" : "月"}
+                        </button>
+                      ))}
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => setSelectedDate(addMonths(selectedDate, -1))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronLeft size={20}/></button>
@@ -1962,13 +1965,13 @@ export default function App() {
       {showMobileMenu && (
         <div ref={mobileMenuRef} className="lg:hidden fixed top-20 left-4 right-4 z-40 bg-white rounded-3xl shadow-2xl border border-gray-100 p-3">
           {[
-            { id: "dashboard", label: "ダッシュボード", icon: LayoutDashboard },
-            { id: "calendar", label: "スケジュール", icon: CalendarDays },
+            { id: "myboard", label: "マイボード", icon: Calendar },
+            { id: "friends", label: "フレンド", icon: Users },
             { id: "settings", label: "設定", icon: Settings },
           ].map(item => (
             <button
               key={item.id}
-              onClick={() => { setView(item.id as "dashboard" | "calendar" | "settings"); setShowMobileMenu(false); }}
+              onClick={() => { setView(item.id as "myboard" | "friends" | "settings"); setShowMobileMenu(false); }}
               className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-gray-50 text-left font-bold"
             >
               <item.icon size={18} />
