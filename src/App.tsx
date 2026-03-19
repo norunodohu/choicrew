@@ -140,6 +140,8 @@ interface UserProfile {
   avatar_url?: string;
   default_start?: string;
   default_end?: string;
+  guest_password?: string;
+  share_period_days?: 7 | 14 | 30;
 }
 
 interface Availability {
@@ -285,28 +287,41 @@ export default function App() {
   
   const [view, setView] = useState<"dashboard" | "calendar" | "settings">("dashboard");
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [calendarMode, setCalendarMode] = useState<"month" | "week">(
+    typeof window !== "undefined" && window.innerWidth < 768 ? "week" : "month"
+  );
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [dashboardDateOffset, setDashboardDateOffset] = useState(0);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
-  const [newAvailDate, setNewAvailDate] = useState(format(selectedDate, "yyyy-MM-dd"));
-  const [newAvailTime, setNewAvailTime] = useState({ start: "10:00", end: "15:00" });
-  const [newAvailNote, setNewAvailNote] = useState("");
-  const [newAvailStatus, setNewAvailStatus] = useState<Availability["status"]>("open");
+  const [draftDate, setDraftDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [draftTime, setDraftTime] = useState({ start: "10:00", end: "15:00" });
+  const [draftNote, setDraftNote] = useState("");
+  const [draftStatus, setDraftStatus] = useState<Availability["status"]>("open");
+  const [lastNewDraft, setLastNewDraft] = useState({
+    date: format(new Date(), "yyyy-MM-dd"),
+    time: { start: "10:00", end: "15:00" },
+    note: "",
+    status: "open" as Availability["status"],
+  });
   const [newAvatarUrl, setNewAvatarUrl] = useState("");
   const [showPastCalendarItems, setShowPastCalendarItems] = useState(false);
 
   const requestSectionRef = useRef<HTMLDivElement | null>(null);
   const confirmedSectionRef = useRef<HTMLDivElement | null>(null);
+  const bellRef = useRef<HTMLDivElement | null>(null);
+  const mobileMenuRef = useRef<HTMLDivElement | null>(null);
 
   const isGuestUser = !currentUser?.email && !currentUser?.line_user_id;
   const accountLabel = isGuestUser ? "ゲストユーザー" : "クルー";
   const shareLink = currentUser ? `${window.location.origin}?share=${currentUser.share_token}` : "";
-  const avatarSrc = currentUser?.avatar_url || currentUser?.line_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser?.name || "choicrew"}`;
+  const avatarSrc = currentUser?.avatar_url || currentUser?.line_picture || "";
+  const avatarIsGuestDefault = isGuestUser && !currentUser?.avatar_url && !currentUser?.line_picture;
   const isOwnPreview = isPublicView && Boolean(currentUser?.uid && publicUser?.uid && currentUser.uid === publicUser.uid);
   const incomingRequests = currentUser
     ? requests.filter(r => r.staff_id === currentUser.uid && r.status === "pending")
@@ -320,19 +335,20 @@ export default function App() {
       return d.getFullYear() === selectedDate.getFullYear() && d.getMonth() === selectedDate.getMonth();
     })
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
-  const openAvailabilityModal = (availability?: Availability) => {
+  const openAvailabilityModal = (availability?: Availability, targetDate?: Date) => {
     if (availability) {
       setEditingAvailability(availability);
-      setNewAvailDate(availability.date);
-      setNewAvailTime({ start: availability.start_time, end: availability.end_time });
-      setNewAvailNote(availability.note || "");
-      setNewAvailStatus(availability.status);
+      setDraftDate(availability.date);
+      setDraftTime({ start: availability.start_time, end: availability.end_time });
+      setDraftNote(availability.note || "");
+      setDraftStatus(availability.status);
     } else {
       setEditingAvailability(null);
-      setNewAvailDate(format(selectedDate, "yyyy-MM-dd"));
-      setNewAvailTime({ start: "10:00", end: "15:00" });
-      setNewAvailNote("");
-      setNewAvailStatus("open");
+      const baseDate = targetDate || selectedDate || new Date();
+      setDraftDate(format(baseDate, "yyyy-MM-dd"));
+      setDraftTime(lastNewDraft.time);
+      setDraftNote(lastNewDraft.note);
+      setDraftStatus(lastNewDraft.status);
     }
     setShowAddModal(true);
   };
@@ -341,6 +357,12 @@ export default function App() {
     setShowAddModal(false);
     setEditingAvailability(null);
   };
+
+  const statusLabel = (status: Availability["status"]) =>
+    status === "open" ? "空き" : status === "pending" ? "依頼中" : status === "confirmed" ? "確定" : "予定あり";
+
+  const statusColor = (status: Availability["status"]) =>
+    status === "confirmed" ? "bg-red-500" : status === "pending" ? "bg-orange-500" : status === "busy" ? "bg-red-900" : "bg-gray-400";
 
   const createNotification = async (userId: string, type: Notification["type"], message: string, date?: string) => {
     await addDoc(collection(db, "notifications"), {
@@ -516,7 +538,7 @@ export default function App() {
       } else {
         const newProfile: UserProfile = {
           uid: firebaseUser.uid,
-          search_id: firebaseUser.uid.slice(0, 8),
+          search_id: "",
           name: profile.displayName || "User",
           email: firebaseUser.email || "",
           role: "staff",
@@ -526,7 +548,8 @@ export default function App() {
           line_user_id: profile.userId,
           line_picture: profile.pictureUrl,
           avatar_url: "",
-          notification_pref: "line"
+          notification_pref: "line",
+          share_period_days: 7
         };
         await setDoc(doc(db, "users", firebaseUser.uid), newProfile);
         setCurrentUser(newProfile);
@@ -547,16 +570,19 @@ export default function App() {
           if (isProcessingLine) return;
           let userDoc = await getDoc(doc(db, "users", user.uid));
           if (!userDoc.exists()) {
+            const guestId = user.isAnonymous ? Math.random().toString(36).slice(2, 7) : "";
             const newProfile: UserProfile = {
               uid: user.uid,
-              search_id: user.uid.slice(0, 8),
+              search_id: guestId,
               name: user.displayName || (user.isAnonymous ? "ゲストユーザー" : "クルー"),
               email: user.email || "",
               role: "staff",
               current_role: "staff",
               share_token: Math.random().toString(36).substring(2, 15),
               accept_requests: !user.isAnonymous,
-              avatar_url: ""
+              avatar_url: "",
+              guest_password: user.isAnonymous ? Math.random().toString(36).slice(2, 10) : undefined,
+              share_period_days: 7
             };
             await setDoc(doc(db, "users", user.uid), newProfile);
             userDoc = await getDoc(doc(db, "users", user.uid));
@@ -696,6 +722,35 @@ export default function App() {
   }, [currentUser?.uid]);
 
   useEffect(() => {
+    if (!currentUser?.uid) return;
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    getDocs(query(collection(db, "notifications"), where("user_id", "==", currentUser.uid))).then(snap => {
+      const batch = writeBatch(db);
+      let hasDeletes = false;
+      snap.docs.forEach(d => {
+        const data = d.data() as Notification;
+        const ts = data.timestamp as Timestamp | Date | null | undefined;
+        const time = ts instanceof Timestamp ? ts.toDate().getTime() : ts instanceof Date ? ts.getTime() : 0;
+        if (time && time < cutoff) {
+          batch.delete(doc(db, "notifications", d.id));
+          hasDeletes = true;
+        }
+      });
+      if (hasDeletes) return batch.commit();
+    }).catch(() => {});
+  }, [currentUser?.uid]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (bellRef.current && !bellRef.current.contains(target)) setShowBellDropdown(false);
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(target)) setShowMobileMenu(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
     if (!currentUser?.uid) {
       setConnectionUsers([]);
       return;
@@ -799,11 +854,11 @@ export default function App() {
       const payload = {
         user_id: currentUser.uid,
         user_name: currentUser.name,
-        date: newAvailDate,
-        start_time: newAvailTime.start,
-        end_time: newAvailTime.end,
-        status: newAvailStatus,
-        note: newAvailNote,
+        date: draftDate,
+        start_time: draftTime.start,
+        end_time: draftTime.end,
+        status: draftStatus,
+        note: draftNote,
       };
 
       if (editingAvailability) {
@@ -816,7 +871,12 @@ export default function App() {
       }
 
       closeAvailabilityModal();
-      setNewAvailNote("");
+      setLastNewDraft({
+        date: draftDate,
+        time: draftTime,
+        note: draftNote,
+        status: draftStatus,
+      });
     } catch (e: unknown) {
       console.error(e);
     } finally {
@@ -849,28 +909,13 @@ export default function App() {
       };
       const requestRef = await addDoc(collection(db, "requests"), reqData);
 
-      const staffDoc = await getDoc(doc(db, "users", availability.user_id));
-      const staffData = staffDoc.data() as UserProfile;
-
       await createNotification(
         availability.user_id,
         "request",
         `${currentUser.name}さんから依頼が届きました。${availability.date} ${availability.start_time}-${availability.end_time}`, 
         availability.date
       );
-
-      if (staffData?.line_user_id) {
-        const lineResult = await sendLineNotification(
-          staffData.line_user_id,
-          `${currentUser.name}さんから依頼が届きました。\n${availability.date} ${availability.start_time}-${availability.end_time}`
-        );
-        alert(`依頼を送信しました。\n${buildLineNotificationAlert(lineResult)}`);
-      } else {
-        alert(`依頼を送信しました。\nLINE通知: ${describeLineNotificationResult({
-          success: false,
-          reason: "line_user_missing",
-        })}`);
-      }
+      alert("依頼を送信しました。");
       console.log("request created:", requestRef.id);
     } catch (e: unknown) {
       console.error(e);
@@ -894,56 +939,30 @@ export default function App() {
 
   const handleApproveRequest = async (request: ShiftRequest) => {
     if (!currentUser) return;
+    if (!window.confirm(`${format(parseISO(request.date), "M月d日", { locale: ja })}の予定を承認しますか？`)) return;
     await updateDoc(doc(db, "requests", request.id), { status: "approved" });
     await updateDoc(doc(db, "availabilities", request.availability_id), { status: "confirmed" });
-
-    const managerDoc = await getDoc(doc(db, "users", request.manager_id));
-    const managerData = managerDoc.data() as UserProfile;
     await createNotification(
       request.manager_id,
       "approval",
       `${currentUser.name}さんが依頼を承認しました。${request.date} ${request.start_time}-${request.end_time}`, 
       request.date
     );
-
-    let lineResult: LineNotificationResult = {
-      success: false,
-      reason: "line_user_missing",
-    };
-    if (managerData?.line_user_id) {
-      lineResult = await sendLineNotification(
-        managerData.line_user_id,
-        `${currentUser.name}さんが依頼を承認しました。\n${request.date} ${request.start_time}-${request.end_time}`
-      );
-    }
-    alert(`承認しました。\n${buildLineNotificationAlert(lineResult)}`);
+    alert("承認しました。");
   };
 
   const handleRejectRequest = async (request: ShiftRequest) => {
     if (!currentUser) return;
+    if (!window.confirm(`${format(parseISO(request.date), "M月d日", { locale: ja })}の予定を辞退しますか？`)) return;
     await updateDoc(doc(db, "requests", request.id), { status: "canceled" });
     await updateDoc(doc(db, "availabilities", request.availability_id), { status: "open" });
-
-    const managerDoc = await getDoc(doc(db, "users", request.manager_id));
-    const managerData = managerDoc.data() as UserProfile;
     await createNotification(
       request.manager_id,
       "decline",
       `${currentUser.name}さんが依頼を削除しました。${request.date} ${request.start_time}-${request.end_time}`, 
       request.date
     );
-
-    let lineResult: LineNotificationResult = {
-      success: false,
-      reason: "line_user_missing",
-    };
-    if (managerData?.line_user_id) {
-      lineResult = await sendLineNotification(
-        managerData.line_user_id,
-        `${currentUser.name}さんが依頼を削除しました。\n${request.date} ${request.start_time}-${request.end_time}`
-      );
-    }
-    alert(`削除しました。\n${buildLineNotificationAlert(lineResult)}`);
+    alert("辞退しました。");
   };
 
   const handleRefreshShareToken = async () => {
@@ -1019,22 +1038,14 @@ export default function App() {
   // Renderers
   if (!isAuthReady) return (
     <div className="min-h-screen bg-blue-50 flex items-center justify-center">
-      <motion.div 
-        animate={{ rotate: 360 }} 
-        transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-        className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full"
-      />
+      <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full" />
     </div>
   );
 
   if (!isLoggedIn && !isPublicView) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex flex-col items-center justify-center p-6">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md space-y-12 text-center"
-        >
+        <div className="w-full max-w-md space-y-12 text-center">
           <div className="space-y-4">
             <img
               src={CHOICREW_LOGO}
@@ -1065,7 +1076,7 @@ export default function App() {
           <p className="text-sm text-gray-400">
             ログインすることで、利用規約とプライバシーポリシーに同意したことになります。
           </p>
-        </motion.div>
+        </div>
       </div>
     );
   }
@@ -1083,6 +1094,7 @@ export default function App() {
               <div>
                 <h1 className="text-3xl font-black tracking-tight">{publicUser.name}さんの予定</h1>
                 <p className="text-gray-500 font-medium">空き時間を確認して、依頼を送れます。</p>
+                <p className="text-sm text-red-500 font-semibold">共有URLでは、本人の共有期間は1週間として表示されています。</p>
               </div>
           </div>
 
@@ -1105,6 +1117,7 @@ export default function App() {
                       <div>
                         <p className="text-lg font-bold">{format(parseISO(a.date), "M月d日 (E)", { locale: ja })}</p>
                         <p className="text-2xl font-black">{a.start_time} - {a.end_time}</p>
+                        {a.note && <p className="text-sm text-red-500 font-semibold mt-1">{a.note}</p>}
                       </div>
                     </div>
                     {isOwnPreview ? (
@@ -1166,11 +1179,8 @@ export default function App() {
 
         <div className="pt-8 border-t border-gray-100">
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden">
-              <img
-                src={avatarSrc}
-                alt="avatar"
-              />
+            <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden flex items-center justify-center">
+              {avatarIsGuestDefault ? <User size={24} className="text-gray-400" /> : <img src={avatarSrc} alt="avatar" />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold truncate">{currentUser?.name}</p>
@@ -1184,10 +1194,21 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className={`lg:ml-72 min-h-screen pb-32 lg:pb-12`}>
+      <main className={`lg:ml-72 min-h-screen pb-28 lg:pb-12`}>
         {/* Header */}
-        <header className="sticky top-0 z-10 bg-[#F8FAFC]/80 backdrop-blur-md px-6 py-6 lg:px-12 flex items-center justify-between">
-          <div>
+        <header className="sticky top-0 z-10 bg-[#F8FAFC]/80 backdrop-blur-md px-6 py-5 lg:px-12 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              className="lg:hidden w-11 h-11 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-gray-600"
+              onClick={() => setShowMobileMenu(v => !v)}
+            >
+              <span className="sr-only">メニュー</span>
+              <div className="space-y-1.5">
+                <div className="w-4 h-0.5 bg-current rounded-full" />
+                <div className="w-4 h-0.5 bg-current rounded-full" />
+                <div className="w-4 h-0.5 bg-current rounded-full" />
+              </div>
+            </button>
             <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest">
               {view === "dashboard" ? "Overview" : view === "calendar" ? "Schedule" : "Preferences"}
             </h2>
@@ -1197,34 +1218,41 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-3 relative">
-            <button 
-              onClick={handleOpenNotifications}
-              className="w-12 h-12 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-50 relative"
-            >
-              <Bell size={20} />
-              {notifications.some(n => !n.read) && (
-                <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+            <div ref={bellRef} className="relative">
+              <button 
+                onClick={handleOpenNotifications}
+                className="w-12 h-12 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-gray-500 hover:bg-gray-50 relative"
+              >
+                <Bell size={20} />
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-3 right-3 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                )}
+              </button>
+              {showBellDropdown && (
+                <div className="absolute right-0 top-14 z-20 w-[min(90vw,24rem)] bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-black text-lg">通知</p>
+                    <span className="text-xs text-gray-400">{notifications.length}件</span>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto space-y-2">
+                    {notifications.length > 0 ? notifications.map(notification => (
+                      <div key={notification.id} className={`p-4 rounded-2xl border flex items-start justify-between gap-3 ${notification.read ? "bg-gray-50 border-gray-100" : "bg-blue-50 border-blue-100"}`}>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold">{notification.message}</p>
+                          <p className="text-[11px] text-gray-400 mt-1">{notification.type}</p>
+                        </div>
+                        <button onClick={async () => deleteDoc(doc(db, "notifications", notification.id))} className="text-gray-300 hover:text-red-500">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    )) : (
+                      <p className="text-sm text-gray-400 p-4 text-center">通知はまだありません</p>
+                    )}
+                  </div>
+                </div>
               )}
-            </button>
-            {showBellDropdown && (
-              <div className="absolute right-6 top-24 z-20 w-[min(90vw,24rem)] bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-black text-lg">通知</p>
-                  <span className="text-xs text-gray-400">{notifications.length}件</span>
-                </div>
-                <div className="max-h-80 overflow-y-auto space-y-2">
-                  {notifications.length > 0 ? notifications.map(notification => (
-                    <div key={notification.id} className={`p-4 rounded-2xl border ${notification.read ? "bg-gray-50 border-gray-100" : "bg-blue-50 border-blue-100"}`}>
-                      <p className="text-sm font-bold">{notification.message}</p>
-                      <p className="text-[11px] text-gray-400 mt-1">{notification.type}</p>
-                    </div>
-                  )) : (
-                    <p className="text-sm text-gray-400 p-4 text-center">通知はまだありません</p>
-                  )}
-                </div>
-              </div>
-            )}
-            <Button onClick={() => openAvailabilityModal()} icon={Plus} className="hidden sm:flex">
+            </div>
+            <Button onClick={() => openAvailabilityModal(undefined, selectedDate)} icon={Plus} className="hidden sm:flex">
               予定を追加
             </Button>
           </div>
@@ -1235,9 +1263,9 @@ export default function App() {
             {view === "dashboard" && (
               <motion.div 
                 key="dashboard"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
+                initial={false}
+                animate={false}
+                exit={false}
                 className="space-y-8"
               >
                 {/* Quick Actions */}
@@ -1256,6 +1284,7 @@ export default function App() {
                         value={shareLink}
                         className="w-full px-4 py-3 rounded-2xl bg-white/95 text-blue-700 text-sm font-mono border border-white/30 outline-none"
                       />
+                      <p className="text-xs text-blue-100 font-semibold">共有期間は設定により1週間、2週間、1か月から選べます。共有URL側では本人の共有期間が1週間と表示されます。</p>
                       <Button onClick={copyShareLink} variant="secondary" className="w-full bg-white text-blue-600">
                         共有リンクをコピー
                       </Button>
@@ -1319,8 +1348,7 @@ export default function App() {
 
                 {isGuestUser && (
                   <Card className="p-6 border-amber-100 bg-amber-50/70">
-                    <p className="font-bold text-amber-900">ゲストユーザーは予定の作成・変更・削除のみできます。依頼の受信や承認はクルーでログインしたときに使えます。</p>
-                    <p className="text-sm text-amber-700 mt-2">ログインすると通知センターも使えます。LINE連携済みなら通知が届きます。</p>
+                    <p className="font-bold text-amber-900">ゲストは予定の追加・編集と共有リンクの表示だけ使えます。今日の予定は2番目に表示されます。</p>
                   </Card>
                 )}
 
@@ -1361,7 +1389,7 @@ export default function App() {
                           onClick={() => setDashboardDateOffset(offset)}
                           className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${dashboardDateOffset === offset ? "bg-gray-900 text-white" : "bg-white text-gray-400 border border-gray-100"}`}
                         >
-                          {offset === 0 ? "今日" : offset === 1 ? "明日" : format(addDays(new Date(), offset), "M/d")}
+                          {offset === 0 ? `今日 ${format(new Date(), "M月d日(E)", { locale: ja })}` : offset === 1 ? `明日 ${format(addDays(new Date(), 1), "M月d日(E)", { locale: ja })}` : `${format(addDays(new Date(), offset), "M月d日(E)", { locale: ja })}`}
                         </button>
                       ))}
                     </div>
@@ -1392,7 +1420,7 @@ export default function App() {
                                       a.status === "busy" ? "bg-red-900" : "bg-blue-500"
                                     }`}></span>
                                   <p className="text-sm font-bold text-gray-400 uppercase tracking-wider">
-                                    {a.status === "open" ? "空き" : a.status === "pending" ? "依頼中" : a.status === "confirmed" ? "確定" : "予定あり"}
+                                    {statusLabel(a.status)}
                                   </p>
                                     {a.note && <span className="text-xs text-gray-300 font-medium ml-2">| {a.note}</span>}
                                   </div>
@@ -1420,14 +1448,22 @@ export default function App() {
             {view === "calendar" && (
               <motion.div 
                 key="calendar"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
+                initial={false}
+                animate={false}
+                exit={false}
                 className="grid grid-cols-1 lg:grid-cols-12 gap-8"
               >
                 <Card className="lg:col-span-8 p-8">
-                  <div className="flex items-center justify-between mb-8">
-                    <h3 className="text-2xl font-black">{format(selectedDate, "yyyy年 M月", { locale: ja })}</h3>
+                  <div className="flex items-center justify-between mb-8 gap-3">
+                    <h3 className="text-2xl font-black">{format(selectedDate, "yyyy年M月", { locale: ja })}</h3>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setCalendarMode("week")} className={`p-3 rounded-xl ${calendarMode === "week" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}>
+                        <Calendar size={18} />
+                      </button>
+                      <button onClick={() => setCalendarMode("month")} className={`p-3 rounded-xl ${calendarMode === "month" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}>
+                        <CalendarDays size={18} />
+                      </button>
+                    </div>
                     <div className="flex gap-2">
                       <button onClick={() => setSelectedDate(addMonths(selectedDate, -1))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronLeft size={20}/></button>
                       <button onClick={() => setSelectedDate(addMonths(selectedDate, 1))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronRight size={20}/></button>
@@ -1438,10 +1474,11 @@ export default function App() {
                     {["日", "月", "火", "水", "木", "金", "土"].map(d => (
                       <div key={d} className="text-center text-xs font-black text-gray-400 uppercase pb-4">{d}</div>
                     ))}
-                    {eachDayOfInterval({
-                      start: startOfMonth(selectedDate),
-                      end: endOfMonth(selectedDate)
-                    }).map(day => {
+                    {eachDayOfInterval(
+                      calendarMode === "week"
+                        ? { start: startOfWeek(selectedDate, { weekStartsOn: 0 }), end: endOfWeek(selectedDate, { weekStartsOn: 0 }) }
+                        : { start: startOfMonth(selectedDate), end: endOfMonth(selectedDate) }
+                    ).map(day => {
                       const dayAvails = availabilities.filter(a => isSameDay(parseISO(a.date), day));
                       const isSelected = isSameDay(day, selectedDate);
                       const isToday = isSameDay(day, new Date());
@@ -1490,7 +1527,7 @@ export default function App() {
                 <div className="lg:col-span-4 space-y-6">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-black">{format(selectedDate, "M/d (E)", { locale: ja })}の予定</h3>
-                    <Button onClick={() => openAvailabilityModal()} variant="outline" icon={Plus} className="p-2 h-10 w-10 rounded-full" />
+                    <Button onClick={() => openAvailabilityModal(undefined, selectedDate)} variant="outline" icon={Plus} className="p-2 h-10 w-10 rounded-full" />
                   </div>
                   
                   <div className="space-y-4">
@@ -1519,15 +1556,15 @@ export default function App() {
                                   </button>
                                 </div>
                               </div>
-                              {a.note && <p className="text-sm text-gray-500 font-medium">{a.note}</p>}
+                              {a.note && <p className="text-sm text-red-500 font-medium">{a.note}</p>}
                               <div className="flex items-center justify-between pt-2 border-t border-gray-50">
-                                <span className={`text-[10px] font-bold uppercase tracking-widest ${
+                              <span className={`text-[10px] font-bold uppercase tracking-widest ${
                                   a.status === "confirmed" ? "text-red-500" : 
                                   a.status === "pending" ? "text-orange-500" : 
                                   a.status === "busy" ? "text-red-900" : "text-gray-400"
                                 }`}>
-                                  {a.status === "open" ? "空き" : a.status === "pending" ? "依頼中" : a.status === "confirmed" ? "確定" : "予定あり"}
-                                </span>
+                                  {statusLabel(a.status)}
+                              </span>
                               </div>
                             </Card>
                           ))
@@ -1556,7 +1593,7 @@ export default function App() {
                             <p className="text-sm text-gray-500">{a.start_time} - {a.end_time}</p>
                           </div>
                           <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                            {a.status === "open" ? "空き" : a.status === "pending" ? "依頼中" : a.status === "confirmed" ? "確定" : "予定あり"}
+                            {statusLabel(a.status)}
                           </span>
                         </Card>
                       ))}
@@ -1569,9 +1606,9 @@ export default function App() {
             {view === "settings" && (
               <motion.div 
                 key="settings"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
+                initial={false}
+                animate={false}
+                exit={false}
                 className="max-w-2xl space-y-8"
               >
                 <Card className="p-8 space-y-8">
@@ -1582,10 +1619,13 @@ export default function App() {
                     </h3>
                     <div className="flex items-center gap-6">
                       <div className="w-20 h-20 bg-gray-100 rounded-3xl overflow-hidden">
-                        <img
-                          src={avatarSrc}
-                          alt="avatar"
-                        />
+                        {avatarIsGuestDefault ? (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <User size={38} className="text-gray-400" />
+                          </div>
+                        ) : (
+                          <img src={avatarSrc} alt="avatar" />
+                        )}
                       </div>
                       <div className="flex-1 space-y-2">
                         {isEditingName ? (
@@ -1608,7 +1648,25 @@ export default function App() {
                           </div>
                         )}
                         <p className="text-gray-400 font-medium">{accountLabel}</p>
-                        <p className="text-xs text-blue-600 font-semibold">ログイン中は通知センターが使えます。LINE連携でプッシュ通知も届きます。</p>
+                        {isGuestUser && <p className="text-xs text-gray-500 font-semibold">ゲストIDは設定から確認できます。</p>}
+                        {isGuestUser && (
+                          <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 text-sm space-y-1">
+                            <p className="font-bold">ID: {currentUser?.search_id}</p>
+                            <p className="font-bold">PASS: {currentUser?.guest_password || "未設定"}</p>
+                            <Button
+                              onClick={async () => {
+                                if (!currentUser) return;
+                                const nextPassword = Math.random().toString(36).slice(2, 10);
+                                await updateDoc(doc(db, "users", currentUser.uid), { guest_password: nextPassword });
+                                setCurrentUser({ ...currentUser, guest_password: nextPassword });
+                              }}
+                              variant="outline"
+                              className="w-full mt-2"
+                            >
+                              パスワード更新
+                            </Button>
+                          </div>
+                        )}
                         <div className="pt-3 space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">プロフィール画像URL</label>
                           <div className="flex gap-2">
@@ -1619,6 +1677,24 @@ export default function App() {
                               className="flex-1 px-4 py-2 bg-gray-50 border border-gray-100 rounded-xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <Button onClick={handleSaveAvatar} variant="outline">保存</Button>
+                          </div>
+                        </div>
+                        <div className="pt-3 space-y-2">
+                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">共有期間</label>
+                          <div className="flex gap-2">
+                            {[7, 14, 30].map(days => (
+                              <button
+                                key={days}
+                                onClick={async () => {
+                                  if (!currentUser) return;
+                                  await updateDoc(doc(db, "users", currentUser.uid), { share_period_days: days });
+                                  setCurrentUser({ ...currentUser, share_period_days: days as 7 | 14 | 30 });
+                                }}
+                                className={`px-4 py-3 rounded-xl text-sm font-black ${currentUser?.share_period_days === days ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600"}`}
+                              >
+                                {days === 7 ? "1週間" : days === 14 ? "2週間" : "1か月"}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -1670,33 +1746,6 @@ export default function App() {
 
                   <section className="space-y-6 pt-8 border-t border-gray-100">
                     <h3 className="text-xl font-black flex items-center gap-3">
-                      <Clock size={24} className="text-blue-600" />
-                      時間プリセット
-                    </h3>
-                    <p className="text-sm text-gray-400">テンプレ予定として、隔週の土日や平日をまとめて空きにできます。空きだけ一括削除もできます。</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {presets.length > 0 ? (
-                        presets.map(p => (
-                          <div key={p.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
-                            <div>
-                              <p className="font-bold">{p.name}</p>
-                              <p className="text-sm text-gray-400">{p.start} - {p.end}</p>
-                            </div>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-gray-400 text-sm italic">登録されているプリセットはありません</p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <Button onClick={() => handleCreateTemplateAvailabilities("weekend")} variant="outline">隔週土日を追加</Button>
-                      <Button onClick={() => handleCreateTemplateAvailabilities("weekday")} variant="outline">隔週平日を追加</Button>
-                      <Button onClick={handleDeleteOpenAvailabilities} variant="danger">空き時間をすべて削除</Button>
-                    </div>
-                  </section>
-
-                  <section className="space-y-6 pt-8 border-t border-gray-100">
-                    <h3 className="text-xl font-black flex items-center gap-3">
                       <MessageCircle size={24} className="text-[#06C755]" />
                       LINE連携
                     </h3>
@@ -1708,19 +1757,14 @@ export default function App() {
                           </div>
                           <div>
                             <p className="font-bold text-emerald-900">連携済み</p>
-                        <p className="text-sm text-emerald-700">LINEで通知を受け取れます。友だち追加済みの公式アカウント宛てに送信します。</p>
+                        <p className="text-sm text-emerald-700">連携済みです。</p>
                           </div>
                         </div>
-                        <div className="flex flex-col gap-2">
-                          <Button onClick={handleTestLineNotification} variant="outline" className="border-emerald-200 text-emerald-700">
-                            通知テスト
-                          </Button>
-                          <Button variant="ghost" className="text-emerald-600">解除</Button>
-                        </div>
+                        <Button variant="ghost" className="text-emerald-600">解除</Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        <p className="text-gray-500">LINEと連携すると、リクエストや通知をリアルタイムで受け取れます。通知を使うには公式アカウントの友だち追加が必要です。</p>
+                        <p className="text-gray-500">設定からLINE連携やGoogle連携を案内します。</p>
                         <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full">
                           LINEと連携する
                         </Button>
@@ -1734,28 +1778,35 @@ export default function App() {
         </div>
       </main>
 
-      {/* Mobile Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-100 px-6 py-4 flex items-center justify-between lg:hidden z-30">
-        {[
-          { id: "dashboard", icon: LayoutDashboard },
-          { id: "calendar", icon: CalendarDays },
-          { id: "add", icon: Plus, special: true },
-          { id: "share", icon: Share2 },
-          { id: "settings", icon: Settings },
-        ].map(item => (
-          <button
-            key={item.id}
-            onClick={() => {
-              if (item.id === "add") openAvailabilityModal();
-              else if (item.id === "share") copyShareLink();
-              else setView(item.id as "dashboard" | "calendar" | "settings");
-            }}
-            className={`p-4 rounded-2xl transition-all ${item.special ? "bg-blue-600 text-white shadow-xl shadow-blue-200 -mt-12" : view === item.id ? "text-blue-600" : "text-gray-400"}`}
-          >
-            <item.icon size={24} />
+      {showMobileMenu && (
+        <div ref={mobileMenuRef} className="lg:hidden fixed top-20 left-4 right-4 z-40 bg-white rounded-3xl shadow-2xl border border-gray-100 p-3">
+          {[
+            { id: "dashboard", label: "ダッシュボード", icon: LayoutDashboard },
+            { id: "calendar", label: "カレンダー", icon: CalendarDays },
+            { id: "settings", label: "設定", icon: Settings },
+          ].map(item => (
+            <button
+              key={item.id}
+              onClick={() => { setView(item.id as "dashboard" | "calendar" | "settings"); setShowMobileMenu(false); }}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-gray-50 text-left font-bold"
+            >
+              <item.icon size={18} />
+              {item.label}
+            </button>
+          ))}
+          <button onClick={() => { openAvailabilityModal(undefined, selectedDate); setShowMobileMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-blue-600 text-white font-black mt-2">
+            <Plus size={18} />
+            予定の追加
           </button>
-        ))}
-      </nav>
+        </div>
+      )}
+
+      <button
+        onClick={() => openAvailabilityModal(undefined, selectedDate)}
+        className="lg:hidden fixed right-5 bottom-5 z-40 w-16 h-16 rounded-full bg-blue-600 text-white shadow-2xl shadow-blue-200 flex items-center justify-center"
+      >
+        <Plus size={28} />
+      </button>
 
       {/* Add Modal */}
       <AnimatePresence>
@@ -1769,10 +1820,9 @@ export default function App() {
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div
-              initial={{ y: "100%", opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: "100%", opacity: 0 }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              initial={false}
+              animate={false}
+              exit={false}
               className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 sm:p-10 shadow-2xl overflow-hidden"
             >
               <div className="w-12 h-1.5 bg-gray-100 rounded-full mx-auto mb-6 sm:hidden" />
@@ -1786,28 +1836,22 @@ export default function App() {
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">日付</label>
                   <input
                     type="date"
-                    value={newAvailDate}
-                    onChange={e => setNewAvailDate(e.target.value)}
+                    value={draftDate}
+                    onChange={e => setDraftDate(e.target.value)}
                     className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">プリセット</label>
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">状態</label>
                   <div className="flex flex-wrap gap-2">
-                    {[
-                      { label: "朝 (9-13)", start: "09:00", end: "13:00" },
-                      { label: "昼 (13-17)", start: "13:00", end: "17:00" },
-                      { label: "夕 (17-21)", start: "17:00", end: "21:00" },
-                      { label: "夜 (21-24)", start: "21:00", end: "00:00" },
-                      { label: "フル (9-21)", start: "09:00", end: "21:00" },
-                    ].map(p => (
+                    {["open", "busy"].map(status => (
                       <button
-                        key={p.label}
-                        onClick={() => setNewAvailTime({ start: p.start, end: p.end })}
-                        className="px-4 py-2 bg-blue-50 text-blue-600 rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors"
+                        key={status}
+                        onClick={() => setDraftStatus(status as Availability["status"])}
+                        className={`px-4 py-3 rounded-xl text-sm font-black ${draftStatus === status ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600"}`}
                       >
-                        {p.label}
+                        {status === "open" ? "空き" : "予定有り"}
                       </button>
                     ))}
                   </div>
@@ -1818,8 +1862,8 @@ export default function App() {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">開始</label>
                     <input
                       type="time"
-                      value={newAvailTime.start}
-                      onChange={e => setNewAvailTime({ ...newAvailTime, start: e.target.value })}
+                      value={draftTime.start}
+                      onChange={e => setDraftTime({ ...draftTime, start: e.target.value })}
                       className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -1827,36 +1871,23 @@ export default function App() {
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">終了</label>
                     <input
                       type="time"
-                      value={newAvailTime.end}
-                      onChange={e => setNewAvailTime({ ...newAvailTime, end: e.target.value })}
+                      value={draftTime.end}
+                      onChange={e => setDraftTime({ ...draftTime, end: e.target.value })}
                       className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">状態</label>
-                  <select
-                    value={newAvailStatus}
-                    onChange={e => setNewAvailStatus(e.target.value as Availability["status"])}
-                    className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="open">空き</option>
-                    <option value="pending">依頼中</option>
-                    <option value="confirmed">確定</option>
-                    <option value="busy">予定あり</option>
-                  </select>
-                </div>
-
-                <div className="space-y-2">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">予定名 (任意)</label>
                   <input
                     type="text"
-                    placeholder="例: 授業、サークルなど"
-                    value={newAvailNote}
-                    onChange={e => setNewAvailNote(e.target.value)}
+                    placeholder="例: 手伝う内容など"
+                    value={draftNote}
+                    onChange={e => setDraftNote(e.target.value)}
                     className="w-full p-4 bg-gray-50 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  <p className="text-xs font-semibold text-red-600">カレンダーを共有したときにも表示されます。</p>
                 </div>
 
                 <div className="flex gap-3 pt-4">
