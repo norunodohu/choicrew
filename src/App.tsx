@@ -1140,11 +1140,16 @@ export default function App() {
                       </div>
                     </div>
                     {isOwnPreview ? (
-                      <Button variant="outline" disabled>プレビュー中</Button>
+                      <button
+                        onClick={() => alert("これはプレビューなので、依頼ができませんが、現在依頼を受け付けている予定です。")}
+                        className="px-5 py-3 rounded-2xl border border-blue-100 text-blue-300 bg-blue-50 font-black"
+                      >
+                        依頼
+                      </button>
                     ) : isLoggedIn ? (
-                      <Button onClick={() => openRequestModal(a)} variant="outline">依頼する</Button>
+                      <Button onClick={() => openRequestModal(a)} variant="outline" className="opacity-70">依頼</Button>
                     ) : (
-                      <Button onClick={() => alert("依頼を送るにはログインが必要です。") } variant="outline">依頼する</Button>
+                      <Button onClick={() => alert("依頼を送るにはログインが必要です。") } variant="outline" className="opacity-70">依頼</Button>
                     )}
                   </Card>
                 ))
@@ -1293,19 +1298,6 @@ export default function App() {
                 exit={false}
                 className="space-y-8"
               >
-                <div className="space-y-2">
-                  <div className="h-10 px-4 rounded-2xl bg-blue-600 text-white flex items-center justify-between gap-3">
-                    <div className="min-w-0 flex items-center gap-2">
-                      <Share2 size={16} className="shrink-0" />
-                      <span className="text-sm font-black truncate">スケジュール共有リンク</span>
-                    </div>
-                    <button onClick={copyShareLink} className="text-xs font-bold px-2 py-1 rounded-lg bg-white/15 hover:bg-white/25">
-                      コピー
-                    </button>
-                  </div>
-                  <p className="text-xs text-blue-700 font-semibold">注意: 1週間分が表示されます。設定から共有期間を確認できます。</p>
-                </div>
-
                 {incomingRequests.length > 0 && (
                   <div className="space-y-4" ref={requestSectionRef}>
                     <div className="flex items-center justify-between">
@@ -1407,6 +1399,15 @@ export default function App() {
                 <Card className="p-5 bg-blue-50 border-blue-100">
                   <p className="text-sm font-black text-blue-700">ワンポイント</p>
                   <p className="text-sm text-blue-700 mt-1">予定を共有すると、相手はあなたの空き時間を見て依頼できます。迷ったらまず共有リンクをコピーしておくと便利です。</p>
+                  <div className="flex items-center gap-2 mt-3">
+                    <button onClick={copyShareLink} className="px-3 py-2 rounded-xl bg-blue-600 text-white text-sm font-black">
+                      共有リンクをコピー
+                    </button>
+                    <button onClick={() => window.location.href = `${window.location.origin}?share=${currentUser?.share_token || ""}`} className="px-3 py-2 rounded-xl bg-white text-blue-600 text-sm font-black border border-blue-100">
+                      プレビュー
+                    </button>
+                  </div>
+                  <p className="text-xs text-blue-700 mt-2">注意: 1週間分が表示されます。設定から共有期間を確認できます。</p>
                 </Card>
               </motion.div>
             )}
