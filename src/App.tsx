@@ -28,7 +28,8 @@ import {
   getAuth, 
   onAuthStateChanged, 
   signInWithPopup, 
-  signInAnonymously,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   GoogleAuthProvider, 
   signOut, 
   signInWithCustomToken
@@ -139,7 +140,6 @@ interface UserProfile {
   avatar_url?: string;
   default_start?: string;
   default_end?: string;
-  guest_password?: string;
   share_period_days?: 7 | 14 | 30;
 }
 
@@ -278,6 +278,10 @@ export default function App() {
   const [isPublicView, setIsPublicView] = useState(false);
   const [publicUser, setPublicUser] = useState<UserProfile | null>(null);
   const [isProcessingLine, setIsProcessingLine] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
 
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
@@ -333,14 +337,12 @@ export default function App() {
   const bellRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
 
-  const isGuestUser = !currentUser?.email && !currentUser?.line_user_id;
-  const accountLabel = isGuestUser ? "ゲストユーザー" : "クルー";
+  const accountLabel = "クルー";
   const shareLink = currentUser ? `${window.location.origin}?share=${currentUser.share_token}` : "";
   const effectiveSharePeriodDays = publicUser?.share_period_days || currentUser?.share_period_days || 7;
   const publicSharePeriodDays = publicUser?.share_period_days || 7;
   const sharePeriodLabel = effectiveSharePeriodDays === 14 ? "2週間" : effectiveSharePeriodDays === 30 ? "1か月" : "1週間";
   const avatarSrc = currentUser?.avatar_url || currentUser?.line_picture || "";
-  const avatarIsGuestDefault = isGuestUser && !currentUser?.avatar_url && !currentUser?.line_picture;
   const isOwnPreview = isPublicView && Boolean(currentUser?.uid && publicUser?.uid && currentUser.uid === publicUser.uid);
   const incomingRequests = currentUser
     ? requests.filter(r => r.staff_id === currentUser.uid && r.status === "pending")
@@ -625,18 +627,16 @@ export default function App() {
           if (isProcessingLine) return;
           let userDoc = await getDoc(doc(db, "users", user.uid));
           if (!userDoc.exists()) {
-            const guestId = user.isAnonymous ? Math.random().toString(36).slice(2, 7) : "";
             const newProfile: UserProfile = {
               uid: user.uid,
-              search_id: guestId,
-              name: user.displayName || (user.isAnonymous ? "ゲストユーザー" : "クルー"),
+              search_id: "",
+              name: user.displayName || "クルー",
               email: user.email || "",
               role: "staff",
               current_role: "staff",
               share_token: Math.random().toString(36).substring(2, 15),
-              accept_requests: !user.isAnonymous,
+              accept_requests: true,
               avatar_url: "",
-              guest_password: user.isAnonymous ? Math.random().toString(36).slice(2, 10) : undefined,
               share_period_days: 7
             };
             await setDoc(doc(db, "users", user.uid), newProfile);
@@ -873,11 +873,22 @@ export default function App() {
       console.error("Google login error:", err);
     }
   };
-  const handleGuestLoginSafe = async () => {
+  const handleEmailAuth = async () => {
+    setAuthMessage("");
     try {
-      await signInAnonymously(auth);
+      const email = authEmail.trim();
+      if (!email || !authPassword) {
+        setAuthMessage("メールアドレスとパスワードを入力してください。");
+        return;
+      }
+      if (authMode === "register") {
+        await createUserWithEmailAndPassword(auth, email, authPassword);
+      } else {
+        await signInWithEmailAndPassword(auth, email, authPassword);
+      }
     } catch (err) {
-      console.error("Guest login error:", err);
+      console.error("Email auth error:", err);
+      setAuthMessage(authMode === "register" ? "会員登録に失敗しました。" : "ログインに失敗しました。");
     }
   };
   const handleLineLogin = async () => {
@@ -1070,28 +1081,74 @@ export default function App() {
               className="w-full max-w-[320px] mx-auto drop-shadow-[0_24px_40px_rgba(37,99,235,0.16)]"
             />
             <p className="text-xl text-gray-500 font-medium">
-              空いた時間で、予定をかんたんに共有できます。スケジュールを見やすく整理して使えます。
+              空いた時間を、既知の相手にかんたんに公開できます。
             </p>
           </div>
 
-          <div className="grid gap-4">
-            <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="py-5 text-lg">
-              LINEログイン
-            </Button>
-            <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="py-5 text-lg">
-              Googleログイン
-            </Button>
-            <div className="relative py-4">
+          <div className="space-y-4 text-left">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-2xl">
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("login")}
+                  className={`py-3 rounded-2xl font-bold transition-colors ${authMode === "login" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+                >
+                  ログイン
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("register")}
+                  className={`py-3 rounded-2xl font-bold transition-colors ${authMode === "register" ? "bg-white shadow text-gray-900" : "text-gray-500"}`}
+                >
+                  会員登録
+                </button>
+              </div>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-bold text-gray-600">メールアドレス</span>
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={(e) => setAuthEmail(e.target.value)}
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="example@mail.com"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-bold text-gray-600">パスワード</span>
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={(e) => setAuthPassword(e.target.value)}
+                  className="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="8文字以上推奨"
+                />
+              </label>
+
+              <Button onClick={handleEmailAuth} variant="primary" icon={ArrowRight} className="py-5 text-lg w-full">
+                {authMode === "register" ? "メールアドレスで会員登録" : "メールアドレスでログイン"}
+              </Button>
+              {authMessage && <p className="text-sm text-red-500 font-medium">{authMessage}</p>}
+            </div>
+
+            <div className="relative py-2">
               <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
               <div className="relative flex justify-center text-sm"><span className="px-4 bg-[#F8FAFC] text-gray-400">または</span></div>
             </div>
-            <Button onClick={handleGuestLoginSafe} variant="secondary" icon={ArrowRight} className="py-5 text-lg">
-              ゲストで続ける
-            </Button>
+
+            <div className="grid gap-4">
+              <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="py-5 text-lg">
+                LINEで続ける
+              </Button>
+              <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="py-5 text-lg">
+                Googleで続ける
+              </Button>
+            </div>
           </div>
 
           <p className="text-sm text-gray-400">
-            ログインすることで、利用規約とプライバシーポリシーに同意したことになります。
+            続行すると、利用規約とプライバシーポリシーに同意したことになります。
           </p>
         </div>
       </div>
@@ -1268,7 +1325,7 @@ export default function App() {
           <div className="pt-8 border-t border-gray-100">
             <div className="flex items-center gap-4 mb-6">
               <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden flex items-center justify-center">
-                {avatarIsGuestDefault ? <User size={24} className="text-gray-400" /> : <img src={avatarSrc} alt="avatar" />}
+                {avatarSrc ? <img src={avatarSrc} alt="avatar" /> : <User size={24} className="text-gray-400" />}
               </div>
             <div className="flex-1 min-w-0">
               <p className="font-bold truncate">{currentUser?.name}</p>
@@ -1666,12 +1723,10 @@ export default function App() {
                     </h3>
                     <div className="flex items-center gap-6">
                       <div className="w-20 h-20 bg-gray-100 rounded-3xl overflow-hidden">
-                        {avatarIsGuestDefault ? (
+                        {avatarSrc ? <img src={avatarSrc} alt="avatar" /> : (
                           <div className="w-full h-full flex items-center justify-center">
                             <User size={38} className="text-gray-400" />
                           </div>
-                        ) : (
-                          <img src={avatarSrc} alt="avatar" />
                         )}
                       </div>
                       <div className="flex-1 space-y-2">
@@ -1698,25 +1753,6 @@ export default function App() {
                           </div>
                         )}
                         <p className="text-gray-400 font-medium">{accountLabel}</p>
-                        {isGuestUser && <p className="text-xs text-gray-500 font-semibold">ゲストIDは設定から確認できます。</p>}
-                        {isGuestUser && (
-                          <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 text-sm space-y-1">
-                            <p className="font-bold">ID: {currentUser?.search_id}</p>
-                            <p className="font-bold">PASS: {currentUser?.guest_password || "未設定"}</p>
-                            <Button
-                              onClick={async () => {
-                                if (!currentUser) return;
-                                const nextPassword = Math.random().toString(36).slice(2, 10);
-                                await updateDoc(doc(db, "users", currentUser.uid), { guest_password: nextPassword });
-                                setCurrentUser({ ...currentUser, guest_password: nextPassword });
-                              }}
-                              variant="outline"
-                              className="w-full mt-2"
-                            >
-                              パスワード更新
-                            </Button>
-                          </div>
-                        )}
                         <div className="pt-3 space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">プロフィール画像URL</label>
                           <div className="flex gap-2">
