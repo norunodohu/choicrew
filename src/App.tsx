@@ -325,6 +325,8 @@ export default function App() {
   } | null>(null);
   const [showWeekdayTemplate, setShowWeekdayTemplate] = useState(false);
   const [showWeekendTemplate, setShowWeekendTemplate] = useState(false);
+  const [showNameEditModal, setShowNameEditModal] = useState(false);
+  const [nameEditValue, setNameEditValue] = useState("");
 
   const requestSectionRef = useRef<HTMLDivElement | null>(null);
   const confirmedSectionRef = useRef<HTMLDivElement | null>(null);
@@ -376,6 +378,10 @@ export default function App() {
   const publicUpcomingAvailabilities = availabilities
     .filter(a => parseISO(a.date) >= new Date(new Date().setHours(0,0,0,0)))
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
+  const isPendingMyRequest = (availabilityId: string) =>
+    requests.some(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && r.status === "pending");
+  const isApprovedMyRequest = (availabilityId: string) =>
+    requests.some(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && r.status === "approved");
   const openAvailabilityModal = (availability?: Availability, targetDate?: Date) => {
     if (availability) {
       setEditingAvailability(availability);
@@ -1101,14 +1107,8 @@ export default function App() {
                   <button
                     onClick={async () => {
                       if (!currentUser) return;
-                      const nextName = window.prompt("アカウントの名前を変更しますか？", currentUser.name);
-                      if (nextName === null) return;
-                      const trimmed = nextName.trim();
-                      if (!trimmed) return;
-                      await setDoc(doc(db, "users", currentUser.uid), { name: trimmed }, { merge: true });
-                      setCurrentUser({ ...currentUser, name: trimmed });
-                      setNewName(trimmed);
-                      setPublicUser({ ...publicUser, name: trimmed });
+                      setNameEditValue(currentUser.name || publicUser.name || "");
+                      setShowNameEditModal(true);
                     }}
                     className="p-2 rounded-full hover:bg-blue-50 text-blue-600"
                     aria-label="名前を編集"
@@ -1117,8 +1117,14 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <p className="text-gray-500 font-medium">空き時間を確認して、依頼を送れます。</p>
+              <p className="text-gray-500 font-medium">このページをURLで共有することで、空き時間を確認して連絡を待つことができます。</p>
               <p className="text-sm text-red-500 font-semibold">共有URLでは、共有期間は{sharePeriodLabel}として表示されています。</p>
+              <p className="text-sm text-gray-600 mt-2">
+                ログインしている場合は、共有相手は依頼を送れます。ログインしていない場合は、予定の確認のみ行えます。
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                ゲストユーザーの場合は、共有までが可能です。アカウントを有効化して依頼を受付けましょう。予定のみ共有でもOKです。
+              </p>
             </div>
           </div>
 
@@ -1133,14 +1139,14 @@ export default function App() {
             <div className="grid gap-4">
               {publicUpcomingAvailabilities.length > 0 ? (
                 publicUpcomingAvailabilities.map(a => {
-                  const req = requests.find(r => r.availability_id === a.id && r.staff_id === currentUser?.uid);
                   const isBusy = a.status === "confirmed" || a.status === "busy";
-                  const isMyRequest = Boolean(req);
+                  const isMyPendingRequest = isPendingMyRequest(a.id);
+                  const isMyApprovedRequest = isApprovedMyRequest(a.id);
                   const buttonLabel = isBusy
                     ? "依頼"
-                    : isMyRequest && req?.status === "approved"
+                    : isMyApprovedRequest
                       ? "キャンセル依頼"
-                      : isMyRequest
+                      : isMyPendingRequest
                         ? "依頼中"
                         : "依頼";
                   return (
@@ -1153,31 +1159,33 @@ export default function App() {
                         <p className="text-lg font-bold">{format(parseISO(a.date), "M月d日 (E)", { locale: ja })}</p>
                         <p className="text-2xl font-black">{a.start_time} - {a.end_time}</p>
                         {a.note && <p className="text-sm text-red-500 font-semibold mt-1">{a.note}</p>}
-                        {isBusy && <p className="text-xs text-gray-400 mt-1">埋まっている予定のため、依頼はできません。</p>}
-                        {isMyRequest && req?.status === "pending" && <p className="text-xs text-blue-600 mt-1">依頼中です。</p>}
-                        {isMyRequest && req?.status === "approved" && <p className="text-xs text-amber-600 mt-1">承認済みです。キャンセル依頼は相手の同意が必要です。</p>}
+                        {isBusy && <p className="text-xs text-gray-400 mt-1">埋まっている予定です。</p>}
+                        {isMyPendingRequest && <p className="text-xs text-blue-600 mt-1">依頼中です。</p>}
+                        {isMyApprovedRequest && <p className="text-xs text-amber-600 mt-1">承認済みです。キャンセル依頼は相手の同意を得てください。気づかない場合は直接連絡するのがおすすめです。</p>}
                       </div>
                     </div>
                     <button
                       onClick={async () => {
                         if (isBusy) {
-                          alert("これはプレビューなので、依頼ができませんが、現在依頼を受け付けている予定です。");
+                          alert("これはプレビューなので、依頼はできません。埋まっている予定です。");
                           return;
                         }
                         if (isOwnPreview) {
-                          alert("これはプレビューなので、依頼ができませんが、現在依頼を受け付けている予定です。");
+                          alert("これはプレビューなので、依頼はできません。埋まっている予定です。");
                           return;
                         }
                         if (!isLoggedIn) {
                           alert("依頼を送るにはログインが必要です。");
                           return;
                         }
-                        if (isMyRequest && req?.status === "pending") {
-                          if (window.confirm("キャンセルしますか？")) await handleRejectRequest(req as ShiftRequest);
+                        if (isMyPendingRequest) {
+                          const req = requests.find(r => r.availability_id === a.id && r.staff_id === currentUser?.uid && r.status === "pending");
+                          if (req && window.confirm("キャンセルしますか？")) await handleRejectRequest(req);
                           return;
                         }
-                        if (isMyRequest && req?.status === "approved") {
-                          if (window.confirm("キャンセル依頼しますか？")) await handleRejectRequest(req as ShiftRequest);
+                        if (isMyApprovedRequest) {
+                          const req = requests.find(r => r.availability_id === a.id && r.staff_id === currentUser?.uid && r.status === "approved");
+                          if (req && window.confirm("キャンセル依頼しますか？")) await handleRejectRequest(req);
                           return;
                         }
                         openRequestModal(a);
@@ -1199,16 +1207,8 @@ export default function App() {
 
           <Card className="p-5 bg-blue-50 border-blue-100">
             <p className="text-sm font-black text-blue-700">使い方</p>
-            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs font-bold text-blue-700">
-              <span className="px-3 py-2 rounded-full bg-white border border-blue-100">共有リンクを見る</span>
-              <span>→</span>
-              <span className="px-3 py-2 rounded-full bg-white border border-blue-100">空き時間を確認</span>
-              <span>→</span>
-              <span className="px-3 py-2 rounded-full bg-white border border-blue-100">依頼 / 依頼中</span>
-              <span>→</span>
-              <span className="px-3 py-2 rounded-full bg-white border border-blue-100">承認 / キャンセル依頼</span>
-            </div>
-            <p className="text-xs text-blue-700 mt-3">埋まっている予定はグレーで表示され、依頼できないものは押せません。</p>
+            <p className="text-sm text-blue-700 mt-1">このページをURLで共有する。空き時間を確認して連絡を待つ。ログインしている場合は、共有相手は依頼を送れます。ログインしていない場合は予定の確認のみ行えます。ゲストユーザーの場合は、共有までが可能です。アカウントを有効化して依頼を受付けましょう。予定のみ共有でもOKです。</p>
+            <p className="text-xs text-blue-700 mt-2">依頼が飛ぶと承認でお互いが確認した状態になります。必要ならキャンセル依頼を使ってください。気づかない場合は直接連絡するのがおすすめです。</p>
           </Card>
 
           {!isLoggedIn && (
@@ -1864,6 +1864,53 @@ export default function App() {
           </button>
         </div>
       )}
+
+      <AnimatePresence>
+        {showNameEditModal && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setShowNameEditModal(false)}
+            />
+            <motion.div
+              initial={false}
+              animate={false}
+              exit={false}
+              className="relative w-full max-w-md bg-white rounded-[2rem] p-6 shadow-2xl"
+            >
+              <p className="text-lg font-black mb-4">アカウントの名前を変更しますか？</p>
+              <input
+                value={nameEditValue}
+                onChange={e => setNameEditValue(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl font-bold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="flex gap-3 mt-6">
+                <Button
+                  className="flex-1"
+                  onClick={async () => {
+                    if (!currentUser) return;
+                    const trimmed = nameEditValue.trim();
+                    if (!trimmed) return;
+                    await setDoc(doc(db, "users", currentUser.uid), { name: trimmed }, { merge: true });
+                    setCurrentUser({ ...currentUser, name: trimmed });
+                    setNewName(trimmed);
+                    setPublicUser(publicUser ? { ...publicUser, name: trimmed } : publicUser);
+                    setShowNameEditModal(false);
+                  }}
+                >
+                  変更
+                </Button>
+                <Button variant="outline" className="flex-1" onClick={() => setShowNameEditModal(false)}>
+                  キャンセル
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {pendingRequestAction && (
