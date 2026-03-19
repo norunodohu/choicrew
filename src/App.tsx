@@ -166,6 +166,8 @@ interface ShiftRequest {
   date: string;
   start_time: string;
   end_time: string;
+  requested_start_time?: string;
+  requested_end_time?: string;
   status: "pending" | "approved" | "canceled";
   created_at?: unknown;
 }
@@ -312,6 +314,10 @@ export default function App() {
   const [showPastCalendarItems, setShowPastCalendarItems] = useState(false);
   const [dashboardTab, setDashboardTab] = useState<"confirmed" | "requests" | "open" | "all">("confirmed");
   const [notificationFeedback, setNotificationFeedback] = useState("");
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestTarget, setRequestTarget] = useState<Availability | null>(null);
+  const [requestStart, setRequestStart] = useState("");
+  const [requestEnd, setRequestEnd] = useState("");
 
   const requestSectionRef = useRef<HTMLDivElement | null>(null);
   const confirmedSectionRef = useRef<HTMLDivElement | null>(null);
