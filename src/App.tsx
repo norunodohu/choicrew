@@ -424,6 +424,11 @@ export default function App() {
     const mins = total % 60;
     return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
   };
+  const formatCompactTime = (time: string) => {
+    const [hour, minute] = time.split(":");
+    if (minute === "00") return `${Number(hour)}`;
+    return `${Number(hour)}:${minute}`;
+  };
   const weekStartMinutes = parseHourMinutes(currentUser?.default_start || "00:00");
   const weekEndMinutesRaw = parseHourMinutes(currentUser?.default_end || "24:00");
   const weekEndMinutes = weekEndMinutesRaw > weekStartMinutes ? Math.min(weekEndMinutesRaw, weekStartMinutes + 24 * 60) : weekStartMinutes + 24 * 60;
@@ -974,7 +979,18 @@ export default function App() {
           if (applyToSeries) {
             const snap = await getDocs(query(collection(db, "availabilities"), where("loop_group_id", "==", editingAvailability.loop_group_id)));
             const batch = writeBatch(db);
-            snap.docs.forEach(d => batch.update(doc(db, "availabilities", d.id), payload));
+            snap.docs.forEach(d => {
+              const current = d.data() as Availability;
+              batch.update(doc(db, "availabilities", d.id), {
+                user_id: currentUser.uid,
+                user_name: currentUser.name,
+                start_time: payload.start_time,
+                end_time: payload.end_time,
+                status: payload.status,
+                note: payload.note,
+                is_recurring: payload.is_recurring,
+              });
+            });
             await batch.commit();
           } else {
             await updateDoc(doc(db, "availabilities", editingAvailability.id), payload);
@@ -986,7 +1002,7 @@ export default function App() {
         if (draftIsRecurring) {
           const loopGroupId = Math.random().toString(36).substring(2, 15);
           const batch = writeBatch(db);
-          Array.from({ length: 8 }, (_, i) => addDays(parseISO(draftDate), i * 14)).forEach((date, index) => {
+          Array.from({ length: 8 }, (_, i) => addDays(parseISO(draftDate), i * 7)).forEach(date => {
             const ref = doc(collection(db, "availabilities"));
             batch.set(ref, {
               ...payload,
@@ -1706,11 +1722,11 @@ export default function App() {
                           <div className="w-full flex items-center justify-between">
                             <span className={`text-lg sm:text-xl font-black ${isToday && !isSelected ? "text-blue-600" : ""} ${isOutsideCurrentMonth && !isSelected ? "opacity-40" : ""}`}>{format(day, "d")}</span>
                           </div>
-                          {calendarMode === "month" && dayAvails.length > 0 && (
-                            <div className="w-full mt-1 space-y-1 text-[10px] leading-tight">
-                              {dayAvails.slice(0, 2).map(a => (
-                                <div key={a.id} className={`truncate rounded-lg px-1.5 py-0.5 ${a.status === "confirmed" ? "bg-red-50 text-red-700" : a.status === "pending" ? "bg-orange-50 text-orange-700" : a.status === "busy" ? "bg-red-100 text-red-900" : "bg-gray-50 text-gray-600"} ${isOutsideCurrentMonth ? "opacity-50" : ""}`}>
-                                  {a.start_time} - {a.end_time}
+                  {calendarMode === "month" && dayAvails.length > 0 && (
+                    <div className="w-full mt-1 space-y-1 text-[10px] leading-tight">
+                      {dayAvails.slice(0, 2).map(a => (
+                        <div key={a.id} className={`truncate rounded-lg px-1.5 py-0.5 ${a.status === "confirmed" ? "bg-red-50 text-red-700" : a.status === "pending" ? "bg-orange-50 text-orange-700" : a.status === "busy" ? "bg-red-100 text-red-900" : "bg-gray-50 text-gray-600"} ${isOutsideCurrentMonth ? "opacity-50" : ""}`}>
+                                  {formatCompactTime(a.start_time)}-{formatCompactTime(a.end_time)}
                                 </div>
                               ))}
                             </div>
@@ -1923,7 +1939,7 @@ export default function App() {
                         </div>
                         <div className="pt-3 space-y-2">
                           <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">予定追加の考え方</label>
-                          <p className="text-xs text-gray-500">予定追加時に「隔週で同じ予定を入れる」を選ぶと、ループ予定として保存されます。</p>
+                          <p className="text-xs text-gray-500">予定追加時に「毎週ループさせる」を選ぶと、ループ予定として保存されます。</p>
                         </div>
                       </div>
                     </div>
@@ -2115,13 +2131,13 @@ export default function App() {
                   この日に予定を追加
                 </Button>
 
-                {selectedDayItems.length > 0 ? (
-                  selectedDayItems.map(item => (
-                    <Card key={item.id} className="p-4 space-y-3">
+                              {selectedDayItems.length > 0 ? (
+                                selectedDayItems.map(item => (
+                                  <Card key={item.id} className="p-4 space-y-3">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <p className="text-lg font-black">{item.start_time} - {item.end_time}</p>
+                            <p className="text-lg font-black">{formatCompactTime(item.start_time)}-{formatCompactTime(item.end_time)}</p>
                             {item.is_recurring && <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 text-blue-600 text-[10px] font-black"><Repeat2 size={12} />ループ</span>}
                           </div>
                           <p className="text-sm text-gray-500 font-medium mt-1">{statusLabel(item.status)}</p>
@@ -2305,7 +2321,7 @@ export default function App() {
                     onChange={e => setDraftIsRecurring(e.target.checked)}
                     className="w-5 h-5 accent-blue-600"
                   />
-                  <span className="text-sm font-bold text-gray-700">隔週で同じ予定を入れる</span>
+                  <span className="text-sm font-bold text-gray-700">毎週ループさせる</span>
                 </label>
                 <p className="text-xs text-gray-500">ループ予定にはマークが付きます。編集時は系列全体か、その日だけかを確認します。</p>
 
