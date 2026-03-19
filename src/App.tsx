@@ -1209,17 +1209,11 @@ export default function App() {
                 <div className="w-4 h-0.5 bg-current rounded-full" />
               </div>
             </button>
-            <button
-              onClick={() => openAvailabilityModal(undefined, selectedDate)}
-              className="lg:hidden w-11 h-11 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-200"
-            >
-              <Plus size={18} />
-            </button>
             <img src={CHOICREW_LOGO} alt="ChoiCrew" className="lg:hidden w-9 h-9 shrink-0" />
             <h2 className="hidden lg:block text-sm font-bold text-gray-400 uppercase tracking-widest">
               {view === "dashboard" ? "Overview" : view === "calendar" ? "Schedule" : "Preferences"}
             </h2>
-            <h1 className="text-[1.3rem] lg:text-3xl font-black tracking-tight leading-none truncate">
+            <h1 className="text-[0.95rem] lg:text-3xl font-black tracking-tight leading-none truncate">
               {view === "dashboard" ? "ダッシュボード" : view === "calendar" ? "スケジュール" : "設定"}
             </h1>
           </div>
@@ -1460,9 +1454,12 @@ export default function App() {
                 exit={false}
                 className="grid grid-cols-1 lg:grid-cols-12 gap-8"
               >
-                <Card className="lg:col-span-8 p-8">
-                  <div className="flex items-center justify-between mb-8 gap-3">
-                    <h3 className="text-2xl font-black">{format(selectedDate, "yyyy年M月", { locale: ja })}</h3>
+                <Card className="lg:col-span-8 p-5 sm:p-8">
+                  <div className="flex items-start justify-between mb-4 sm:mb-8 gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[10px] sm:hidden font-black text-gray-400 leading-none">{format(selectedDate, "yyyy年", { locale: ja })}</div>
+                      <h3 className="text-2xl font-black leading-none">{calendarMode === "week" ? format(selectedDate, "M月", { locale: ja }) : format(selectedDate, "yyyy年M月", { locale: ja })}</h3>
+                    </div>
                     <div className="flex items-center gap-2">
                       <button onClick={() => setCalendarMode("week")} className={`p-3 rounded-xl ${calendarMode === "week" ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}>
                         <Calendar size={18} />
@@ -1477,10 +1474,17 @@ export default function App() {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-7 gap-2 sm:gap-4">
-                    {["日", "月", "火", "水", "木", "金", "土"].map(d => (
-                      <div key={d} className="text-center text-xs font-black text-gray-400 uppercase pb-4">{d}</div>
-                    ))}
+                  <div className={`grid grid-cols-7 gap-1 sm:gap-4 ${calendarMode === "week" ? "text-[11px]" : ""}`}>
+                    {["日", "月", "火", "水", "木", "金", "土"].map(d => {
+                      const isSun = d === "日";
+                      const isSat = d === "土";
+                      return (
+                        <div key={d} className={`relative text-center font-black uppercase pb-1 sm:pb-4 ${isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-gray-900"}`}>
+                          <div className="h-[2px] w-full bg-blue-500 rounded-full mb-1" />
+                          {d}
+                        </div>
+                      );
+                    })}
                     {eachDayOfInterval(
                       calendarMode === "week"
                         ? { start: startOfWeek(selectedDate, { weekStartsOn: 0 }), end: endOfWeek(selectedDate, { weekStartsOn: 0 }) }
@@ -1517,14 +1521,17 @@ export default function App() {
                         <button 
                           key={day.toString()}
                           onClick={() => setSelectedDate(day)}
-                          className={`aspect-square rounded-2xl flex flex-col items-center justify-center gap-1 transition-all relative ${isSelected ? "bg-blue-600 text-white shadow-xl shadow-blue-200" : "hover:bg-gray-50"}`}
+                          className={`rounded-2xl flex flex-col items-center justify-start transition-all relative ${calendarMode === "week" ? "h-16 sm:h-20 px-1 py-1" : "aspect-square justify-center gap-1"} ${isSelected ? "bg-blue-600 text-white shadow-xl shadow-blue-200" : "hover:bg-gray-50"}`}
                         >
-                          <span className={`text-lg font-black ${isToday && !isSelected ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
-                          {chipText && (
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full text-white font-bold ${isSelected ? "bg-white/20" : chipColor}`}>
-                              {chipText}
-                            </span>
-                          )}
+                          <div className="w-full flex items-center justify-between">
+                            <span className={`text-lg sm:text-xl font-black ${isToday && !isSelected ? "text-blue-600" : ""}`}>{format(day, "d")}</span>
+                            {isToday && <span className="w-2 h-2 rounded-full bg-blue-500" />}
+                          </div>
+                          <div className="mt-auto flex items-center justify-center gap-0.5 sm:gap-1">
+                            {dayAvails.slice(0, 3).map((a, idx) => (
+                              <span key={idx} className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${a.status === "confirmed" ? "bg-red-500" : a.status === "busy" ? "bg-red-900" : a.status === "pending" ? "bg-orange-500" : "bg-gray-400"}`} />
+                            ))}
+                          </div>
                         </button>
                       );
                     })}
@@ -1555,11 +1562,8 @@ export default function App() {
                                   <p className="text-lg font-black">{a.start_time} - {a.end_time}</p>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  <button onClick={() => openAvailabilityModal(a)} className="text-gray-300 hover:text-blue-500 transition-colors">
+                                  <button onClick={() => a.status === "confirmed" ? alert("確定のため変更できません。") : openAvailabilityModal(a)} className={`transition-colors ${a.status === "confirmed" ? "text-gray-200" : "text-gray-300 hover:text-blue-500"}`}>
                                     <Pencil size={16} />
-                                  </button>
-                                  <button onClick={() => handleDeleteAvailability(a.id)} className="text-gray-300 hover:text-red-500 transition-colors">
-                                    <Trash2 size={16} />
                                   </button>
                                 </div>
                               </div>
@@ -1570,7 +1574,7 @@ export default function App() {
                                   a.status === "pending" ? "text-orange-500" : 
                                   a.status === "busy" ? "text-red-900" : "text-gray-400"
                                 }`}>
-                                  {statusLabel(a.status)}
+                                  {a.status === "confirmed" ? "確定済み" : statusLabel(a.status)}
                               </span>
                               </div>
                             </Card>
@@ -1599,9 +1603,17 @@ export default function App() {
                             <p className="font-black">{format(parseISO(a.date), "M/d (E)", { locale: ja })}</p>
                             <p className="text-sm text-gray-500">{a.start_time} - {a.end_time}</p>
                           </div>
-                          <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
-                            {statusLabel(a.status)}
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className={`text-2xl font-black ${a.status === "confirmed" ? "text-red-500" : "text-gray-400"}`}>
+                              {a.status === "confirmed" ? "確" : "空"}
+                            </span>
+                            <button
+                              onClick={() => a.status === "confirmed" ? alert("確定済みの予定は変更できません。") : openAvailabilityModal(a)}
+                              className={`p-2 rounded-xl text-gray-400 ${a.status === "confirmed" ? "opacity-40" : "hover:bg-gray-100"}`}
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          </div>
                         </Card>
                       ))}
                     </div>
@@ -1789,7 +1801,7 @@ export default function App() {
         <div ref={mobileMenuRef} className="lg:hidden fixed top-20 left-4 right-4 z-40 bg-white rounded-3xl shadow-2xl border border-gray-100 p-3">
           {[
             { id: "dashboard", label: "ダッシュボード", icon: LayoutDashboard },
-            { id: "calendar", label: "カレンダー", icon: CalendarDays },
+            { id: "calendar", label: "スケジュール", icon: CalendarDays },
             { id: "settings", label: "設定", icon: Settings },
           ].map(item => (
             <button
@@ -1801,19 +1813,12 @@ export default function App() {
               {item.label}
             </button>
           ))}
-          <button onClick={() => { openAvailabilityModal(undefined, selectedDate); setShowMobileMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-blue-600 text-white font-black mt-2">
+          <button onClick={() => { openAvailabilityModal(undefined, new Date()); setShowMobileMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-blue-600 text-white font-black mt-2">
             <Plus size={18} />
             予定の追加
           </button>
         </div>
       )}
-
-      <button
-        onClick={() => openAvailabilityModal(undefined, selectedDate)}
-        className="lg:hidden fixed right-5 bottom-5 z-40 w-16 h-16 rounded-full bg-blue-600 text-white shadow-2xl shadow-blue-200 flex items-center justify-center"
-      >
-        <Plus size={28} />
-      </button>
 
       {/* Add Modal */}
       <AnimatePresence>
@@ -1910,10 +1915,34 @@ export default function App() {
                     variant="outline"
                     className="flex-1 py-4 font-black"
                     disabled={isSaving}
-                  >
+                    >
                     キャンセル
                   </Button>
                 </div>
+                {editingAvailability && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <Button
+                      onClick={async () => {
+                        if (!editingAvailability) return;
+                        if (editingAvailability.status === "confirmed") {
+                          alert("確定のため削除できません。(相手がいる予定の場合直接キャンセルをお知らせください)");
+                          return;
+                        }
+                        if (!window.confirm("この予定を削除しますか？")) return;
+                        await handleDeleteAvailability(editingAvailability.id);
+                        closeAvailabilityModal();
+                      }}
+                      variant="danger"
+                      className="w-full"
+                      disabled={isSaving}
+                    >
+                      削除
+                    </Button>
+                    {editingAvailability.status === "confirmed" && (
+                      <p className="text-xs text-gray-500 mt-2">確定のため削除できません。(相手がいる予定の場合直接キャンセルをお知らせください)</p>
+                    )}
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>
