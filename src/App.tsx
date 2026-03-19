@@ -345,12 +345,18 @@ export default function App() {
   const confirmedCount = availabilities.filter(a => a.status === "confirmed").length;
   const requestCount = incomingRequests.length;
   const openCount = availabilities.filter(a => a.status === "open").length;
+  const today = new Date();
+  const nextFiveDays = Array.from({ length: 5 }, (_, i) => addDays(today, i));
   const dashboardItems = {
     confirmed: availabilities.filter(a => a.status === "confirmed"),
     requests: incomingRequests,
     open: availabilities.filter(a => a.status === "open"),
     all: availabilities,
   }[dashboardTab];
+  const availableItemsForDay = (day: Date) =>
+    availabilities
+      .filter(a => isSameDay(parseISO(a.date), day))
+      .sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
   const openAvailabilityModal = (availability?: Availability, targetDate?: Date) => {
     if (availability) {
       setEditingAvailability(availability);
