@@ -337,6 +337,7 @@ export default function App() {
   const accountLabel = isGuestUser ? "ゲストユーザー" : "クルー";
   const shareLink = currentUser ? `${window.location.origin}?share=${currentUser.share_token}` : "";
   const effectiveSharePeriodDays = publicUser?.share_period_days || currentUser?.share_period_days || 7;
+  const publicSharePeriodDays = publicUser?.share_period_days || 7;
   const sharePeriodLabel = effectiveSharePeriodDays === 14 ? "2週間" : effectiveSharePeriodDays === 30 ? "1か月" : "1週間";
   const avatarSrc = currentUser?.avatar_url || currentUser?.line_picture || "";
   const avatarIsGuestDefault = isGuestUser && !currentUser?.avatar_url && !currentUser?.line_picture;
@@ -378,7 +379,7 @@ export default function App() {
   const scheduleListDays = Array.from({ length: 14 }, (_, i) => addDays(today, i));
   const publicUpcomingAvailabilities = availabilities
     .filter(a => parseISO(a.date) >= new Date(new Date().setHours(0,0,0,0)))
-    .filter(a => parseISO(a.date) < addDays(new Date(new Date().setHours(0,0,0,0)), effectiveSharePeriodDays))
+    .filter(a => parseISO(a.date) < addDays(new Date(new Date().setHours(0,0,0,0)), publicSharePeriodDays))
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
   const isPendingMyRequest = (availabilityId: string) =>
     requests.some(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && r.status === "pending");
@@ -1097,10 +1098,10 @@ export default function App() {
       <div className="min-h-screen bg-[#F8FAFC] p-6 lg:p-12">
         <div className="max-w-2xl mx-auto space-y-8">
           <div className="space-y-4">
-            <img
+            <img 
               src={CHOICREW_LOGO}
               alt="ChoiCrew logo"
-              className="w-28 shrink-0 drop-shadow-[0_18px_32px_rgba(37,99,235,0.14)]"
+              className="w-36 shrink-0 drop-shadow-[0_18px_32px_rgba(37,99,235,0.14)]"
             />
             <div>
               <div className="flex items-center gap-2">
@@ -1119,10 +1120,10 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <p className="text-gray-500 font-medium">このページをURLで共有する。空き時間を確認して連絡を待つ。</p>
-              <p className="text-sm text-red-500 font-semibold">ユーザー設定により{sharePeriodLabel}分を表示しています。</p>
-              <p className="text-sm text-gray-600 mt-2">ログインしている場合は、共有相手が依頼できます。ログインしていない場合は、予定の確認のみできます。</p>
-              <p className="text-sm text-gray-600 mt-1">ゲストユーザーは共有まで。予定のみ共有でもOKです。</p>
+              <p className="text-gray-500 font-medium">URLを共有して、空き時間を見てもらえます。</p>
+              <p className="text-sm text-red-500 font-semibold">ユーザー設定により{publicSharePeriodDays}日分を表示しています。</p>
+              <p className="text-sm text-gray-600 mt-2">ログイン中なら依頼、未ログインなら確認のみ。</p>
+              <p className="text-sm text-gray-600 mt-1">ゲストでも共有は可能です。</p>
             </div>
           </div>
 
@@ -1145,21 +1146,21 @@ export default function App() {
                     : isMyApprovedRequest
                       ? "キャンセル依頼"
                       : isMyPendingRequest
-                        ? "依頼中"
+                        ? "交渉中"
                         : "依頼";
                   return (
                   <Card key={a.id} className={`p-6 flex items-center justify-between ${isBusy ? "opacity-55 grayscale" : ""}`}>
                     <div className="flex items-center gap-6">
-                      <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center">
+                      <div className="hidden sm:flex w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl items-center justify-center">
                         <Clock size={24} />
                       </div>
                       <div>
                         <p className="text-lg font-bold">{format(parseISO(a.date), "M月d日 (E)", { locale: ja })}</p>
                         <p className="text-2xl font-black">{a.start_time} - {a.end_time}</p>
                         {a.note && <p className="text-sm text-red-500 font-semibold mt-1">{a.note}</p>}
-                        {isBusy && <p className="text-xs text-gray-400 mt-1">埋まっています。</p>}
-                        {isMyPendingRequest && <p className="text-xs text-blue-600 mt-1">交渉中です。</p>}
-                        {isMyApprovedRequest && <p className="text-xs text-amber-600 mt-1">承認済みです。キャンセル依頼は相手の同意を得てください。気づかない場合は直接連絡するのがおすすめです。</p>}
+                        {isBusy && <p className="text-xs text-gray-400 mt-1">予定あり</p>}
+                        {isMyPendingRequest && <p className="text-xs text-blue-600 mt-1">交渉中</p>}
+                        {isMyApprovedRequest && <p className="text-xs text-amber-600 mt-1">承認済み</p>}
                       </div>
                     </div>
                     <button
@@ -1205,8 +1206,13 @@ export default function App() {
 
           <Card className="p-5 bg-blue-50 border-blue-100">
             <p className="text-sm font-black text-blue-700">使い方</p>
-            <p className="text-sm text-blue-700 mt-1">このページをURLで共有する。空き時間を確認して連絡を待つ。ログインしている場合は、共有相手は依頼を送れます。ログインしていない場合は予定の確認のみ行えます。ゲストユーザーの場合は、共有までが可能です。アカウントを有効化して依頼を受付けましょう。予定のみ共有でもOKです。</p>
-            <p className="text-xs text-blue-700 mt-2">依頼が飛ぶと承認でお互いが確認した状態になります。必要ならキャンセル依頼を使ってください。気づかない場合は直接連絡するのがおすすめです。</p>
+            <ul className="mt-2 space-y-1 text-sm text-blue-700 list-disc list-inside">
+              <li>URLで共有する</li>
+              <li>空き時間を見て連絡する</li>
+              <li>ログイン中は依頼できる</li>
+              <li>未ログインは確認のみ</li>
+              <li>依頼後は承認で確認完了</li>
+            </ul>
           </Card>
 
           {!isLoggedIn && (
