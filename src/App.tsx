@@ -1616,7 +1616,10 @@ export default function App() {
                             />
                               <Button onClick={async () => {
                                if (!currentUser) return;
-                               await updateDoc(doc(db, "users", currentUser.uid), { name: newName });
+                               const nextName = newName.trim();
+                               await setDoc(doc(db, "users", currentUser.uid), { name: nextName }, { merge: true });
+                               setCurrentUser({ ...currentUser, name: nextName });
+                               setNewName(nextName);
                                setIsEditingName(false);
                             }} icon={Check}>保存</Button>
                           </div>
