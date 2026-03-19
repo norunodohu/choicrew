@@ -65,6 +65,7 @@ const app = initializeApp(firebaseConfig);
 const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 const auth = getAuth(app);
 const CHOICREW_LOGO = "/choicrew-logo.svg";
+const AUTH_ID_DOMAIN = "choicrew.local";
 
 // Error Handling
 enum OperationType {
@@ -281,11 +282,8 @@ export default function App() {
   const [isProcessingLine, setIsProcessingLine] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [registerName, setRegisterName] = useState("");
-  const [authEmail, setAuthEmail] = useState("");
+  const [authId, setAuthId] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [authCode, setAuthCode] = useState("");
-  const [isSendingCode, setIsSendingCode] = useState(false);
-  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [authMessage, setAuthMessage] = useState("");
 
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
@@ -425,6 +423,9 @@ export default function App() {
 
   const statusColor = (status: Availability["status"]) =>
     status === "confirmed" ? "bg-red-500" : status === "pending" ? "bg-orange-500" : status === "busy" ? "bg-red-900" : "bg-gray-400";
+
+  const normalizeAuthId = (value: string) => value.trim().toLowerCase();
+  const toAuthEmail = (id: string) => `${normalizeAuthId(id)}@${AUTH_ID_DOMAIN}`;
 
   const createNotification = async (userId: string, type: Notification["type"], message: string, date?: string) => {
     await addDoc(collection(db, "notifications"), {
@@ -632,9 +633,10 @@ export default function App() {
           if (isProcessingLine) return;
           let userDoc = await getDoc(doc(db, "users", user.uid));
           if (!userDoc.exists()) {
+            const derivedId = (user.email || "").split("@")[0] || "";
             const newProfile: UserProfile = {
               uid: user.uid,
-              search_id: "",
+              search_id: derivedId,
               name: user.displayName || "クルー",
               email: user.email || "",
               role: "staff",
@@ -881,34 +883,33 @@ export default function App() {
   const handleEmailAuth = async () => {
     setAuthMessage("");
     try {
-      const email = authEmail.trim();
+      const id = normalizeAuthId(authId);
       const name = registerName.trim();
-      if (authMode === "register" && (!name || !authCode)) {
-        setAuthMessage("名前と確認コードを入力してください。");
+      if (id.length < 8) {
+        setAuthMessage("IDは8文字以上にしてください。");
         return;
       }
-      if (!email || !authPassword) {
-        setAuthMessage("メールアドレスとパスワードを入力してください。");
+      if (!authPassword) {
+        setAuthMessage("パスワードを入力してください。");
         return;
       }
       if (authMode === "register") {
-        setIsVerifyingCode(true);
-        const verifyRes = await fetch("/api/auth/email-code/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, code: authCode.trim() }),
-        });
-        if (!verifyRes.ok) {
-          const errData = await verifyRes.json().catch(() => null);
-          throw new Error(errData?.error || "確認コードの検証に失敗しました。");
+        if (!name) {
+          setAuthMessage("名前を入力してください。");
+          return;
         }
-        const cred = await createUserWithEmailAndPassword(auth, email, authPassword);
+        const exists = await getDocs(query(collection(db, "users"), where("search_id", "==", id)));
+        if (!exists.empty) {
+          setAuthMessage("そのIDはすでに使われています。別のIDを指定してください。");
+          return;
+        }
+        const cred = await createUserWithEmailAndPassword(auth, toAuthEmail(id), authPassword);
         await updateProfile(cred.user, { displayName: name });
         await setDoc(doc(db, "users", cred.user.uid), {
           uid: cred.user.uid,
-          search_id: "",
+          search_id: id,
           name,
-          email,
+          email: toAuthEmail(id),
           role: "staff",
           current_role: "staff",
           share_token: Math.random().toString(36).substring(2, 15),
@@ -917,40 +918,11 @@ export default function App() {
           share_period_days: 7
         }, { merge: true });
       } else {
-        await signInWithEmailAndPassword(auth, email, authPassword);
+        await signInWithEmailAndPassword(auth, toAuthEmail(id), authPassword);
       }
     } catch (err) {
       console.error("Email auth error:", err);
       setAuthMessage(err instanceof Error ? err.message : (authMode === "register" ? "会員登録に失敗しました。" : "ログインに失敗しました。"));
-    } finally {
-      setIsVerifyingCode(false);
-    }
-  };
-  const handleSendRegisterCode = async () => {
-    setAuthMessage("");
-    try {
-      const email = authEmail.trim();
-      const name = registerName.trim();
-      if (!email || !name) {
-        setAuthMessage("名前とメールアドレスを入力してください。");
-        return;
-      }
-      setIsSendingCode(true);
-      const res = await fetch("/api/auth/email-code/send", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, name }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || data?.success === false) {
-        throw new Error(data?.error || "確認コードの送信に失敗しました。");
-      }
-      setAuthMessage("確認コードを送信しました。メールを確認してください。");
-    } catch (err) {
-      console.error("Send code error:", err);
-      setAuthMessage(err instanceof Error ? err.message : "確認コードの送信に失敗しました。");
-    } finally {
-      setIsSendingCode(false);
     }
   };
   const handleLineLogin = async () => {
@@ -1167,13 +1139,13 @@ export default function App() {
               </div>
 
               <label className="block space-y-2">
-                <span className="text-sm font-bold text-gray-600">メールアドレス</span>
+                <span className="text-sm font-bold text-gray-600">ID</span>
                 <input
-                  type="email"
-                  value={authEmail}
-                  onChange={(e) => setAuthEmail(e.target.value)}
+                  type="text"
+                  value={authId}
+                  onChange={(e) => setAuthId(e.target.value)}
                   className="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  placeholder="example@mail.com"
+                  placeholder="8文字以上のID"
                 />
               </label>
 
@@ -1200,25 +1172,6 @@ export default function App() {
                       placeholder="山田 太郎"
                     />
                   </label>
-                  <label className="block space-y-2">
-                    <span className="text-sm font-bold text-gray-600">確認コード</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={authCode}
-                      onChange={(e) => setAuthCode(e.target.value)}
-                      className="w-full rounded-2xl border border-gray-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      placeholder="メールで届いた6桁のコード"
-                    />
-                  </label>
-                  <Button
-                    onClick={handleSendRegisterCode}
-                    variant="secondary"
-                    className="py-4 text-base w-full"
-                    disabled={isSendingCode}
-                  >
-                    {isSendingCode ? "送信中..." : "確認コードを送る"}
-                  </Button>
                 </>
               )}
 
@@ -1227,9 +1180,8 @@ export default function App() {
                 variant="primary"
                 icon={ArrowRight}
                 className="py-5 text-lg w-full"
-                disabled={isVerifyingCode}
               >
-                {authMode === "register" ? "確認コードで会員登録" : "メールアドレスでログイン"}
+                {authMode === "register" ? "IDで会員登録" : "IDでログイン"}
               </Button>
               {authMessage && <p className="text-sm text-red-500 font-medium">{authMessage}</p>}
             </div>
