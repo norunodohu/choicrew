@@ -2,7 +2,6 @@
 import { 
   Calendar, 
   Clock, 
-  Settings, 
   Share2, 
   Plus, 
   Bell, 
@@ -14,8 +13,7 @@ import {
   Check, 
   X, 
   MessageCircle, 
-  LayoutDashboard,
-  CalendarDays,
+  Settings,
   ArrowRight,
   Pencil,
   Eye,
@@ -296,18 +294,16 @@ export default function App() {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [connectionUsers, setConnectionUsers] = useState<UserProfile[]>([]);
   
-  const [view, setView] = useState<"dashboard" | "calendar" | "settings">("dashboard");
+  const [view, setView] = useState<"myboard" | "friends" | "settings">("myboard");
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [calendarMode, setCalendarMode] = useState<"month" | "week">(
-    typeof window !== "undefined" && window.innerWidth < 768 ? "week" : "month"
+  const [calendarMode, setCalendarMode] = useState<"day" | "week" | "month">(
+    typeof window !== "undefined" && window.innerWidth < 768 ? "day" : "week"
   );
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [dashboardDateOffset, setDashboardDateOffset] = useState(0);
-
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
   const [draftDate, setDraftDate] = useState(format(new Date(), "yyyy-MM-dd"));
@@ -1395,16 +1391,16 @@ export default function App() {
 
         <nav className="space-y-2 flex-1">
           {[
-            { id: "dashboard", label: "ダッシュボード", icon: LayoutDashboard },
-            { id: "calendar", label: "カレンダー", icon: CalendarDays },
+            { id: "myboard", label: "マイボード", icon: Calendar },
+            { id: "friends", label: "フレンド", icon: Users },
             { id: "settings", label: "設定", icon: Settings },
           ].map(item => (
             <button
               key={item.id}
-              onClick={() => setView(item.id as "dashboard" | "calendar" | "settings")}
+              onClick={() => setView(item.id as "myboard" | "friends" | "settings")}
               className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${view === item.id ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"}`}
             >
-              <item.icon size={22} />
+              <item.icon size={18} />
               {item.label}
             </button>
           ))}
@@ -1441,10 +1437,10 @@ export default function App() {
             </button>
             <img src={CHOICREW_LOGO} alt="ChoiCrew" className="lg:hidden h-10 w-auto shrink-0" />
             <h2 className="hidden lg:block text-sm font-bold text-gray-400 uppercase tracking-widest">
-              {view === "dashboard" ? "Overview" : view === "calendar" ? "Schedule" : "Preferences"}
+              {view === "myboard" ? "My Board" : view === "friends" ? "Friends" : "Preferences"}
             </h2>
             <h1 className="text-[0.95rem] lg:text-3xl font-black tracking-tight leading-none truncate">
-              {view === "dashboard" ? "ダッシュボード" : view === "calendar" ? "スケジュール" : "設定"}
+              {view === "myboard" ? "マイボード" : view === "friends" ? "フレンド" : "設定"}
             </h1>
           </div>
 
