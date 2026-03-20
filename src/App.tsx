@@ -908,11 +908,11 @@ export default function App() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
       if (auth.currentUser) {
-        const shouldLink = window.confirm("このGoogleアカウントを、今ログイン中のアカウントに統合します。よろしいですか？");
-        if (!shouldLink) return;
-        await linkWithPopup(auth.currentUser, provider);
+        const result = await linkWithPopup(auth.currentUser, provider);
+        alert(`Google連携中になりました。\n統合先: ${result.user.email || result.user.displayName || "Googleアカウント"}`);
       } else {
-        await signInWithPopup(auth, provider);
+        const result = await signInWithPopup(auth, provider);
+        alert(`Googleでログインしました。\n${result.user.email || result.user.displayName || "Googleアカウント"}`);
       }
     } catch (err) {
       console.error("Google login error:", err);
