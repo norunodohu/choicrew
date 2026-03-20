@@ -36,7 +36,8 @@ import {
   GoogleAuthProvider, 
   signOut, 
   signInWithCustomToken,
-  unlink
+  unlink,
+  linkWithPopup
 } from "firebase/auth";
 import { 
   getFirestore, 
@@ -904,7 +905,15 @@ export default function App() {
   // Handlers
   const handleGoogleLogin = async () => {
     try {
-      await signInWithPopup(auth, new GoogleAuthProvider());
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: "select_account" });
+      if (auth.currentUser) {
+        const shouldLink = window.confirm("このGoogleアカウントを、今ログイン中のアカウントに統合します。よろしいですか？");
+        if (!shouldLink) return;
+        await linkWithPopup(auth.currentUser, provider);
+      } else {
+        await signInWithPopup(auth, provider);
+      }
     } catch (err) {
       console.error("Google login error:", err);
     }
