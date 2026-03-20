@@ -524,6 +524,16 @@ export default function App() {
     alert(`通知テスト結果\n${buildLineNotificationAlert(result)}`);
   };
 
+  const handleUnlinkLine = async () => {
+    if (!currentUser) return;
+    await updateDoc(doc(db, "users", currentUser.uid), {
+      line_user_id: null,
+      notification_pref: "none",
+    });
+    setCurrentUser({ ...currentUser, line_user_id: undefined, notification_pref: "none" });
+    alert("LINE連携を解除しました。ログインは引き続き利用できます。");
+  };
+
   useEffect(() => {
     if (!currentUser) return;
     setSelectedAvatar(currentUser.avatar_url || currentUser.line_picture || presetAvatars[0]);
@@ -1275,19 +1285,26 @@ export default function App() {
               {authMessage && <p className="text-sm text-red-500 font-medium">{authMessage}</p>}
             </div>
 
-            <div className="relative py-2">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
-              <div className="relative flex justify-center text-sm"><span className="px-4 bg-[#F8FAFC] text-gray-400">または</span></div>
-            </div>
+            {!isLoggedIn && (
+              <>
+                <div className="relative py-2">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200"></div></div>
+                  <div className="relative flex justify-center text-sm"><span className="px-4 bg-[#F8FAFC] text-gray-400">または</span></div>
+                </div>
 
-            <div className="grid gap-4">
-              <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="py-5 text-lg">
-                LINEで続ける
-              </Button>
-              <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="py-5 text-lg">
-                Googleで続ける
-              </Button>
-            </div>
+                <div className="grid gap-4">
+                  <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="py-5 text-lg">
+                    LINEで続ける
+                  </Button>
+                  <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="py-5 text-lg">
+                    Googleで続ける
+                  </Button>
+                </div>
+              </>
+            )}
+            {isLoggedIn && (
+              <p className="text-center text-gray-500 font-medium mt-4">すでにサインイン済みです。</p>
+            )}
           </div>
 
           <p className="text-sm text-gray-400">
@@ -1975,9 +1992,23 @@ export default function App() {
                       ID/パスワードに加えて、LINEまたはGoogleでもサインインできます。どれで入っても同じアカウントに紐づきます。
                     </p>
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full py-4">
-                        LINEでサインイン
-                      </Button>
+                      {currentUser?.line_user_id ? (
+                        <div className="w-full py-4 px-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex flex-col gap-2 justify-center">
+                          <div className="flex items-center gap-2 text-emerald-700 font-bold">
+                            <Check size={18} />
+                            LINEサインイン済み / 通知連携済み
+                          </div>
+                          <p className="text-xs text-emerald-600">連携を解除してもログイン自体は継続できます。</p>
+                          <div className="flex gap-2">
+                            <Button onClick={handleTestLineNotification} variant="outline" className="flex-1 border-emerald-200 text-emerald-700">通知テスト</Button>
+                            <Button onClick={handleUnlinkLine} variant="ghost" className="flex-1 text-emerald-700">連携解除（通知のみオフ）</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="w-full py-4">
+                          LINEでサインイン
+                        </Button>
+                      )}
                       <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="w-full py-4">
                         Googleでサインイン
                       </Button>
