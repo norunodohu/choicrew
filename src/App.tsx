@@ -909,14 +909,31 @@ export default function App() {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: "select_account" });
       if (auth.currentUser) {
-        const result = await linkWithPopup(auth.currentUser, provider);
-        alert(`Google連携中になりました。\n統合先: ${result.user.email || result.user.displayName || "Googleアカウント"}`);
+        const sourceUid = auth.currentUser.uid;
+        try {
+          const result = await linkWithPopup(auth.currentUser, provider);
+          alert(`Google連携中になりました。\n統合先: ${result.user.email || result.user.displayName || "Googleアカウント"}`);
+        } catch (linkError: unknown) {
+          const code = (linkError as { code?: string })?.code;
+          if (code === "auth/credential-already-in-use") {
+            const shouldSwitch = window.confirm("そのGoogleアカウントは既に別アカウントに連携されています。そちらへ切り替えて今のデータを統合しますか？");
+            if (!shouldSwitch) return;
+            const result = await signInWithPopup(auth, provider);
+            if (sourceUid !== result.user.uid) {
+              await migrateUserData(sourceUid, result.user.uid);
+            }
+            alert(`Google連携中になりました。\n統合先: ${result.user.email || result.user.displayName || "Googleアカウント"}`);
+          } else {
+            throw linkError;
+          }
+        }
       } else {
         const result = await signInWithPopup(auth, provider);
         alert(`Googleでログインしました。\n${result.user.email || result.user.displayName || "Googleアカウント"}`);
       }
     } catch (err) {
       console.error("Google login error:", err);
+      alert("Google連携に失敗しました。別アカウントに既に連携済みの可能性があります。");
     }
   };
   const handleEmailAuth = async () => {
