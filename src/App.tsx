@@ -386,7 +386,10 @@ export default function App() {
     : [];
   const today = new Date();
   const displayedAvailabilities = [...availabilities].sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
-  const scrollCalendarDays = Array.from({ length: 20 }, (_, i) => addDays(today, i - 5));
+  const scrollCalendarDays = Array.from(
+    { length: endOfMonth(selectedDate).getDate() },
+    (_, i) => addDays(startOfMonth(selectedDate), i)
+  );
   const isBlockedByOwner = isPublicView && currentUser ? connections.some(c =>
     c.status === "blocked" &&
     c.blocked_by === publicUser?.uid &&
@@ -436,16 +439,19 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (calendarMode !== "day") return;
     const key = format(selectedDate, "yyyy-MM-dd");
     const target = dayRowRefs.current[key];
     if (target) {
-      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.requestAnimationFrame(() => {
+        target.scrollIntoView({ behavior: "auto", block: "center" });
+      });
       return;
     }
     if (isSameDay(selectedDate, today)) {
-      dayScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      dayScrollRef.current?.scrollTo({ top: 0, behavior: "auto" });
     }
-  }, [selectedDate]);
+  }, [selectedDate, calendarMode]);
 
   const openIdModal = () => {
     setIdValue(currentUser?.search_id || "");
@@ -1757,7 +1763,14 @@ export default function App() {
                 <Card className="lg:col-span-12 p-5 sm:p-8">
                   <div className="flex items-start justify-between mb-4 sm:mb-8 gap-3">
                     <div className="min-w-0">
-                      <h3 className="text-xl sm:text-2xl font-black leading-none">{format(selectedDate, "M月", { locale: ja })}</h3>
+                      {calendarMode === "day" ? (
+                        <div className="leading-none">
+                          <div className="text-[10px] sm:text-xs font-black text-gray-400">{format(selectedDate, "yyyy年", { locale: ja })}</div>
+                          <h3 className="text-xl sm:text-2xl font-black leading-none">{format(selectedDate, "M月", { locale: ja })}</h3>
+                        </div>
+                      ) : (
+                        <h3 className="text-xl sm:text-2xl font-black leading-none">{calendarMode === "week" ? format(selectedDate, "M月", { locale: ja }) : format(selectedDate, "yyyy年M月", { locale: ja })}</h3>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       {["day", "week", "month"].map(mode => (
@@ -1800,8 +1813,8 @@ export default function App() {
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <p className={`font-black ${isPast ? "text-gray-500" : day.getDay() === 0 ? "text-red-500" : day.getDay() === 6 ? "text-blue-500" : "text-gray-900"}`}>
-                                    {format(day, "M/d(E)", { locale: ja })}
+                                  <p className={`font-black text-base sm:text-lg ${isPast ? "text-gray-500" : day.getDay() === 0 ? "text-red-500" : day.getDay() === 6 ? "text-blue-500" : "text-gray-900"}`}>
+                                    {format(day, "d(E)", { locale: ja })}
                                   </p>
                                   <p className="text-[11px] text-gray-400">
                                     {idx === 5 ? "今日" : isToday ? "現在" : isSelected ? "選択中" : ""}
