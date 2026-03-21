@@ -366,6 +366,8 @@ export default function App() {
   const confirmedSectionRef = useRef<HTMLDivElement | null>(null);
   const bellRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
+  const dayScrollRef = useRef<HTMLDivElement | null>(null);
+  const dayRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isLineSignedIn = Boolean(auth.currentUser?.providerData.some(provider => provider.providerId === "oidc.line") || currentUser?.line_user_id);
   const isGoogleSignedIn = Boolean(
@@ -432,6 +434,18 @@ export default function App() {
     setSelectedDate(day);
     setShowDayDetailModal(true);
   };
+
+  useEffect(() => {
+    const key = format(selectedDate, "yyyy-MM-dd");
+    const target = dayRowRefs.current[key];
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    if (isSameDay(selectedDate, today)) {
+      dayScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [selectedDate]);
 
   const openIdModal = () => {
     setIdValue(currentUser?.search_id || "");
@@ -1772,15 +1786,16 @@ export default function App() {
                           今日に戻る
                         </button>
                       </div>
-                      <div className="max-h-[72vh] overflow-y-auto pr-1 space-y-3 scroll-smooth">
+                      <div ref={dayScrollRef} className="max-h-[72vh] overflow-y-auto pr-1 space-y-3 scroll-smooth">
                         {scrollCalendarDays.map((day, idx) => {
                           const items = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day)).sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
                           const isToday = isSameDay(day, today);
-                          const isPast = isBefore(startOfDay(day), startOfDay(addDays(today, -1)));
+                          const isPast = isBefore(startOfDay(day), startOfDay(today));
                           const isSelected = isSameDay(day, selectedDate);
                           return (
                             <div
                               key={day.toISOString()}
+                              ref={el => { dayRowRefs.current[format(day, "yyyy-MM-dd")] = el; }}
                               className={`rounded-2xl border p-4 space-y-3 ${isSelected ? "border-blue-200 bg-blue-50/40 shadow-sm" : isPast ? "border-gray-200 bg-gray-100/80 opacity-70" : "border-gray-100 bg-gray-50/60"}`}
                             >
                               <div className="flex items-center justify-between gap-3">
@@ -1798,13 +1813,17 @@ export default function App() {
                               </div>
                               <div className="space-y-2">
                                 {items.length > 0 ? items.map(item => (
-                                  <div key={item.id} className={`rounded-xl border px-3 py-2 shadow-sm ${isPast ? "border-gray-200 bg-gray-50 text-gray-400" : "border-gray-200 bg-white"}`}>
+                                  <button
+                                    key={item.id}
+                                    onClick={() => openAvailabilityModal(item)}
+                                    className={`w-full text-left rounded-xl border px-3 py-2 shadow-sm transition-colors ${isPast ? "border-gray-200 bg-gray-50 text-gray-400" : item.status === "open" ? "border-dashed border-gray-300 bg-white text-gray-700" : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50"}`}
+                                  >
                                     <div className="flex items-center justify-between gap-2 text-sm font-bold">
                                       <span>{item.start_time}-{item.end_time}</span>
                                       <span className="text-xs text-gray-500">{item.status === "confirmed" ? "確定" : item.status === "pending" ? "依頼中" : item.status === "busy" ? "予定あり" : "空き"}</span>
                                     </div>
                                     {item.note && <p className="text-xs text-gray-500 mt-1 truncate">{item.note}</p>}
-                                  </div>
+                                  </button>
                                 )) : (
                                   <div className="text-xs text-gray-400 bg-white border border-dashed border-gray-200 rounded-xl px-3 py-4 text-center">予定なし</div>
                                 )}
