@@ -2044,9 +2044,16 @@ export default function App() {
                           <User size={18} />
                           {isGoogleSignedIn ? "Google連携中" : "Google連携"}
                         </div>
-                        <p className={`text-xs ${isGoogleSignedIn ? "text-emerald-600" : "text-gray-400"}`}>
-                          {isGoogleSignedIn ? "Google連携は有効です。" : "Google連携を追加すると、LINE解除時もログインを維持できます。"}
-                        </p>
+                        <div className="text-xs space-y-1">
+                          <p className={isGoogleSignedIn ? "text-emerald-600" : "text-gray-400"}>
+                            {isGoogleSignedIn ? "Google連携は有効です。" : "Google連携を追加すると、LINE解除時もログインを維持できます。"}
+                          </p>
+                          {isGoogleSignedIn && currentUser?.google_email && (
+                            <p className="text-emerald-700 font-semibold break-all">
+                              連携メール: {currentUser.google_email}
+                            </p>
+                          )}
+                        </div>
                         <Button onClick={isGoogleSignedIn ? handleUnlinkGoogle : handleGoogleLogin} variant={isGoogleSignedIn ? "ghost" : "outline"} className="w-full">
                           {isGoogleSignedIn ? "Google連携を解除" : "Google連携"}
                         </Button>
