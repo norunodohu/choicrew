@@ -446,10 +446,7 @@ export default function App() {
     const target = dayRowRefs.current[key];
     if (!container || !target) return;
     dayScrollProgrammaticRef.current = true;
-    container.scrollTo({
-      top: Math.max(0, target.offsetTop),
-      behavior: "auto"
-    });
+    target.scrollIntoView({ behavior: "auto", block: "start" });
     window.setTimeout(() => {
       dayScrollProgrammaticRef.current = false;
     }, 120);
@@ -467,7 +464,20 @@ export default function App() {
     if (dayScrollSyncRef.current !== null) return;
     dayScrollSyncRef.current = window.requestAnimationFrame(() => {
       dayScrollSyncRef.current = null;
-      // 日スクロールは表示専用。選択日は月カレンダーやボタン操作でのみ変える。
+      const container = dayScrollRef.current;
+      if (!container) return;
+      const threshold = container.scrollTop + 48;
+      let nextDay: Date | null = null;
+      let nextTop = -Infinity;
+      for (const day of scrollCalendarDays) {
+        const key = format(day, "yyyy-MM-dd");
+        const el = dayRowRefs.current[key];
+        if (el && el.offsetTop <= threshold && el.offsetTop > nextTop) {
+          nextDay = day;
+          nextTop = el.offsetTop;
+        }
+      }
+      if (nextDay && !isSameDay(nextDay, selectedDate)) setSelectedDate(nextDay);
     });
   };
 
