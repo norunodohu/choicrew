@@ -333,6 +333,7 @@ export default function App() {
   const [draftNote, setDraftNote] = useState("");
   const [draftStatus, setDraftStatus] = useState<Availability["status"]>("open");
   const [draftIsRecurring, setDraftIsRecurring] = useState(false);
+  const [recentAddedIds, setRecentAddedIds] = useState<string[]>([]);
   const [lastNewDraft, setLastNewDraft] = useState({
     date: format(new Date(), "yyyy-MM-dd"),
     time: { start: "10:00", end: "15:00" },
@@ -1180,8 +1181,10 @@ export default function App() {
         if (draftIsRecurring) {
           const loopGroupId = Math.random().toString(36).substring(2, 15);
           const batch = writeBatch(db);
+          const createdIds: string[] = [];
           Array.from({ length: 8 }, (_, i) => addDays(parseISO(draftDate), i * 7)).forEach(date => {
             const ref = doc(collection(db, "availabilities"));
+            createdIds.push(ref.id);
             batch.set(ref, {
               ...payload,
               date: format(date, "yyyy-MM-dd"),
@@ -1191,11 +1194,13 @@ export default function App() {
             });
           });
           await batch.commit();
+          setRecentAddedIds(createdIds);
         } else {
-          await addDoc(collection(db, "availabilities"), {
+          const ref = await addDoc(collection(db, "availabilities"), {
             ...payload,
             created_at: serverTimestamp()
           });
+          setRecentAddedIds([ref.id]);
         }
       }
 
@@ -1207,6 +1212,7 @@ export default function App() {
         isRecurring: draftIsRecurring,
       });
       window.setTimeout(() => closeAvailabilityModal(), 180);
+      window.setTimeout(() => setRecentAddedIds([]), 2000);
     } catch (e: unknown) {
       console.error(e);
     } finally {
@@ -1849,8 +1855,12 @@ export default function App() {
                                   <motion.button
                                     key={item.id}
                                     initial={{ opacity: 0, scale: 0.75, y: 18 }}
-                                    animate={{ opacity: 1, scale: [0.75, 1.06, 1], y: 0 }}
-                                    transition={{ duration: 0.42, times: [0, 0.68, 1], ease: "easeOut" }}
+                                    animate={recentAddedIds.includes(item.id)
+                                      ? { opacity: [0, 1, 1, 1], scale: [0.75, 1.08, 1, 1], y: 0, boxShadow: ["0 0 0 rgba(59,130,246,0)", "0 0 0 8px rgba(59,130,246,0.18)", "0 0 0 0 rgba(59,130,246,0)", "0 0 0 0 rgba(59,130,246,0)"] }
+                                      : { opacity: 1, scale: [0.75, 1.06, 1], y: 0 }}
+                                    transition={recentAddedIds.includes(item.id)
+                                      ? { duration: 2, times: [0, 0.18, 0.4, 1], ease: "easeInOut" }
+                                      : { duration: 0.42, times: [0, 0.68, 1], ease: "easeOut" }}
                                     onClick={() => openAvailabilityModal(item)}
                                     className={`w-full text-left rounded-xl border px-3 py-2 shadow-sm transition-colors ${isPast ? "border-gray-200 bg-gray-50 text-gray-400" : item.status === "open" ? "border-dashed border-gray-300 bg-white text-gray-700" : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50"}`}
                                   >
