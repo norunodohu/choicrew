@@ -325,6 +325,7 @@ export default function App() {
   const [newName, setNewName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [showBellDropdown, setShowBellDropdown] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
@@ -366,8 +367,6 @@ export default function App() {
   const confirmedSectionRef = useRef<HTMLDivElement | null>(null);
   const bellRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
-  const dayScrollSyncRef = useRef<number | null>(null);
-  const dayScrollProgrammaticRef = useRef(false);
   const dayScrollRef = useRef<HTMLDivElement | null>(null);
   const dayRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -445,11 +444,7 @@ export default function App() {
     const container = dayScrollRef.current;
     const target = dayRowRefs.current[key];
     if (!container || !target) return;
-    dayScrollProgrammaticRef.current = true;
     target.scrollIntoView({ behavior: "auto", block: "start" });
-    window.setTimeout(() => {
-      dayScrollProgrammaticRef.current = false;
-    }, 120);
   };
 
   useEffect(() => {
@@ -458,28 +453,6 @@ export default function App() {
       window.requestAnimationFrame(() => syncDayScrollToDate(selectedDate));
     });
   }, [selectedDate, calendarMode]);
-
-  const handleDayScroll = () => {
-    if (dayScrollProgrammaticRef.current) return;
-    if (dayScrollSyncRef.current !== null) return;
-    dayScrollSyncRef.current = window.requestAnimationFrame(() => {
-      dayScrollSyncRef.current = null;
-      const container = dayScrollRef.current;
-      if (!container) return;
-      const threshold = container.scrollTop + 48;
-      let nextDay: Date | null = null;
-      let nextTop = -Infinity;
-      for (const day of scrollCalendarDays) {
-        const key = format(day, "yyyy-MM-dd");
-        const el = dayRowRefs.current[key];
-        if (el && el.offsetTop <= threshold && el.offsetTop > nextTop) {
-          nextDay = day;
-          nextTop = el.offsetTop;
-        }
-      }
-      if (nextDay && !isSameDay(nextDay, selectedDate)) setSelectedDate(nextDay);
-    });
-  };
 
   const openIdModal = () => {
     setIdValue(currentUser?.search_id || "");
@@ -1801,17 +1774,26 @@ export default function App() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      {["day", "month"].map(mode => (
+                      {["day"].map(mode => (
                         <button
                           key={mode}
                           onClick={() => setCalendarMode(mode as "day" | "week" | "month")}
                           className={`px-4 py-2 rounded-xl font-black ${calendarMode === mode ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}
                         >
-                          {mode === "day" ? "日" : "月"}
+                          日
                         </button>
                       ))}
                     </div>
                     <div className="flex gap-2">
+                      {view === "myboard" && calendarMode === "day" && (
+                        <button
+                          onClick={() => setShowCalendarModal(true)}
+                          className="p-3 rounded-xl hover:bg-gray-100"
+                          aria-label="カレンダーを開く"
+                        >
+                          <Calendar size={20} />
+                        </button>
+                      )}
                       <button onClick={() => setSelectedDate(addMonths(selectedDate, -1))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronLeft size={20}/></button>
                       <button onClick={() => setSelectedDate(addMonths(selectedDate, 1))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronRight size={20}/></button>
                     </div>
@@ -1819,41 +1801,6 @@ export default function App() {
                   
                   {calendarMode === "day" && (
                     <div className="space-y-3">
-                      <div className="rounded-2xl border border-gray-100 bg-white p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="leading-none">
-                            <div className="text-[10px] font-black text-gray-400">{format(selectedDate, "yyyy年", { locale: ja })}</div>
-                            <div className="text-sm font-black text-gray-900">{format(selectedDate, "M月", { locale: ja })}</div>
-                          </div>
-                          <div className="text-[10px] text-gray-400 font-medium">タップで移動</div>
-                        </div>
-                        <div className="grid grid-cols-7 gap-1 h-[200px] overflow-hidden">
-                          {["日", "月", "火", "水", "木", "金", "土"].map(d => (
-                            <div key={d} className={`text-center text-[10px] font-black ${d === "日" ? "text-red-500" : d === "土" ? "text-blue-500" : "text-gray-400"}`}>{d}</div>
-                          ))}
-                          {eachDayOfInterval({
-                            start: startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 0 }),
-                            end: endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 0 })
-                          }).map(day => {
-                            const dayAvails = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day));
-                            const isSelected = isSameDay(day, selectedDate);
-                            const hasItems = dayAvails.length > 0;
-                            const isOutsideCurrentMonth = day.getMonth() !== selectedDate.getMonth();
-                            return (
-                              <button
-                                key={day.toISOString()}
-                                onClick={() => setSelectedDate(day)}
-                                className={`relative aspect-square rounded-xl text-[12px] font-black transition-colors ${isSelected ? "bg-blue-600 text-white" : "bg-gray-50 hover:bg-gray-100 text-gray-800"} ${isOutsideCurrentMonth && !isSelected ? "opacity-35" : ""}`}
-                              >
-                                <span className={`${hasItems ? "underline decoration-black decoration-2 underline-offset-2" : ""}`}>
-                                  {format(day, "d")}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
                       <div className="flex items-center justify-end gap-3">
                         <button
                           onClick={() => setSelectedDate(today)}
@@ -1862,7 +1809,7 @@ export default function App() {
                           今日に戻る
                         </button>
                       </div>
-                      <div ref={dayScrollRef} onScroll={handleDayScroll} className="max-h-[72vh] overflow-y-auto pr-1 space-y-3 scroll-smooth">
+                      <div ref={dayScrollRef} className="max-h-[72vh] overflow-y-auto pr-1 space-y-3 scroll-smooth">
                         {scrollCalendarDays.map((day, idx) => {
                           const items = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day)).sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
                           const isToday = isSameDay(day, today);
@@ -2561,6 +2508,64 @@ export default function App() {
                     キャンセル
                   </Button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showCalendarModal && calendarMode === "day" && (
+          <div className="fixed inset-0 z-[65] flex items-start justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/35 backdrop-blur-sm"
+              onClick={() => setShowCalendarModal(false)}
+            />
+            <motion.div
+              initial={false}
+              animate={false}
+              exit={false}
+              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-gray-100 p-4 mt-20"
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div className="leading-none">
+                  <div className="text-[10px] font-black text-gray-400">{format(selectedDate, "yyyy年", { locale: ja })}</div>
+                  <div className="text-lg font-black text-gray-900">{format(selectedDate, "M月", { locale: ja })}</div>
+                </div>
+                <button onClick={() => setShowCalendarModal(false)} className="p-2 rounded-full hover:bg-gray-100">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="grid grid-cols-7 gap-1 h-[200px]">
+                {["日", "月", "火", "水", "木", "金", "土"].map(d => (
+                  <div key={d} className={`text-center text-[10px] font-black ${d === "日" ? "text-red-500" : d === "土" ? "text-blue-500" : "text-gray-400"}`}>{d}</div>
+                ))}
+                {eachDayOfInterval({
+                  start: startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 0 }),
+                  end: endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 0 })
+                }).map(day => {
+                  const dayAvails = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day));
+                  const isSelected = isSameDay(day, selectedDate);
+                  const hasItems = dayAvails.length > 0;
+                  const isOutsideCurrentMonth = day.getMonth() !== selectedDate.getMonth();
+                  return (
+                    <button
+                      key={day.toISOString()}
+                      onClick={() => {
+                        setSelectedDate(day);
+                        setShowCalendarModal(false);
+                      }}
+                      className={`relative aspect-square rounded-xl text-[12px] font-black transition-colors ${isSelected ? "bg-blue-600 text-white" : "bg-gray-50 hover:bg-gray-100 text-gray-800"} ${isOutsideCurrentMonth && !isSelected ? "opacity-35" : ""}`}
+                    >
+                      <span className={`${hasItems ? "underline decoration-black decoration-2 underline-offset-2" : ""}`}>
+                        {format(day, "d")}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </motion.div>
           </div>
