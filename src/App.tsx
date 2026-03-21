@@ -1678,7 +1678,7 @@ export default function App() {
       {/* Main Content */}
       <main className={`lg:ml-72 min-h-screen pb-28 lg:pb-12`}>
         {/* Header */}
-        <header className="sticky top-0 z-30 bg-[#F8FAFC]/90 backdrop-blur-md px-4 sm:px-6 py-3 lg:px-12 flex items-center justify-between gap-3">
+        <header className="fixed sm:sticky top-0 inset-x-0 z-30 bg-[#F8FAFC]/90 backdrop-blur-md px-4 sm:px-6 py-3 lg:px-12 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 lg:gap-3 min-w-0">
             <button
               className="lg:hidden w-11 h-11 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-gray-600"
@@ -1749,7 +1749,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="px-4 sm:px-6 lg:px-12 max-w-[100rem] mx-auto">
+        <div className="pt-20 sm:pt-0 px-4 sm:px-6 lg:px-12 max-w-[100rem] mx-auto">
           <AnimatePresence mode="wait">
             {view === "myboard" && (
               <motion.div 
