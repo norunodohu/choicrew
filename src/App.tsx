@@ -754,41 +754,30 @@ export default function App() {
       }
     );
 
-    const unsubNotif = onSnapshot(
-      query(collection(db, "notifications"), where("user_id", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(20)),
-      (snap) => setNotifications(snap.docs.map(d => ({ id: d.id, ...d.data() } as Notification))),
-      (err) => handleFirestoreError(err, OperationType.LIST, "notifications")
-    );
-
-    const unsubConn1 = onSnapshot(
-      query(collection(db, "connections"), where("user1_id", "==", currentUser.uid)),
-      (snap) => {
-        const c1 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
-        setConnections(prev => {
-          const others = prev.filter(c => c.user2_id === currentUser.uid && c.user1_id !== currentUser.uid);
-          return [...c1, ...others];
-        });
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, "connections")
-    );
-
-    const unsubConn2 = onSnapshot(
-      query(collection(db, "connections"), where("user2_id", "==", currentUser.uid)),
-      (snap) => {
-        const c2 = snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
-        setConnections(prev => {
-          const others = prev.filter(c => c.user1_id === currentUser.uid && c.user2_id !== currentUser.uid);
-          return [...others, ...c2];
-        });
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, "connections")
-    );
-
-    const unsubPreset = onSnapshot(
-      query(collection(db, "presets"), where("user_id", "==", currentUser.uid)),
-      (snap) => setPresets(snap.docs.map(d => ({ id: d.id, ...d.data() } as Preset))),
-      (err) => handleFirestoreError(err, OperationType.LIST, "presets")
-    );
+    // Non-realtime fetch to抑制 read 回数
+    (async () => {
+      try {
+        const notifSnap = await getDocs(query(collection(db, "notifications"), where("user_id", "==", currentUser.uid), orderBy("timestamp", "desc"), limit(20)));
+        setNotifications(notifSnap.docs.map(d => ({ id: d.id, ...d.data() } as Notification)));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, "notifications");
+      }
+      try {
+        const c1snap = await getDocs(query(collection(db, "connections"), where("user1_id", "==", currentUser.uid)));
+        const c2snap = await getDocs(query(collection(db, "connections"), where("user2_id", "==", currentUser.uid)));
+        const c1 = c1snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
+        const c2 = c2snap.docs.map(d => ({ id: d.id, ...d.data() } as Connection));
+        setConnections([...c1, ...c2]);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, "connections");
+      }
+      try {
+        const presetSnap = await getDocs(query(collection(db, "presets"), where("user_id", "==", currentUser.uid)));
+        setPresets(presetSnap.docs.map(d => ({ id: d.id, ...d.data() } as Preset)));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.LIST, "presets");
+      }
+    })();
 
     const unsubUser = onSnapshot(
       doc(db, "users", currentUser.uid),
@@ -805,10 +794,6 @@ export default function App() {
       unsubAvail();
       unsubStaffReq();
       unsubManagerReq();
-      unsubNotif();
-      unsubConn1();
-      unsubConn2();
-      unsubPreset();
       unsubUser();
     };
   }, [currentUser?.uid]);
