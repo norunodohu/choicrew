@@ -2098,12 +2098,12 @@ export default function App() {
                             <p className="text-2xl font-black truncate">{currentUser?.name}</p>
                             <Button onClick={() => setIsEditingName(true)} variant="ghost">編集</Button>
                           </div>
-                          <div className="flex items-center gap-2 text-lg">
-                            <MessageCircle size={18} className={isLineSignedIn ? "text-[#06C755]" : "text-gray-300"} />
-                            <User size={18} className={isGoogleSignedIn ? "text-emerald-700" : "text-gray-300"} />
-                            <Key size={18} className={currentUser?.search_id ? "text-blue-600" : "text-gray-300"} />
-                          </div>
                         )}
+                        <div className="flex items-center gap-2 text-lg">
+                          <MessageCircle size={18} className={isLineSignedIn ? "text-[#06C755]" : "text-gray-300"} />
+                          <User size={18} className={isGoogleSignedIn ? "text-emerald-700" : "text-gray-300"} />
+                          <Key size={18} className={currentUser?.search_id ? "text-blue-600" : "text-gray-300"} />
+                        </div>
                         <p className="text-gray-400 font-medium">{accountLabel}</p>
                       </div>
                     </div>
