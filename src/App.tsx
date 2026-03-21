@@ -365,7 +365,6 @@ export default function App() {
   const confirmedSectionRef = useRef<HTMLDivElement | null>(null);
   const bellRef = useRef<HTMLDivElement | null>(null);
   const mobileMenuRef = useRef<HTMLDivElement | null>(null);
-  const dayScrollRef = useRef<HTMLDivElement | null>(null);
   const dayRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isLineSignedIn = Boolean(auth.currentUser?.providerData.some(provider => provider.providerId === "oidc.line") || currentUser?.line_user_id);
@@ -388,7 +387,7 @@ export default function App() {
   const scrollCalendarDays = Array.from(
     { length: endOfMonth(selectedDate).getDate() },
     (_, i) => addDays(startOfMonth(selectedDate), i)
-  );
+  ).filter(day => showPastCalendarItems || !isBefore(startOfDay(day), startOfDay(today)));
   const isBlockedByOwner = isPublicView && currentUser ? connections.some(c =>
     c.status === "blocked" &&
     c.blocked_by === publicUser?.uid &&
@@ -439,9 +438,8 @@ export default function App() {
 
   const syncDayScrollToDate = (date: Date) => {
     const key = format(date, "yyyy-MM-dd");
-    const container = dayScrollRef.current;
     const target = dayRowRefs.current[key];
-    if (!container || !target) return;
+    if (!target) return;
     target.scrollIntoView({ behavior: "auto", block: "start" });
   };
 
@@ -1749,30 +1747,9 @@ export default function App() {
               </Button>
             </div>
           </div>
-          {view === "myboard" && (
-            <div className="mt-3 flex items-center justify-between gap-3 lg:hidden">
-              <button
-                onClick={() => setShowCalendarModal(true)}
-                className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-gray-600"
-                aria-label="カレンダーを開く"
-              >
-                <Calendar size={20} />
-              </button>
-              <div className="min-w-0">
-                <div className="text-[10px] font-black text-gray-400">{format(selectedDate, "yyyy年", { locale: ja })}</div>
-                <div className="text-lg font-black text-gray-900">{format(selectedDate, "M月", { locale: ja })}</div>
-              </div>
-              <button
-                onClick={() => setSelectedDate(today)}
-                className="px-3 h-10 rounded-xl text-xs font-black bg-gray-50 text-gray-600 hover:bg-gray-100 whitespace-nowrap"
-              >
-                今日に戻る
-              </button>
-            </div>
-          )}
         </header>
 
-        <div className="pt-[7.25rem] sm:pt-0 px-4 sm:px-6 lg:px-12 max-w-[100rem] mx-auto">
+        <div className="pt-16 sm:pt-0 px-4 sm:px-6 lg:px-12 max-w-[100rem] mx-auto">
           <AnimatePresence mode="wait">
             {view === "myboard" && (
               <motion.div 
@@ -1791,6 +1768,12 @@ export default function App() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setShowPastCalendarItems(v => !v)}
+                        className={`hidden lg:inline-flex px-3 h-10 rounded-xl text-xs font-black ${showPastCalendarItems ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}
+                      >
+                        {showPastCalendarItems ? "過去を隠す" : "過去を表示"}
+                      </button>
                       {view === "myboard" && (
                         <button
                           onClick={() => setShowCalendarModal(true)}
@@ -1804,7 +1787,18 @@ export default function App() {
                   </div>
                   
                   <div className="space-y-3">
-                    <div ref={dayScrollRef} className="w-full max-h-[calc(100vh-11rem)] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden pr-0 sm:pr-1 space-y-3 scroll-smooth">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedDate(today);
+                          setShowPastCalendarItems(v => !v);
+                        }}
+                        className={`lg:hidden px-3 h-9 rounded-xl text-xs font-black ${showPastCalendarItems ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}
+                      >
+                        {showPastCalendarItems ? "過去を隠す" : "過去を表示"}
+                      </button>
+                    </div>
+                    <div className="w-full overflow-x-hidden pr-0 sm:pr-1 space-y-3">
                         {scrollCalendarDays.map((day, idx) => {
                           const items = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day)).sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
                           const isToday = isSameDay(day, today);
@@ -1814,7 +1808,7 @@ export default function App() {
                             <div
                               key={day.toISOString()}
                               ref={el => { dayRowRefs.current[format(day, "yyyy-MM-dd")] = el; }}
-                              className={`rounded-2xl border p-4 space-y-3 ${isSelected ? "border-blue-200 bg-blue-50/40 shadow-sm" : isPast ? "border-gray-200 bg-gray-100/80 opacity-70" : "border-gray-100 bg-gray-50/60"}`}
+                              className={`rounded-2xl border p-4 space-y-3 ${isSelected ? "border-blue-200 bg-blue-50/40 shadow-sm" : isPast ? "border-gray-300 bg-gray-200/80 opacity-55" : "border-gray-100 bg-gray-50/60"}`}
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div>
@@ -1824,9 +1818,6 @@ export default function App() {
                                   <p className="text-[11px] text-gray-400">
                                     {idx === 5 ? "今日" : isToday ? "現在" : isSelected ? "選択中" : ""}
                                   </p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <Button onClick={() => openAvailabilityModal(undefined, day)} variant="outline" className="px-3 py-2 h-9 text-xs" disabled={isPast}>追加</Button>
                                 </div>
                               </div>
                               <div className="space-y-2">
@@ -1843,7 +1834,13 @@ export default function App() {
                                     {item.note && <p className="text-xs text-gray-500 mt-1 truncate">{item.note}</p>}
                                   </button>
                                 )) : (
-                                  <div className="text-xs text-gray-400 bg-white border border-dashed border-gray-200 rounded-xl px-3 py-4 text-center">予定なし</div>
+                                  <button
+                                    onClick={() => !isPast && openAvailabilityModal(undefined, day)}
+                                    disabled={isPast}
+                                    className="w-full text-xs text-gray-400 bg-white border border-dashed border-gray-200 rounded-xl px-3 py-4 text-center font-black disabled:opacity-60"
+                                  >
+                                    予定なし＋
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -2445,6 +2442,7 @@ export default function App() {
                       key={day.toISOString()}
                       onClick={() => {
                         setSelectedDate(day);
+                        setShowPastCalendarItems(true);
                         setShowCalendarModal(false);
                       }}
                       className={`relative aspect-square rounded-xl text-[12px] font-black transition-colors ${isSelected ? "bg-blue-600 text-white" : "bg-gray-50 hover:bg-gray-100 text-gray-800"} ${isOutsideCurrentMonth && !isSelected ? "opacity-35" : ""}`}
