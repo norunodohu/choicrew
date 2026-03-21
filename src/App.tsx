@@ -327,6 +327,7 @@ export default function App() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingAvailability, setEditingAvailability] = useState<Availability | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Availability | null>(null);
   const [draftDate, setDraftDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [draftTime, setDraftTime] = useState({ start: "10:00", end: "15:00" });
   const [draftNote, setDraftNote] = useState("");
@@ -1198,7 +1199,6 @@ export default function App() {
         }
       }
 
-      closeAvailabilityModal();
       setLastNewDraft({
         date: draftDate,
         time: draftTime,
@@ -1206,6 +1206,7 @@ export default function App() {
         status: draftStatus,
         isRecurring: draftIsRecurring,
       });
+      window.setTimeout(() => closeAvailabilityModal(), 180);
     } catch (e: unknown) {
       console.error(e);
     } finally {
@@ -1215,7 +1216,6 @@ export default function App() {
 
   const handleDeleteAvailability = async (id: string) => {
     try {
-      if (!window.confirm("本当に削除しますか？")) return;
       await deleteDoc(doc(db, "availabilities", id));
       setAvailabilities(prev => prev.filter(item => item.id !== id));
       if (editingAvailability?.id === id) closeAvailabilityModal();
@@ -2486,6 +2486,50 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {deleteTarget && (
+          <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => setDeleteTarget(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.98, y: 8 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="relative w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-gray-100 p-5"
+            >
+              <div className="space-y-2">
+                <p className="text-lg font-black">本当に削除しますか？</p>
+                <p className="text-sm text-gray-500">
+                  {deleteTarget ? `${format(parseISO(deleteTarget.date), "M月d日(E)", { locale: ja })} ${deleteTarget.start_time}-${deleteTarget.end_time}` : ""}
+                </p>
+              </div>
+              <div className="mt-5 flex gap-3">
+                <Button variant="outline" className="flex-1" onClick={() => setDeleteTarget(null)}>
+                  やめる
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  onClick={async () => {
+                    if (!deleteTarget) return;
+                    await handleDeleteAvailability(deleteTarget.id);
+                    setDeleteTarget(null);
+                  }}
+                >
+                  削除する
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Add Modal */}
       <AnimatePresence>
         {showAddModal && (
@@ -2563,21 +2607,20 @@ export default function App() {
                     variant="outline"
                     className="flex-1 py-3 font-black"
                     disabled={isSaving}
-                    >
+                  >
                     キャンセル
                   </Button>
                 </div>
                 {editingAvailability && (
                   <div className="pt-2 border-t border-gray-100">
                     <Button
-                      onClick={async () => {
+                      onClick={() => {
                         if (!editingAvailability) return;
                         if (editingAvailability.status === "confirmed") {
                           alert("確定のため削除できません。(相手がいる予定の場合直接キャンセルをお知らせください)");
                           return;
                         }
-                        await handleDeleteAvailability(editingAvailability.id);
-                        closeAvailabilityModal();
+                        setDeleteTarget(editingAvailability);
                       }}
                       variant="danger"
                     className="w-full py-3"
