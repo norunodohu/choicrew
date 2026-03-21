@@ -2127,59 +2127,52 @@ export default function App() {
                       サインイン方法
                     </h3>
                     <p className="text-sm text-gray-500">
-                      ID/パスワードに加えて、LINEまたはGoogleでもサインインできます。どれで入っても同じアカウントに紐づきます。
+                      LINE / Google / ID のどれで入っても同じアカウントに紐づきます。
                     </p>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className={`w-full py-4 px-4 rounded-2xl border flex flex-col gap-2 justify-center ${isLineSignedIn ? "bg-emerald-50 border-emerald-100" : "bg-gray-50 border-gray-100"}`}>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className={`w-full p-4 rounded-2xl border flex flex-col gap-2 justify-center ${isLineSignedIn ? "bg-emerald-50 border-emerald-100" : "bg-gray-50 border-gray-100"}`}>
                         <div className={`flex items-center gap-2 font-bold ${isLineSignedIn ? "text-emerald-700" : "text-gray-500"}`}>
                           <Check size={18} />
                           {isLineSignedIn ? "LINEでログイン中" : "LINEでログイン"}
                         </div>
                         <p className={`text-xs ${isLineSignedIn ? "text-emerald-600" : "text-gray-400"}`}>
-                          {isLineSignedIn ? "LINEログインは有効です。" : "LINEでログインすると通知連携ができます。"}
+                          {isLineSignedIn ? "LINEログインは有効です。" : "ログインで通知連携も使えます。"}
                         </p>
-                        <Button onClick={isLineSignedIn ? handleUnlinkLine : handleLineLogin} variant={isLineSignedIn ? "ghost" : "line"} className="w-full">
+                        <Button onClick={isLineSignedIn ? handleUnlinkLine : handleLineLogin} variant={isLineSignedIn ? "ghost" : "line"} className="w-full text-sm">
                           {isLineSignedIn ? "LINE連携を解除" : "LINEでログイン"}
                         </Button>
                       </div>
-                      <div className={`w-full py-4 px-4 rounded-2xl border flex flex-col gap-2 justify-center ${isGoogleSignedIn ? "bg-emerald-50 border-emerald-100" : "bg-gray-50 border-gray-100"}`}>
+
+                      <div className={`w-full p-4 rounded-2xl border flex flex-col gap-2 justify-center ${isGoogleSignedIn ? "bg-emerald-50 border-emerald-100" : "bg-gray-50 border-gray-100"}`}>
                         <div className={`flex items-center gap-2 font-bold ${isGoogleSignedIn ? "text-emerald-700" : "text-gray-500"}`}>
                           <User size={18} />
                           {isGoogleSignedIn ? "Google連携中" : "Google連携"}
                         </div>
                         <div className="text-xs space-y-1">
                           <p className={isGoogleSignedIn ? "text-emerald-600" : "text-gray-400"}>
-                            {isGoogleSignedIn ? "Google連携は有効です。" : "Google連携を追加すると、LINE解除時もログインを維持できます。"}
+                            {isGoogleSignedIn ? "Google連携は有効です。" : "連携するとLINEがなくてもログイン維持できます。"}
                           </p>
                           {isGoogleSignedIn && currentUser?.google_email && (
-                            <p className="text-emerald-700 font-semibold break-all">
-                              連携メール: {currentUser.google_email}
-                            </p>
+                            <p className="text-emerald-700 font-semibold break-all">連携メール: {currentUser.google_email}</p>
                           )}
                         </div>
-                        <Button onClick={isGoogleSignedIn ? handleUnlinkGoogle : handleGoogleLogin} variant={isGoogleSignedIn ? "ghost" : "outline"} className="w-full">
+                        <Button onClick={isGoogleSignedIn ? handleUnlinkGoogle : handleGoogleLogin} variant={isGoogleSignedIn ? "ghost" : "outline"} className="w-full text-sm">
                           {isGoogleSignedIn ? "Google連携を解除" : "Google連携"}
                         </Button>
                       </div>
-                    </div>
-                  </section>
 
-                  <section className="space-y-4 pt-8 border-t border-gray-100">
-                    <h3 className="text-xl font-black flex items-center gap-3">
-                      <User size={24} className="text-blue-600" />
-                      IDログイン
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      IDとパスワードを設定すると、LINEやGoogleがなくてもログインできます。
-                    </p>
-                    <div className="p-4 rounded-2xl border bg-gray-50 flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-bold">{currentUser?.search_id ? `ID: ${currentUser.search_id}` : "ID未設定"}</p>
-                        <p className="text-xs text-gray-500">{currentUser?.search_id ? "パスワードは非表示です" : "IDとパスワードを設定できます"}</p>
+                      <div className={`w-full p-4 rounded-2xl border flex flex-col gap-2 justify-center ${currentUser?.search_id ? "bg-emerald-50 border-emerald-100" : "bg-gray-50 border-gray-100"}`}>
+                        <div className={`flex items-center gap-2 font-bold ${currentUser?.search_id ? "text-emerald-700" : "text-gray-500"}`}>
+                          <Eye size={18} />
+                          {currentUser?.search_id ? `IDログイン設定済み` : "IDログイン未設定"}
+                        </div>
+                        <p className={`text-xs ${currentUser?.search_id ? "text-emerald-600" : "text-gray-400"}`}>
+                          {currentUser?.search_id ? `ID: ${currentUser.search_id}` : "IDとパスワードを設定できます。"}
+                        </p>
+                        <Button onClick={openIdModal} variant={currentUser?.search_id ? "ghost" : "secondary"} className="w-full text-sm">
+                          {currentUser?.search_id ? "ID/パスワードを変更" : "ID/パスワードを設定"}
+                        </Button>
                       </div>
-                      <Button onClick={openIdModal} variant="outline">
-                        {currentUser?.search_id ? "ID/パスワードを変更" : "ID/パスワードを設定"}
-                      </Button>
                     </div>
                   </section>
 
