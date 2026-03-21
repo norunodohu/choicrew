@@ -1848,9 +1848,9 @@ export default function App() {
                                 {items.length > 0 ? items.map(item => (
                                   <motion.button
                                     key={item.id}
-                                    initial={{ opacity: 0, scale: 0.96, y: 8 }}
-                                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                                    transition={{ duration: 0.22, ease: "easeOut" }}
+                                    initial={{ opacity: 0, scale: 0.75, y: 18 }}
+                                    animate={{ opacity: 1, scale: [0.75, 1.06, 1], y: 0 }}
+                                    transition={{ duration: 0.42, times: [0, 0.68, 1], ease: "easeOut" }}
                                     onClick={() => openAvailabilityModal(item)}
                                     className={`w-full text-left rounded-xl border px-3 py-2 shadow-sm transition-colors ${isPast ? "border-gray-200 bg-gray-50 text-gray-400" : item.status === "open" ? "border-dashed border-gray-300 bg-white text-gray-700" : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50"}`}
                                   >
