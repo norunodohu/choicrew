@@ -318,9 +318,7 @@ export default function App() {
   
   const [view, setView] = useState<"myboard" | "friends" | "settings">("myboard");
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [calendarMode, setCalendarMode] = useState<"day" | "week" | "month">(
-    typeof window !== "undefined" && window.innerWidth < 768 ? "day" : "week"
-  );
+  const [calendarMode, setCalendarMode] = useState<"day" | "week" | "month">("day");
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -1764,28 +1762,13 @@ export default function App() {
                 <Card className="lg:col-span-12 p-5 sm:p-8">
                   <div className="flex items-start justify-between mb-4 sm:mb-8 gap-3">
                     <div className="min-w-0">
-                      {calendarMode === "day" ? (
-                        <div className="leading-none">
-                          <div className="text-[10px] sm:text-xs font-black text-gray-400">{format(selectedDate, "yyyy年", { locale: ja })}</div>
-                          <h3 className="text-xl sm:text-2xl font-black leading-none">{format(selectedDate, "M月", { locale: ja })}</h3>
-                        </div>
-                      ) : (
-                        <h3 className="text-xl sm:text-2xl font-black leading-none">{calendarMode === "week" ? format(selectedDate, "M月", { locale: ja }) : format(selectedDate, "yyyy年M月", { locale: ja })}</h3>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {["day"].map(mode => (
-                        <button
-                          key={mode}
-                          onClick={() => setCalendarMode(mode as "day" | "week" | "month")}
-                          className={`px-4 py-2 rounded-xl font-black ${calendarMode === mode ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-500"}`}
-                        >
-                          日
-                        </button>
-                      ))}
+                      <div className="leading-none">
+                        <div className="text-[10px] sm:text-xs font-black text-gray-400">{format(selectedDate, "yyyy年", { locale: ja })}</div>
+                        <h3 className="text-xl sm:text-2xl font-black leading-none">{format(selectedDate, "M月", { locale: ja })}</h3>
+                      </div>
                     </div>
                     <div className="flex gap-2">
-                      {view === "myboard" && calendarMode === "day" && (
+                      {view === "myboard" && (
                         <button
                           onClick={() => setShowCalendarModal(true)}
                           className="p-3 rounded-xl hover:bg-gray-100"
@@ -1794,22 +1777,19 @@ export default function App() {
                           <Calendar size={20} />
                         </button>
                       )}
-                      <button onClick={() => setSelectedDate(addMonths(selectedDate, -1))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronLeft size={20}/></button>
-                      <button onClick={() => setSelectedDate(addMonths(selectedDate, 1))} className="p-3 rounded-xl hover:bg-gray-100"><ChevronRight size={20}/></button>
                     </div>
                   </div>
                   
-                  {calendarMode === "day" && (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-end gap-3">
-                        <button
-                          onClick={() => setSelectedDate(today)}
-                          className="shrink-0 px-3 py-2 rounded-xl text-xs font-black bg-gray-50 text-gray-600 hover:bg-gray-100"
-                        >
-                          今日に戻る
-                        </button>
-                      </div>
-                      <div ref={dayScrollRef} className="max-h-[72vh] overflow-y-auto pr-1 space-y-3 scroll-smooth">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-end gap-3">
+                      <button
+                        onClick={() => setSelectedDate(today)}
+                        className="shrink-0 px-3 py-2 rounded-xl text-xs font-black bg-gray-50 text-gray-600 hover:bg-gray-100"
+                      >
+                        今日に戻る
+                      </button>
+                    </div>
+                    <div ref={dayScrollRef} className="w-full max-h-[calc(100vh-14rem)] sm:max-h-[72vh] overflow-y-auto overflow-x-hidden pr-0 sm:pr-1 space-y-3 scroll-smooth">
                         {scrollCalendarDays.map((day, idx) => {
                           const items = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day)).sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
                           const isToday = isSameDay(day, today);
@@ -1854,114 +1834,8 @@ export default function App() {
                             </div>
                           );
                         })}
-                      </div>
                     </div>
-                  )}
-
-                  {calendarMode === "week" && (
-                    <div className="mt-2 rounded-3xl border border-gray-100 bg-white/70 overflow-hidden">
-                      <div className="px-4 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-black text-gray-900">週間ボード</p>
-                          <p className="text-xs text-gray-400">空白時間は表示せず、予定ブロックだけを並べています。</p>
-                        </div>
-                        <p className="text-xs text-gray-400 font-medium">横幅広めで表示中</p>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[80rem] grid grid-cols-7 divide-x divide-gray-100">
-                          {weekDays.map((day, dayIndex) => {
-                            const items = weekDayAvails[dayIndex].slice().sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
-                            return (
-                              <div key={day.toISOString()} className="min-h-[20rem] p-4">
-                                <div className="flex items-center justify-between gap-2 mb-3">
-                                  <div>
-                                    <p className={`text-sm font-black ${day.getDay() === 0 ? "text-red-500" : day.getDay() === 6 ? "text-blue-500" : "text-gray-900"}`}>
-                                      {format(day, "M/d", { locale: ja })}
-                                    </p>
-                                    <p className="text-[10px] text-gray-400">{format(day, "E", { locale: ja })}</p>
-                                  </div>
-                                  <button onClick={() => openDayDetailModal(day)} className="text-[10px] font-black text-blue-600 hover:underline">
-                                    詳細
-                                  </button>
-                                </div>
-                                <div className="space-y-2">
-                                  {items.length > 0 ? items.map((item, itemIndex) => (
-                                    <button
-                                      key={`${item.id}-${itemIndex}`}
-                                      onClick={() => openAvailabilityModal(item)}
-                                      className={`w-full rounded-2xl px-3 py-3 text-left text-xs font-bold shadow-sm border transition-all ${
-                                        item.status === "confirmed"
-                                          ? "bg-red-50 border-red-100 text-red-700"
-                                          : item.status === "pending"
-                                            ? "bg-orange-50 border-orange-100 text-orange-700"
-                                            : item.status === "busy"
-                                              ? "bg-red-100 border-red-200 text-red-900"
-                                              : "bg-white border-dashed border-gray-300 text-gray-700"
-                                      }`}
-                                    >
-                                      <div className="flex items-center justify-between gap-2">
-                                        <span className="truncate">{formatCompactTime(item.start_time)}-{formatCompactTime(item.end_time)}</span>
-                                        <span className="shrink-0">{item.status === "confirmed" ? "確定" : item.status === "pending" ? "依頼中" : item.status === "busy" ? "予定あり" : "空き"}</span>
-                                      </div>
-                                      {item.is_recurring && (
-                                        <p className="mt-1 inline-flex items-center gap-1 text-[10px] font-black text-blue-600">
-                                          <Repeat2 size={11} /> ループ
-                                        </p>
-                                      )}
-                                      {item.note && <p className="mt-1 font-medium opacity-80 truncate">{item.note}</p>}
-                                    </button>
-                                  )) : (
-                                    <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/70 px-3 py-6 text-center text-xs text-gray-400">
-                                      予定なし
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {calendarMode === "month" && (
-                    <div className="overflow-x-hidden">
-                      <div className="w-full max-w-[90vw] grid grid-cols-7 gap-2 mx-auto">
-                        {["日", "月", "火", "水", "木", "金", "土"].map(d => {
-                          const isSun = d === "日";
-                          const isSat = d === "土";
-                          return (
-                            <div key={d} className={`relative text-center font-black uppercase pb-2 ${isSun ? "text-red-500" : isSat ? "text-blue-500" : "text-gray-900"}`}>
-                              {d}
-                            </div>
-                          );
-                        })}
-                        {eachDayOfInterval({
-                          start: startOfWeek(startOfMonth(selectedDate), { weekStartsOn: 0 }),
-                          end: endOfWeek(endOfMonth(selectedDate), { weekStartsOn: 0 })
-                        }).map(day => {
-                          const dayAvails = displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day));
-                          const isSelected = isSameDay(day, selectedDate);
-                          const isToday = isSameDay(day, new Date());
-                          const isOutsideCurrentMonth = day.getMonth() !== selectedDate.getMonth();
-                          return (
-                            <button 
-                              key={day.toString()}
-                              onClick={() => setSelectedDate(day)}
-                              className={`rounded-2xl flex flex-col items-center justify-start transition-all relative aspect-square justify-center gap-1 ${isSelected ? "bg-blue-600 text-white shadow-xl shadow-blue-200" : "hover:bg-gray-50"} ${isOutsideCurrentMonth && !isSelected ? "text-gray-300" : ""}`}
-                            >
-                              <div className="w-full flex items-center justify-between">
-                                <span className={`text-lg sm:text-xl font-black ${isToday && !isSelected ? "text-blue-600" : ""} ${isOutsideCurrentMonth && !isSelected ? "opacity-40" : ""}`}>{format(day, "d")}</span>
-                              </div>
-                              {dayAvails.length > 0 && (
-                                <div className="mt-auto w-3/5 border-b-2 border-gray-900" />
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </Card>
               </motion.div>
             )}
