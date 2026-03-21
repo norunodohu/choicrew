@@ -740,7 +740,8 @@ export default function App() {
           const others = prev.filter(r => r.manager_id === currentUser.uid && r.staff_id !== currentUser.uid);
           return [...staffReqs, ...others];
         });
-      }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, "requests")
     );
 
     const unsubManagerReq = onSnapshot(
@@ -751,7 +752,8 @@ export default function App() {
           const others = prev.filter(r => r.staff_id === currentUser.uid && r.manager_id !== currentUser.uid);
           return [...others, ...managerReqs];
         });
-      }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, "requests")
     );
 
     // Non-realtime fetch to抑制 read 回数
@@ -787,7 +789,8 @@ export default function App() {
           setCurrentUser(profile);
           setNewName(profile.name);
         }
-      }
+      },
+      (err) => handleFirestoreError(err, OperationType.READ, "users")
     );
 
     return () => {
