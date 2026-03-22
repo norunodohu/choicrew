@@ -465,7 +465,7 @@ export default function App() {
       setDraftDate(format(baseDate, "yyyy-MM-dd"));
       setDraftTime(lastNewDraft.time);
       setDraftNote(lastNewDraft.note);
-      setDraftStatus(lastNewDraft.status);
+      setDraftStatus("open");
       setDraftIsRecurring(lastNewDraft.isRecurring);
     }
     setShowAddModal(true);
