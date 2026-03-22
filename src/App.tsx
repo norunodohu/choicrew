@@ -1838,19 +1838,19 @@ export default function App() {
                             <div
                               key={day.toISOString()}
                               ref={el => { dayRowRefs.current[format(day, "yyyy-MM-dd")] = el; }}
-                              className={`rounded-2xl border p-4 space-y-3 ${isSelected ? "border-blue-200 bg-blue-50/40 shadow-sm" : isPast ? "border-gray-300 bg-gray-200/80 opacity-55" : "border-gray-100 bg-gray-50/60"}`}
+                              className={`rounded-2xl border p-6 sm:p-7 min-h-[18rem] space-y-4 ${isSelected ? "border-blue-200 bg-blue-50/40 shadow-sm" : isPast ? "border-gray-300 bg-gray-200/80 opacity-55" : "border-gray-100 bg-gray-50/60"}`}
                             >
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <p className={`font-black text-base sm:text-lg ${isPast ? "text-gray-500" : day.getDay() === 0 ? "text-red-500" : day.getDay() === 6 ? "text-blue-500" : "text-gray-900"}`}>
+                                  <p className={`font-black text-lg sm:text-2xl ${isPast ? "text-gray-500" : day.getDay() === 0 ? "text-red-500" : day.getDay() === 6 ? "text-blue-500" : "text-gray-900"}`}>
                                     {format(day, "d(E)", { locale: ja })}
                                   </p>
-                                  <p className="text-[11px] text-gray-400">
+                                  <p className="text-xs sm:text-sm text-gray-400">
                                     {isPast ? "過去" : `${format(day, "d日(E)", { locale: ja })}の空き`}
                                   </p>
                                 </div>
                               </div>
-                              <div className="space-y-2">
+                              <div className="space-y-3">
                                 {items.length > 0 ? items.map(item => (
                                   <motion.button
                                     key={item.id}
@@ -1862,19 +1862,18 @@ export default function App() {
                                       ? { duration: 2, times: [0, 0.18, 0.36, 0.56, 0.74, 1], ease: "easeInOut" }
                                       : { duration: 0.24, ease: "easeOut" }}
                                     onClick={() => openAvailabilityModal(item)}
-                                    className={`w-full text-left rounded-xl border px-3 py-2 shadow-sm transition-colors ${isPast ? "border-gray-200 bg-gray-50 text-gray-400" : item.status === "open" ? "border-dashed border-gray-300 bg-white text-gray-700" : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50"}`}
+                                    className={`w-full text-left rounded-2xl border px-4 py-4 sm:py-5 shadow-sm transition-colors ${isPast ? "border-gray-200 bg-gray-50 text-gray-400" : "border-dashed border-gray-300 bg-white text-gray-700"}`}
                                   >
-                                    <div className="flex items-center justify-between gap-2 text-sm font-bold">
+                                    <div className="flex items-center justify-between gap-2 text-base sm:text-lg font-black">
                                       <span>{item.start_time}-{item.end_time}</span>
-                                      <span className="text-xs text-gray-500">{item.status === "confirmed" ? "確定" : item.status === "pending" ? "依頼中" : item.status === "busy" ? "予定あり" : "空き"}</span>
                                     </div>
-                                    {item.note && <p className="text-xs text-gray-500 mt-1 truncate">{item.note}</p>}
+                                    {item.note && <p className="text-sm text-gray-500 mt-1 truncate">{item.note}</p>}
                                   </motion.button>
                                 )) : (
                                   <button
                                     onClick={() => !isPast && openAvailabilityModal(undefined, day)}
                                     disabled={isPast}
-                                    className="w-full text-xs text-gray-400 bg-white border border-dashed border-gray-200 rounded-xl px-3 py-4 text-center font-black disabled:opacity-60"
+                                    className="w-full text-sm text-gray-400 bg-white border-2 border-dashed border-gray-300 rounded-2xl px-3 py-8 text-center font-black disabled:opacity-60"
                                   >
                                     空き追加
                                   </button>
@@ -1882,7 +1881,7 @@ export default function App() {
                                 {items.length > 0 && !isPast && (
                                   <button
                                     onClick={() => openAvailabilityModal(undefined, day)}
-                                    className="w-full text-xs text-blue-600 bg-white border border-dashed border-blue-200 rounded-xl px-3 py-3 text-center font-black hover:bg-blue-50"
+                                    className="w-full text-sm text-blue-600 bg-white border-2 border-dashed border-blue-200 rounded-2xl px-3 py-4 text-center font-black hover:bg-blue-50"
                                   >
                                     空き追加
                                   </button>
