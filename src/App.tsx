@@ -502,7 +502,7 @@ export default function App() {
   };
 
   const statusLabel = (status: Availability["status"]) =>
-    status === "open" ? "空き" : "やり取り中";
+    status === "open" ? "空き" : status === "confirmed" ? "確定" : "やり取り中";
 
   const statusColor = (status: Availability["status"]) =>
     status === "confirmed" ? "bg-red-500" : status === "pending" ? "bg-orange-500" : status === "busy" ? "bg-red-900" : "bg-gray-400";
@@ -1912,7 +1912,7 @@ export default function App() {
                                           ? "bg-amber-100 text-amber-700"
                                           : "bg-blue-50 text-blue-500"
                                       }`}>
-                                        {item.status === "confirmed" ? "やり取り中" : "空き"}
+                                        {item.status === "confirmed" ? "確定" : "空き"}
                                       </span>
                                     </div>
                                     {item.note && <p className={`text-sm mt-1 truncate ${item.status === "confirmed" ? "text-amber-700" : "text-gray-500"}`}>{item.note}</p>}
