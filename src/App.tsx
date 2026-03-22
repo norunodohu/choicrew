@@ -78,11 +78,11 @@ const CHOICREW_LOGO = "/choicrew-logo.svg";
 const AUTH_ID_DOMAIN = "choicrew.local";
 const DEFAULT_TIME_STORAGE_KEY = "choicrew_default_time";
 const avatarSeeds = [
-  "alex","sam","mika","haru","yui","ren","rio","kei","nana","shun",
-  "riku","aoi","mei","sora","yuna","kota","hana","tomo","rei","mio",
-  "yuto","mai","nao","kana","subaru","noa","itsuki","asahi","aya","hina"
+  "haruto","yuto","sota","ren","riku","subaru","kota","itsuki","asahi","shun",
+  "yui","mei","aoi","hana","mio","noa","kana","aya","nana","yuna",
+  "kaito","ryo","naoki","tomo","rei","sora","miku","mai","hinata","rin"
 ];
-const presetAvatars = avatarSeeds.map(seed => `https://api.dicebear.com/7.x/lorelei-neutral/svg?seed=${seed}&backgroundColor=transparent`);
+const presetAvatars = avatarSeeds.map(seed => `https://api.dicebear.com/7.x/adventurer-neutral/svg?seed=${seed}&backgroundColor=transparent`);
 const pickRandomAvatar = () => presetAvatars[Math.floor(Math.random() * presetAvatars.length)];
 const getDefaultTimeStorageKey = (uid: string) => `${DEFAULT_TIME_STORAGE_KEY}_${uid}`;
 
