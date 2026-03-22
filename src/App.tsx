@@ -78,13 +78,11 @@ const CHOICREW_LOGO = "/choicrew-logo.svg";
 const AUTH_ID_DOMAIN = "choicrew.local";
 const DEFAULT_TIME_STORAGE_KEY = "choicrew_default_time";
 const avatarSeeds = [
-  "fox","panda","sloth","koala","tiger","lion","eagle","dolphin","whale","penguin",
-  "otter","owl","parrot","seal","shark","orca","hippo","rhino","giraffe","zebra",
-  "camel","buffalo","bear","moose","deer","goat","sheep","hedgehog","raccoon","squirrel",
-  "beaver","hamster","duck","flamingo","peacock","frog","gecko","dragon","yeti","goblin",
-  "ghost","robot","ninja","wizard","personA","personB","personC","personD","monsterA","monsterB"
+  "alex","sam","mika","haru","yui","ren","rio","kei","nana","shun",
+  "riku","aoi","mei","sora","yuna","kota","hana","tomo","rei","mio",
+  "yuto","mai","nao","kana","subaru","noa","itsuki","asahi","aya","hina"
 ];
-const presetAvatars = avatarSeeds.map(seed => `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${seed}&backgroundColor=transparent`);
+const presetAvatars = avatarSeeds.map(seed => `https://api.dicebear.com/7.x/personas/svg?seed=${seed}&backgroundColor=transparent`);
 const pickRandomAvatar = () => presetAvatars[Math.floor(Math.random() * presetAvatars.length)];
 const getDefaultTimeStorageKey = (uid: string) => `${DEFAULT_TIME_STORAGE_KEY}_${uid}`;
 
@@ -557,7 +555,7 @@ export default function App() {
   const weekDayAvails = weekDays.map(day => displayedAvailabilities.filter(a => isSameDay(parseISO(a.date), day)));
   const lineAvatarOption = currentUser?.line_picture ? [currentUser.line_picture] : [];
   const avatarOptions = [...lineAvatarOption, ...presetAvatars];
-  const visibleAvatars = showAllAvatars ? avatarOptions : avatarOptions.slice(0, 8);
+  const visibleAvatars = showAllAvatars ? avatarOptions : avatarOptions.slice(0, 5);
 
   const createNotification = async (userId: string, type: Notification["type"], message: string, date?: string) => {
     await addDoc(collection(db, "notifications"), {
