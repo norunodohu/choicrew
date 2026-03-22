@@ -1878,13 +1878,16 @@ export default function App() {
                                     空き追加
                                   </button>
                                 )}
-                {items.length > 0 && !isPast && (
-                                  <button
-                                    onClick={() => openAvailabilityModal(undefined, day)}
-                                    className="mx-auto w-[150px] inline-flex items-center justify-center rounded-2xl border border-dashed border-blue-200 bg-white/70 text-blue-500 text-sm font-black hover:bg-blue-50 opacity-60 px-4 py-3"
-                                  >
-                                    ＋
-                                  </button>
+                                {items.length > 0 && !isPast && (
+                                  <div className="flex justify-center">
+                                    <button
+                                      onClick={() => openAvailabilityModal(undefined, day)}
+                                      className="text-blue-500 text-3xl font-black leading-none opacity-70 hover:opacity-100"
+                                      aria-label="空き追加"
+                                    >
+                                      ＋
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -2636,7 +2639,7 @@ export default function App() {
                         ...prev,
                         time: draftTime,
                       }));
-                      alert("デフォルト時間として追加されました。");
+                      alert(`${draftTime.start}-${draftTime.end} が次回登録時にも使えるデフォルト時間として登録されました。続けて予定を追加して下さい。`);
                     }}
                     className="text-[11px] font-black text-gray-400 hover:text-blue-600"
                   >
