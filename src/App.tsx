@@ -1846,7 +1846,7 @@ export default function App() {
                                     {format(day, "d(E)", { locale: ja })}
                                   </p>
                                   <p className="text-[11px] text-gray-400">
-                                    {idx === 5 ? "今日" : isToday ? "現在" : isSelected ? "選択中" : ""}
+                                    {isPast ? "過去" : `${format(day, "d日(E)", { locale: ja })}の空き`}
                                   </p>
                                 </div>
                               </div>
@@ -1876,7 +1876,15 @@ export default function App() {
                                     disabled={isPast}
                                     className="w-full text-xs text-gray-400 bg-white border border-dashed border-gray-200 rounded-xl px-3 py-4 text-center font-black disabled:opacity-60"
                                   >
-                                    予定なし＋
+                                    空き追加
+                                  </button>
+                                )}
+                                {items.length > 0 && !isPast && (
+                                  <button
+                                    onClick={() => openAvailabilityModal(undefined, day)}
+                                    className="w-full text-xs text-blue-600 bg-white border border-dashed border-blue-200 rounded-xl px-3 py-3 text-center font-black hover:bg-blue-50"
+                                  >
+                                    空き追加
                                   </button>
                                 )}
                               </div>
