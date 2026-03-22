@@ -1958,16 +1958,21 @@ export default function App() {
                       <h3 className="text-xl font-black">公開URL</h3>
                     </div>
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                      <Button onClick={copyShareLink} className="whitespace-nowrap" icon={Copy}>
+                      <Button onClick={copyShareLink} className="whitespace-nowrap" icon={Copy} disabled={Boolean(currentUser?.share_paused)}>
                         URLをコピー
+                      </Button>
+                      <Button
+                        onClick={() => window.open(shareLink, "_blank", "noopener,noreferrer")}
+                        className="whitespace-nowrap"
+                        icon={CalendarDays}
+                        disabled={Boolean(currentUser?.share_paused)}
+                      >
+                        プレビュー
                       </Button>
                       <Button onClick={handleToggleSharePause} variant={currentUser?.share_paused ? "secondary" : "outline"} className="whitespace-nowrap">
                         {currentUser?.share_paused ? "公開に戻す" : "全員に非公開"}
                       </Button>
                     </div>
-                  </div>
-                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl px-4 py-3 text-sm font-mono break-all text-gray-700">
-                    {shareLink || "ログインすると公開URLが表示されます"}
                   </div>
                 </Card>
 
