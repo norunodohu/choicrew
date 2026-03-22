@@ -2604,16 +2604,32 @@ export default function App() {
               className="relative w-full max-w-lg bg-white rounded-t-[2rem] sm:rounded-[2rem] p-4 sm:p-7 shadow-2xl overflow-hidden max-h-[85vh] overflow-y-auto"
             >
               <div className="w-10 h-1.5 bg-gray-100 rounded-full mx-auto mb-4 sm:hidden" />
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
-                <h3 className="text-xl sm:text-2xl font-black tracking-tight">{editingAvailability ? "予定を編集" : "予定を追加"}</h3>
+              <div className="flex items-end justify-between gap-3 mb-4 sm:mb-6">
+                <div className="flex items-end gap-3 flex-wrap">
+                  <h3 className="text-xl sm:text-2xl font-black tracking-tight">{editingAvailability ? "予定を編集" : "予定を追加"}</h3>
+                  <p className="text-sm sm:text-base font-black text-gray-500">
+                    {format(parseISO(draftDate), "M月d日(E)", { locale: ja })}
+                  </p>
+                </div>
                 <div className="flex items-center gap-5">
                   <button
                     type="button"
-                    onClick={() => setDraftIsRecurring(v => !v)}
-                    className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
-                    aria-label="毎週ループ"
+                    onClick={async () => {
+                      if (currentUser?.share_paused) {
+                        alert("設定にて公開をオンにしてください。");
+                        return;
+                      }
+                      await handleToggleSharePause();
+                    }}
+                    className={`h-10 px-3 flex items-center justify-center gap-2 rounded-full transition-colors ${
+                      currentUser?.share_paused
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "hover:bg-blue-50 text-blue-600"
+                    }`}
+                    aria-label="公開設定"
                   >
-                    <Repeat2 size={20} className={draftIsRecurring ? "text-emerald-600" : "text-gray-400"} />
+                    <Share2 size={18} className={currentUser?.share_paused ? "text-gray-400" : "text-blue-600"} />
+                    <span className="text-xs font-black">{currentUser?.share_paused ? "非公開" : "公開"}</span>
                   </button>
                   <button onClick={closeAvailabilityModal} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X/></button>
                 </div>
@@ -2621,8 +2637,14 @@ export default function App() {
 
               <div className="space-y-4 sm:space-y-5">
                 <div className="rounded-2xl bg-gray-50 px-4 py-3">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">日付</p>
-                  <p className="mt-1 font-black text-gray-800">{format(parseISO(draftDate), "yyyy年M月d日(E)", { locale: ja })}</p>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">予定名</p>
+                  <input
+                    type="text"
+                    value={draftNote}
+                    onChange={e => setDraftNote(e.target.value)}
+                    placeholder="予定名を入力"
+                    className="mt-1 w-full bg-transparent font-black text-gray-800 placeholder:text-gray-300 focus:outline-none"
+                  />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 sm:gap-4 items-end">
@@ -2645,10 +2667,6 @@ export default function App() {
                     />
                   </div>
                 </div>
-
-                {draftIsRecurring && (
-                  <p className="text-xs text-gray-500 leading-snug">ループをONにしました。どの条件で繰り返すかは保存時に確認します。</p>
-                )}
 
                 <div className="flex gap-3 pt-2 sm:pt-4">
                   <Button
