@@ -2,7 +2,6 @@
 import { 
   Calendar, 
   Clock, 
-  Share2, 
   Plus, 
   Bell, 
   ChevronRight, 
@@ -503,7 +502,7 @@ export default function App() {
   };
 
   const statusLabel = (status: Availability["status"]) =>
-    status === "open" ? "空き" : status === "pending" ? "依頼中" : status === "confirmed" ? "確定" : "予定あり";
+    status === "open" ? "空き" : status === "pending" ? "やり取り中" : status === "confirmed" ? "確定" : "予定あり";
 
   const statusColor = (status: Availability["status"]) =>
     status === "confirmed" ? "bg-red-500" : status === "pending" ? "bg-orange-500" : status === "busy" ? "bg-red-900" : "bg-gray-400";
@@ -1598,7 +1597,7 @@ export default function App() {
                           : isMyApprovedRequest
                             ? "キャンセル依頼"
                             : isMyPendingRequest
-                              ? "交渉中"
+                              ? "やり取り中"
                               : "依頼を送る";
                         return (
                         <Card key={a.id} className={`p-4 sm:p-6 flex items-center justify-between gap-4 ${isBusy ? "opacity-55 grayscale" : ""}`}>
@@ -1606,7 +1605,7 @@ export default function App() {
                             <p className="text-xl font-black">{a.start_time} - {a.end_time}</p>
                             {a.note && <p className="text-sm text-red-500 font-semibold mt-1">{a.note}</p>}
                             {isBusy && <p className="text-xs text-gray-400 mt-1">予定あり</p>}
-                            {isMyPendingRequest && <p className="text-xs text-blue-600 mt-1">交渉中</p>}
+                            {isMyPendingRequest && <p className="text-xs text-blue-600 mt-1">やり取り中</p>}
                             {isMyApprovedRequest && <p className="text-xs text-amber-600 mt-1">承認済み</p>}
                           </div>
                           <button
@@ -1624,7 +1623,7 @@ export default function App() {
                                 return;
                               }
                               if (isMyPendingRequest) {
-                                alert("他のひとが交渉中です。");
+                                alert("他のひとがやり取り中です。");
                                 return;
                               }
                               if (isMyApprovedRequest) {
@@ -2624,46 +2623,25 @@ export default function App() {
                     {format(parseISO(draftDate), "M月d日(E)", { locale: ja })}
                   </p>
                 </div>
-                <div className="flex items-center gap-5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const order: Availability["status"][] = ["confirmed", "open", "pending"];
-                      const next = order[(order.indexOf(draftStatus) + 1) % order.length];
-                      setDraftStatus(next);
-                    }}
-                    className={`h-10 px-3 flex items-center justify-center gap-2 rounded-full transition-colors ${
-                      draftStatus === "confirmed"
-                        ? "bg-emerald-50 text-emerald-700"
-                        : draftStatus === "pending"
-                          ? "bg-amber-50 text-amber-700"
-                          : "bg-blue-50 text-blue-700"
-                    }`}
-                    aria-label="状態切り替え"
-                  >
-                    <span className="text-xs font-black">
-                      {draftStatus === "confirmed" ? "確定" : draftStatus === "pending" ? "交渉中" : "空き"}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (currentUser?.share_paused) {
-                        alert("設定にて公開をオンにしてください。");
-                        return;
-                      }
-                      await handleToggleSharePause();
-                    }}
-                    className={`h-10 px-3 flex items-center justify-center gap-2 rounded-full transition-colors ${
-                      currentUser?.share_paused
-                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                        : "hover:bg-blue-50 text-blue-600"
-                    }`}
-                    aria-label="公開設定"
-                  >
-                    <Share2 size={18} className={currentUser?.share_paused ? "text-gray-400" : "text-blue-600"} />
-                    <span className="text-xs font-black">{currentUser?.share_paused ? "非公開" : "公開"}</span>
-                  </button>
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  {[
+                    { key: "open", label: "空き", className: "bg-blue-600 text-white border-blue-600" },
+                    { key: "pending", label: "やり取り中", className: "bg-amber-500 text-white border-amber-500" },
+                    { key: "confirmed", label: "確定", className: "bg-emerald-600 text-white border-emerald-600" },
+                  ].map(item => (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => setDraftStatus(item.key as Availability["status"])}
+                      className={`h-10 px-3 rounded-full border text-xs font-black transition-colors ${
+                        draftStatus === item.key
+                          ? item.className
+                          : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                   <button onClick={closeAvailabilityModal} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X/></button>
                 </div>
               </div>
