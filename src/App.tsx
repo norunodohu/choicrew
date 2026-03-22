@@ -1878,10 +1878,10 @@ export default function App() {
                                     空き追加
                                   </button>
                                 )}
-                                {items.length > 0 && !isPast && (
+                {items.length > 0 && !isPast && (
                                   <button
                                     onClick={() => openAvailabilityModal(undefined, day)}
-                                    className="ml-1 inline-flex items-center justify-center w-9 h-9 rounded-full border border-dashed border-blue-200 bg-white/70 text-blue-500 text-lg font-black hover:bg-blue-50 opacity-55"
+                                    className="mx-auto w-[150px] inline-flex items-center justify-center rounded-2xl border border-dashed border-blue-200 bg-white/70 text-blue-500 text-sm font-black hover:bg-blue-50 opacity-60 px-4 py-3"
                                   >
                                     ＋
                                   </button>
@@ -2627,6 +2627,21 @@ export default function App() {
                   >
                     キャンセル
                   </Button>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLastNewDraft(prev => ({
+                        ...prev,
+                        time: draftTime,
+                      }));
+                      alert("デフォルト時間として追加されました。");
+                    }}
+                    className="text-[11px] font-black text-gray-400 hover:text-blue-600"
+                  >
+                    デフォルト時間
+                  </button>
                 </div>
                 {editingAvailability && (
                   <div className="pt-2 border-t border-gray-100">
