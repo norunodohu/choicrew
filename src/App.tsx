@@ -86,6 +86,7 @@ const avatarSeeds = [
 ];
 const presetAvatars = avatarSeeds.map(seed => `https://api.dicebear.com/7.x/fun-emoji/svg?seed=${seed}&backgroundColor=transparent`);
 const pickRandomAvatar = () => presetAvatars[Math.floor(Math.random() * presetAvatars.length)];
+const getDefaultTimeStorageKey = (uid: string) => `${DEFAULT_TIME_STORAGE_KEY}_${uid}`;
 
 // Error Handling
 enum OperationType {
@@ -374,6 +375,20 @@ export default function App() {
   const [idValue, setIdValue] = useState("");
   const [idPassword, setIdPassword] = useState("");
   const [showAvatarToast, setShowAvatarToast] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser?.uid || typeof window === "undefined") return;
+    try {
+      const saved = window.localStorage.getItem(getDefaultTimeStorageKey(currentUser.uid));
+      if (!saved) return;
+      const parsed = JSON.parse(saved) as { start?: string; end?: string };
+      if (parsed.start && parsed.end) {
+        setDraftTime({ start: parsed.start, end: parsed.end });
+      }
+    } catch {
+      // ignore malformed local storage
+    }
+  }, [currentUser?.uid]);
 
   const requestSectionRef = useRef<HTMLDivElement | null>(null);
   const confirmedSectionRef = useRef<HTMLDivElement | null>(null);
@@ -2645,7 +2660,9 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       const next = { start: draftTime.start, end: draftTime.end };
-                      window.localStorage.setItem(DEFAULT_TIME_STORAGE_KEY, JSON.stringify(next));
+                      if (currentUser?.uid) {
+                        window.localStorage.setItem(getDefaultTimeStorageKey(currentUser.uid), JSON.stringify(next));
+                      }
                       setLastNewDraft(prev => ({
                         ...prev,
                         time: next,
