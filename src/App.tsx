@@ -1881,9 +1881,9 @@ export default function App() {
                                 {items.length > 0 && !isPast && (
                                   <button
                                     onClick={() => openAvailabilityModal(undefined, day)}
-                                    className="w-full text-sm text-blue-600 bg-white border-2 border-dashed border-blue-200 rounded-2xl px-3 py-4 text-center font-black hover:bg-blue-50"
+                                    className="mx-auto w-11 h-11 rounded-full border border-dashed border-blue-200 bg-white/70 text-blue-500 text-lg font-black hover:bg-blue-50 flex items-center justify-center opacity-70"
                                   >
-                                    空き追加
+                                    ＋
                                   </button>
                                 )}
                               </div>
