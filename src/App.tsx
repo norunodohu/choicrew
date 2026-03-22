@@ -15,7 +15,6 @@ import {
   MessageCircle, 
   Settings,
   ArrowRight,
-  Pencil,
   Eye,
   Link2,
   Repeat2,
@@ -1540,24 +1539,7 @@ export default function App() {
               className="w-36 shrink-0 drop-shadow-[0_18px_32px_rgba(37,99,235,0.14)]"
             />
             <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-black tracking-tight">{publicUser.name}さんの予定</h1>
-                {isOwnPreview && (
-                  <button
-                    onClick={async () => {
-                      if (!currentUser) return;
-                      setNameEditValue(currentUser.name || publicUser.name || "");
-                      setShowNameEditModal(true);
-                    }}
-                    className="p-2 rounded-full hover:bg-blue-50 text-blue-600"
-                    aria-label="名前を編集"
-                  >
-                    <Pencil size={18} />
-                  </button>
-                )}
-              </div>
-              <p className="text-gray-500 font-medium">URLを共有して、予定を見てもらえます。</p>
-              <p className="text-sm text-red-500 font-semibold">ユーザー設定により{publicSharePeriodDays}日分を表示しています。</p>
+              <h1 className="text-3xl font-black tracking-tight">{publicUser.name}さんの予定</h1>
             </div>
           </div>
 
@@ -1582,22 +1564,24 @@ export default function App() {
                     </div>
                     <div className="grid gap-3">
                       {groupedPublicAvailabilities[date].map(a => {
-                        const isBusy = a.status === "confirmed" || a.status === "busy";
+                        const isBusy = a.status === "confirmed" || a.status === "busy" || a.status === "pending";
                         const isMyPendingRequest = isPendingMyRequest(a.id);
                         const isMyApprovedRequest = isApprovedMyRequest(a.id);
-                        const buttonLabel = isBusy
-                          ? "依頼を送る"
-                          : isMyApprovedRequest
-                            ? "キャンセル依頼"
-                            : isMyPendingRequest
-                              ? "やり取り中"
-                              : "依頼を送る";
+                        const buttonLabel = a.status === "confirmed"
+                          ? "確定"
+                          : a.status === "pending"
+                            ? "やり取り中"
+                            : isMyApprovedRequest
+                              ? "キャンセル依頼"
+                              : isMyPendingRequest
+                                ? "やり取り中"
+                                : "依頼を送る";
                         return (
-                        <Card key={a.id} className={`p-4 sm:p-6 flex items-center justify-between gap-4 ${isBusy ? "opacity-55 grayscale" : ""}`}>
+                        <Card key={a.id} className={`p-4 sm:p-6 flex items-center justify-between gap-4 ${isBusy ? "opacity-40 grayscale" : ""}`}>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xl font-black">{a.start_time} - {a.end_time}</p>
-                            {a.note && <p className="text-sm text-red-500 font-semibold mt-1">{a.note}</p>}
-                            {isBusy && <p className="text-xs text-amber-600 mt-1">やり取り中</p>}
+                            <p className="text-lg font-semibold text-gray-700">{a.start_time} - {a.end_time}</p>
+                            {a.status === "confirmed" && <p className="text-xs text-emerald-600 mt-1">確定</p>}
+                            {a.status === "pending" && <p className="text-xs text-amber-600 mt-1">やり取り中</p>}
                             {isMyPendingRequest && <p className="text-xs text-amber-600 mt-1">やり取り中</p>}
                             {isMyApprovedRequest && <p className="text-xs text-amber-600 mt-1">承認済み</p>}
                           </div>
@@ -1626,7 +1610,7 @@ export default function App() {
                               }
                               openRequestModal(a);
                             }}
-                            className={`px-4 py-3 rounded-2xl font-black border whitespace-nowrap ${isBusy || isOwnPreview ? "border-blue-100 text-blue-300 bg-blue-50" : "border-blue-200 text-blue-600 bg-white"}`}
+                            className={`px-4 py-3 rounded-2xl font-black border whitespace-nowrap ${isBusy || isOwnPreview ? "border-gray-200 text-gray-300 bg-gray-50" : "border-blue-200 text-blue-600 bg-white"}`}
                           >
                             {buttonLabel}
                           </button>
@@ -1643,16 +1627,6 @@ export default function App() {
               )}
             </div>
           </div>
-
-          <Card className="p-5 bg-blue-50 border-blue-100">
-            <p className="text-sm font-black text-blue-700">使い方</p>
-            <ul className="mt-2 space-y-1 text-sm text-blue-700 list-disc list-inside">
-              <li>URLで共有</li>
-              <li>空き時間を確認</li>
-              <li>ログイン中は依頼、未ログインは確認のみ</li>
-            </ul>
-          </Card>
-
           <div className="pt-8 border-t border-gray-100 flex flex-col gap-3">
             {isOwnPreview ? (
               <Button onClick={() => window.close()} variant="outline">閉じる</Button>
