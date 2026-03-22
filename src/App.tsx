@@ -1186,7 +1186,7 @@ export default function App() {
         date: draftDate,
         start_time: draftTime.start,
         end_time: draftTime.end,
-        status: editingAvailability ? draftStatus : "open",
+        status: draftNote.trim() ? "confirmed" : editingAvailability ? draftStatus : "open",
         note: editingAvailability ? draftNote : "",
         is_recurring: draftIsRecurring,
       };
@@ -2606,7 +2606,7 @@ export default function App() {
               <div className="w-10 h-1.5 bg-gray-100 rounded-full mx-auto mb-4 sm:hidden" />
               <div className="flex items-end justify-between gap-3 mb-4 sm:mb-6">
                 <div className="flex items-end gap-3 flex-wrap">
-                  <h3 className="text-xl sm:text-2xl font-black tracking-tight">{editingAvailability ? "予定を編集" : "予定を追加"}</h3>
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight">{editingAvailability ? "空きを編集" : "空きを追加"}</h3>
                   <p className="text-sm sm:text-base font-black text-gray-500">
                     {format(parseISO(draftDate), "M月d日(E)", { locale: ja })}
                   </p>
