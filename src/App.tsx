@@ -20,7 +20,6 @@ import {
   Link2,
   Repeat2,
   Copy,
-  RefreshCcw,
   Key
 } from "lucide-react";
 import { 
@@ -1365,12 +1364,6 @@ export default function App() {
     setTimeout(() => setShowAvatarToast(false), 2500);
   };
 
-  const handleUpdateSharePeriod = async (days: 7 | 14 | 30) => {
-    if (!currentUser) return;
-    await updateDoc(doc(db, "users", currentUser.uid), { share_period_days: days });
-    setCurrentUser({ ...currentUser, share_period_days: days });
-  };
-
   const handleUnfollow = async (peerId: string) => {
     if (!currentUser) return;
     const pairId = [currentUser.uid, peerId].sort().join("_");
@@ -1962,16 +1955,11 @@ export default function App() {
                 <Card className="p-6 sm:p-8 space-y-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">招待リンク</p>
-                      <h3 className="text-xl font-black">フレンドにシェア</h3>
-                      <p className="text-sm text-gray-500">リンクを送れば予定を見せられます。トークやメールでそのまま貼り付けてください。</p>
+                      <h3 className="text-xl font-black">公開URL</h3>
                     </div>
                     <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                       <Button onClick={copyShareLink} className="whitespace-nowrap" icon={Copy}>
-                        リンクをコピー
-                      </Button>
-                      <Button onClick={handleRefreshShareToken} variant="outline" className="whitespace-nowrap" icon={RefreshCcw}>
-                        招待URLを更新
+                        URLをコピー
                       </Button>
                       <Button onClick={handleToggleSharePause} variant={currentUser?.share_paused ? "secondary" : "outline"} className="whitespace-nowrap">
                         {currentUser?.share_paused ? "公開に戻す" : "全員に非公開"}
@@ -1979,35 +1967,14 @@ export default function App() {
                     </div>
                   </div>
                   <div className="bg-gray-50 border border-dashed border-gray-200 rounded-2xl px-4 py-3 text-sm font-mono break-all text-gray-700">
-                    {shareLink || "ログインすると招待リンクが表示されます"}
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">共有期間</span>
-                    <div className="flex gap-2">
-                      {[7, 14, 30].map(days => (
-                        <button
-                          key={days}
-                          onClick={() => handleUpdateSharePeriod(days as 7 | 14 | 30)}
-                          className={`px-4 py-2 rounded-xl text-sm font-black ${currentUser?.share_period_days === days ? "bg-blue-600 text-white" : "bg-gray-50 text-gray-600"}`}
-                        >
-                          {days === 7 ? "1週間" : days === 14 ? "2週間" : "1か月"}
-                        </button>
-                      ))}
-                    </div>
-                    <span className="text-xs text-gray-400">共有リンクで表示される日数を切り替えられます。</span>
-                    {currentUser?.share_paused && <span className="text-xs text-red-500 font-bold">現在: 非公開モード</span>}
+                    {shareLink || "ログインすると公開URLが表示されます"}
                   </div>
                 </Card>
 
                 <Card className="p-6 sm:p-8 space-y-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Friends</p>
                       <h3 className="text-xl font-black">フレンド一覧</h3>
-                      <p className="text-sm text-gray-500">フォロー {connections.filter(c => c.user1_id === currentUser?.uid).length}件 / フォロワー {connections.filter(c => c.user2_id === currentUser?.uid).length}件</p>
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      招待された人は自動でフォローになります
                     </div>
                   </div>
 
@@ -2018,8 +1985,6 @@ export default function App() {
                           (c.user1_id === currentUser?.uid && c.user2_id === peer.uid) ||
                           (c.user2_id === currentUser?.uid && c.user1_id === peer.uid)
                         );
-                        const isFollowing = relation?.user1_id === currentUser?.uid;
-                        const isFollower = relation?.user2_id === currentUser?.uid;
                         const isBlocked = relation?.status === "blocked";
                         return (
                           <div
@@ -2036,14 +2001,7 @@ export default function App() {
                               </div>
                               <div className="min-w-0">
                                 <p className="font-bold truncate">{peer.name}</p>
-                                <p className="text-xs text-gray-400 truncate">
-                                  {isBlocked ? "ブロック中" : null}
-                                  {!isBlocked && (
-                                    <>
-                                      {isFollowing && "フォロー中"}{isFollowing && isFollower ? " / " : ""}{isFollower && "フォロワー"}
-                                    </>
-                                  )}
-                                </p>
+                                <p className="text-xs text-gray-400 truncate">{isBlocked ? "ブロック中" : ""}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2 flex-wrap">
