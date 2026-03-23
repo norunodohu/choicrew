@@ -1705,11 +1705,87 @@ export default function App() {
     target.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
+  const exitPublicView = useCallback(() => {
+    if (!isPublicView) return;
+    window.history.replaceState({}, document.title, window.location.pathname);
+    setIsPublicView(false);
+    setPublicUser(null);
+    setViewKind(null);
+    setPendingFriendUid("");
+  }, [isPublicView]);
+
+  const handleSidebarNav = useCallback((nextView: "myboard" | "friends" | "settings") => {
+    setView(nextView);
+    exitPublicView();
+  }, [exitPublicView]);
+
   const copyShareLink = () => {
     if (!currentUser) return;
     navigator.clipboard.writeText(shareLink);
     alert("共有リンクをコピーしました。");
   };
+
+  const desktopSidebarNode = (
+    <aside className="fixed left-0 top-0 bottom-0 w-72 bg-white border-r border-gray-100 hidden lg:flex flex-col p-8 z-20">
+      <div className="mb-12">
+        <img
+          src={CHOICREW_LOGO}
+          alt="ChoiCrew logo"
+          className="w-full max-w-[190px]"
+        />
+      </div>
+
+      <nav className="space-y-2 flex-1">
+        {[
+          { id: "myboard", label: "マイボード", icon: Calendar },
+          { id: "friends", label: "フレンド", icon: Users },
+          { id: "settings", label: "設定", icon: Settings },
+        ].map(item => (
+          <button
+            key={item.id}
+            onClick={() => handleSidebarNav(item.id as "myboard" | "friends" | "settings")}
+            className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${view === item.id ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"}`}
+          >
+            <item.icon size={18} />
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      {isLoggedIn && isPublicView && publicUser && (
+        <div className="pt-6 border-t border-gray-100 space-y-3">
+          <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.22em]">表示切替</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setPublicViewScope("single")}
+              className={`px-3 py-3 rounded-2xl text-sm font-black border transition-all ${publicViewScope === "single" ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100" : "bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600"}`}
+            >
+              個人
+            </button>
+            <button
+              onClick={() => hasFriendAccess && setPublicViewScope("friends")}
+              disabled={!hasFriendAccess}
+              className={`px-3 py-3 rounded-2xl text-sm font-black border transition-all ${publicViewScope === "friends" ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-100" : hasFriendAccess ? "bg-white text-gray-400 border-gray-200 hover:border-blue-200 hover:text-blue-600" : "bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed"}`}
+            >
+              フレンド
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="pt-8 border-t border-gray-100">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden flex items-center justify-center">
+            {avatarSrc ? <img src={avatarSrc} alt="avatar" /> : <User size={24} className="text-gray-400" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="font-bold truncate">{currentUser?.name}</p>
+            <p className="text-xs text-gray-400 truncate">{accountLabel}</p>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
 
   const requestModalNode = showRequestModal && requestTarget ? (
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-6">
@@ -1879,7 +1955,8 @@ export default function App() {
 
   if (isPublicView && publicUser) {
     return (
-      <div className="min-h-screen bg-[#F8FAFC] p-6 lg:p-12">
+      <div className={`min-h-screen bg-[#F8FAFC] p-6 lg:p-12 ${isLoggedIn ? "lg:pl-72" : ""}`}>
+        {isLoggedIn && desktopSidebarNode}
         <div className="max-w-2xl mx-auto space-y-8">
           <div className="space-y-4">
             <img 
@@ -1895,7 +1972,7 @@ export default function App() {
           </div>
 
           <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 lg:hidden">
               <button
                 onClick={() => setPublicViewScope("single")}
                 className={`px-4 py-2 rounded-xl text-sm font-black border ${publicViewScope === "single" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-400 border-gray-200"}`}
@@ -2043,44 +2120,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-gray-900 font-sans">
       {/* Sidebar Desktop */}
-      <aside className="fixed left-0 top-0 bottom-0 w-72 bg-white border-r border-gray-100 hidden lg:flex flex-col p-8 z-20">
-        <div className="mb-12">
-          <img
-            src={CHOICREW_LOGO}
-            alt="ChoiCrew logo"
-            className="w-full max-w-[190px]"
-          />
-        </div>
-
-        <nav className="space-y-2 flex-1">
-          {[
-            { id: "myboard", label: "マイボード", icon: Calendar },
-            { id: "friends", label: "フレンド", icon: Users },
-            { id: "settings", label: "設定", icon: Settings },
-          ].map(item => (
-            <button
-              key={item.id}
-              onClick={() => setView(item.id as "myboard" | "friends" | "settings")}
-              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${view === item.id ? "bg-blue-50 text-blue-600" : "text-gray-400 hover:bg-gray-50 hover:text-gray-600"}`}
-            >
-              <item.icon size={18} />
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-          <div className="pt-8 border-t border-gray-100">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 bg-gray-100 rounded-full overflow-hidden flex items-center justify-center">
-                {avatarSrc ? <img src={avatarSrc} alt="avatar" /> : <User size={24} className="text-gray-400" />}
-              </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-bold truncate">{currentUser?.name}</p>
-              <p className="text-xs text-gray-400 truncate">{accountLabel}</p>
-            </div>
-            </div>
-          </div>
-      </aside>
+      {desktopSidebarNode}
 
       {/* Main Content */}
       <main className={`lg:ml-72 min-h-screen pb-28 lg:pb-12`}>
