@@ -1850,12 +1850,13 @@ export default function App() {
               className="w-36 shrink-0 drop-shadow-[0_18px_32px_rgba(37,99,235,0.14)]"
             />
             <div>
-              <h1 className="text-3xl font-black tracking-tight">{publicUser.name}さんの予定</h1>
+              <h1 className="text-3xl font-black tracking-tight">
+                {publicViewScope === "friends" ? "フレンドの予定" : `${publicUser.name}さんの予定`}
+              </h1>
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xl font-black">公開中の空き時間</h3>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => setPublicViewScope("single")}
