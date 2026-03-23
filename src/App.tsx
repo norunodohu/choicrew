@@ -477,7 +477,7 @@ export default function App() {
   const publicVisibleAvailabilities = publicViewScope === "friends" ? publicFriendAvailabilities : publicUpcomingAvailabilities;
   const filteredPublicAvailabilities = publicVisibleAvailabilities.filter(a => {
     if (publicFilterMode === "open") return a.status === "open";
-    if (publicFilterMode === "my_requests") return currentUser ? requests.some(r => r.availability_id === a.id && r.staff_id === currentUser.uid && r.status === "pending") : false;
+    if (publicFilterMode === "my_requests") return currentUser ? requests.some(r => r.availability_id === a.id && r.staff_id === currentUser.uid && (r.status === "pending" || r.status === "approved")) : false;
     return true;
   });
   const groupedPublicAvailabilities = filteredPublicAvailabilities.reduce<Record<string, Availability[]>>((acc, availability) => {
@@ -489,6 +489,8 @@ export default function App() {
     requests.some(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && r.status === "pending");
   const isApprovedMyRequest = (availabilityId: string) =>
     requests.some(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && r.status === "approved");
+  const getMyRequest = (availabilityId: string) =>
+    requests.find(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && (r.status === "pending" || r.status === "approved"));
   const selectedDayItems = displayedAvailabilities
     .filter(a => isSameDay(parseISO(a.date), selectedDate))
     .sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
@@ -1419,6 +1421,18 @@ export default function App() {
     alert("辞退しました。");
   };
 
+  const handleCancelPendingRequest = async (request: ShiftRequest) => {
+    if (!currentUser) return;
+    await updateDoc(doc(db, "requests", request.id), { status: "canceled" });
+    await createNotification(
+      request.manager_id,
+      "decline",
+      `${currentUser.name}さんが依頼を取り消しました。${request.date} ${request.start_time}-${request.end_time}`,
+      request.date
+    );
+    alert("依頼を取り消しました。");
+  };
+
   const handleRefreshShareToken = async () => {
     if (!currentUser) return;
     const nextToken = Math.random().toString(36).substring(2, 15);
@@ -1858,23 +1872,24 @@ export default function App() {
                         const isBusy = a.status === "confirmed" || a.status === "busy" || a.status === "pending";
                         const isMyPendingRequest = isPendingMyRequest(a.id);
                         const isMyApprovedRequest = isApprovedMyRequest(a.id);
-                        const buttonLabel = a.status === "confirmed"
-                          ? "確定"
-                          : a.status === "pending"
-                            ? "やり取り中"
-                            : isMyApprovedRequest
-                              ? "キャンセル依頼"
-                              : isMyPendingRequest
+                        const myRequest = getMyRequest(a.id);
+                        const buttonLabel = isMyPendingRequest
+                          ? "依頼中"
+                          : isMyApprovedRequest
+                            ? "依頼確定"
+                            : a.status === "confirmed"
+                              ? "確定"
+                              : a.status === "pending"
                                 ? "やり取り中"
                                 : "依頼を送る";
                         return (
-                        <Card key={a.id} className={`p-4 sm:p-6 flex items-center justify-between gap-4 ${isBusy ? "opacity-40 grayscale" : ""}`}>
+                        <Card key={a.id} className={`p-4 sm:p-6 flex items-center justify-between gap-4 ${isBusy && !isMyApprovedRequest ? "opacity-40 grayscale" : ""}`}>
                           <div className="min-w-0 flex-1">
                             <p className="text-lg font-semibold text-gray-700">{a.start_time} - {a.end_time}</p>
-                            {a.status === "confirmed" && <p className="text-xs text-emerald-600 mt-1">確定</p>}
-                            {a.status === "pending" && <p className="text-xs text-amber-600 mt-1">やり取り中</p>}
                             {isMyPendingRequest && <p className="text-xs text-amber-600 mt-1">依頼中</p>}
-                            {isMyApprovedRequest && <p className="text-xs text-amber-600 mt-1">承認済み</p>}
+                            {isMyApprovedRequest && <p className="text-xs text-emerald-600 mt-1">依頼確定</p>}
+                            {!isMyPendingRequest && !isMyApprovedRequest && a.status === "confirmed" && <p className="text-xs text-emerald-600 mt-1">確定</p>}
+                            {!isMyPendingRequest && !isMyApprovedRequest && a.status === "pending" && <p className="text-xs text-amber-600 mt-1">やり取り中</p>}
                           </div>
                           <button
                             onClick={async () => {
@@ -1891,17 +1906,16 @@ export default function App() {
                                 return;
                               }
                               if (isMyPendingRequest) {
-                                alert("他のひとがやり取り中です。");
+                                if (myRequest && window.confirm("依頼を取り消しますか？")) await handleCancelPendingRequest(myRequest);
                                 return;
                               }
                               if (isMyApprovedRequest) {
-                                const req = requests.find(r => r.availability_id === a.id && r.staff_id === currentUser?.uid && r.status === "approved");
-                                if (req && window.confirm("キャンセル依頼しますか？")) await handleRejectRequest(req);
                                 return;
                               }
-                              openRequestModal(a);
+                              if (!myRequest) openRequestModal(a);
                             }}
-                            className={`px-4 py-3 rounded-2xl font-black border whitespace-nowrap ${isBusy || isOwnPreview ? "border-gray-200 text-gray-300 bg-gray-50" : "border-blue-200 text-blue-600 bg-white"}`}
+                            disabled={isOwnPreview || isMyApprovedRequest}
+                            className={`px-4 py-3 rounded-2xl font-black border whitespace-nowrap ${isOwnPreview ? "border-gray-200 text-gray-300 bg-gray-50" : isMyApprovedRequest ? "border-emerald-200 text-emerald-700 bg-emerald-50" : isMyPendingRequest ? "border-amber-200 text-amber-700 bg-amber-50" : isBusy ? "border-gray-200 text-gray-300 bg-gray-50" : "border-blue-200 text-blue-600 bg-white"}`}
                           >
                             {buttonLabel}
                           </button>
