@@ -1915,6 +1915,13 @@ export default function App() {
                           </div>
                           <button
                             onClick={async () => {
+                              if (isMyPendingRequest) {
+                                if (myRequest && window.confirm("依頼を取り消しますか？")) await handleCancelPendingRequest(myRequest);
+                                return;
+                              }
+                              if (isMyApprovedRequest) {
+                                return;
+                              }
                               if (isBusy) {
                                 alert("この予定はすでに埋まっています。");
                                 return;
@@ -1925,13 +1932,6 @@ export default function App() {
                               }
                               if (!isLoggedIn) {
                                 alert("依頼を送るにはログインが必要です。");
-                                return;
-                              }
-                              if (isMyPendingRequest) {
-                                if (myRequest && window.confirm("依頼を取り消しますか？")) await handleCancelPendingRequest(myRequest);
-                                return;
-                              }
-                              if (isMyApprovedRequest) {
                                 return;
                               }
                               if (!myRequest) openRequestModal(a);
