@@ -707,7 +707,17 @@ export default function App() {
     if (!currentUser) return;
     setSelectedAvatar(currentUser.avatar_url || pickRandomAvatar());
   }, [currentUser?.uid, currentUser?.avatar_url]);
-  
+
+  useEffect(() => {
+    if (!currentUser?.uid || !friendSearchResult) return;
+    const relation = connections.find(c =>
+      (c.user1_id === currentUser.uid && c.user2_id === friendSearchResult.uid) ||
+      (c.user2_id === currentUser.uid && c.user1_id === friendSearchResult.uid)
+    );
+    if (!relation) return;
+    setFriendSearchStatus(relation.status === "pending" ? "pending" : relation.status === "active" ? "sent" : "found");
+  }, [currentUser?.uid, connections, friendSearchResult]);
+
   useEffect(() => {
     const handleResize = () => {}; // No longer needed for isDesktop
     window.addEventListener('resize', handleResize);
