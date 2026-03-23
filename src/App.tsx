@@ -1966,56 +1966,101 @@ export default function App() {
 
   if (isPublicView && publicUser) {
     return (
-      <div className={`min-h-screen bg-[#F8FAFC] p-6 lg:p-12 ${isLoggedIn ? "lg:pl-72" : ""}`}>
+      <div className={`min-h-screen bg-[#F8FAFC] ${isLoggedIn ? "lg:pl-72" : ""}`}>
         {isLoggedIn && desktopSidebarNode}
-        <div className="max-w-2xl mx-auto space-y-8">
-          <div className="space-y-4">
-            <img 
-              src={CHOICREW_LOGO}
-              alt="ChoiCrew logo"
-              className="w-36 shrink-0 drop-shadow-[0_18px_32px_rgba(37,99,235,0.14)]"
-            />
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">
-                {publicViewScope === "friends" ? "フレンドの予定" : `${publicUser.name}さんの予定`}
-              </h1>
-            </div>
-          </div>
+        <div className={`mx-auto ${isLoggedIn ? "max-w-[100rem] px-4 py-6 lg:px-12" : "max-w-2xl px-6 py-6"} space-y-8`}>
+          {isLoggedIn ? (
+            <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
+              <Card className="p-5 sm:p-6 space-y-4 xl:sticky xl:top-6 h-fit">
+                <div>
+                  <h2 className="text-xl font-black">フレンド一覧</h2>
+                  <p className="text-sm text-gray-500">選ぶと右側に予定が表示されます。</p>
+                </div>
+                <div className="grid gap-3">
+                  {connectionUsers.length > 0 ? connectionUsers.map(peer => (
+                    <button
+                      key={peer.uid}
+                      onClick={() => handleOpenFriendView(peer)}
+                      className={`w-full rounded-2xl border p-3 text-left transition-all flex items-center gap-3 ${publicUser.uid === peer.uid ? "border-blue-300 bg-blue-50 shadow-sm" : "border-gray-200 bg-white hover:border-blue-200 hover:bg-blue-50/60"}`}
+                    >
+                      <div className="w-11 h-11 rounded-full overflow-hidden bg-gray-100 shrink-0">
+                        <img
+                          src={peer.avatar_url || peer.line_picture || `https://api.dicebear.com/7.x/avataaars/svg?seed=${peer.name}`}
+                          alt={peer.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-black truncate">{peer.name}</p>
+                        <p className="text-xs text-gray-500 truncate">ID: {peer.search_id || "未設定"}</p>
+                      </div>
+                    </button>
+                  )) : (
+                    <div className="px-4 py-8 text-center text-gray-400 font-bold bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                      フレンドがまだいません。
+                    </div>
+                  )}
+                </div>
+              </Card>
 
-          <div className="space-y-4">
-            <div className="flex flex-wrap items-center gap-2 lg:hidden">
-              <button
-                onClick={() => setPublicViewScope("single")}
-                className={`px-4 py-2 rounded-xl text-sm font-black border ${publicViewScope === "single" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-400 border-gray-200"}`}
-              >
-                個人
-              </button>
-              <button
-                onClick={() => hasFriendAccess && setPublicViewScope("friends")}
-                className={`px-4 py-2 rounded-xl text-sm font-black border ${publicViewScope === "friends" ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-200"} ${hasFriendAccess ? "text-gray-400" : "text-gray-300 opacity-50 cursor-not-allowed"}`}
-              >
-                フレンドまとめて
-              </button>
-              <div className="w-2" />
-              <button
-                onClick={() => setPublicFilterMode("all")}
-                className={`px-4 py-2 rounded-xl text-sm font-black border ${publicFilterMode === "all" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-400 border-gray-200"}`}
-              >
-                すべて
-              </button>
-              <button
-                onClick={() => setPublicFilterMode("open")}
-                className={`px-4 py-2 rounded-xl text-sm font-black border ${publicFilterMode === "open" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-400 border-gray-200"}`}
-              >
-                空きだけ
-              </button>
-              <button
-                onClick={() => setPublicFilterMode("my_requests")}
-                className={`px-4 py-2 rounded-xl text-sm font-black border ${publicFilterMode === "my_requests" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-gray-400 border-gray-200"}`}
-              >
-                依頼中
-              </button>
-            </div>
+              <div className="space-y-8">
+                <Card className="p-5 sm:p-8 space-y-4">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <h1 className="text-3xl font-black tracking-tight">
+                        {publicViewScope === "friends" ? "フレンドの予定" : `${publicUser.name}さんの予定`}
+                      </h1>
+                      <p className="text-sm text-gray-500 mt-1">
+                        {publicUser.search_id ? `ID: ${publicUser.search_id}` : "ID未設定"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {publicUser.avatar_url || publicUser.line_picture ? (
+                        <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-100">
+                          <img
+                            src={publicUser.avatar_url || publicUser.line_picture || ""}
+                            alt={publicUser.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setPublicViewScope("single")}
+                      className={`px-4 py-2 rounded-xl text-sm font-black border ${publicViewScope === "single" ? "bg-blue-600 text-white border-blue-600 shadow-sm" : "bg-white text-gray-400 border-gray-200"}`}
+                    >
+                      個人
+                    </button>
+                    <button
+                      onClick={() => hasFriendAccess && setPublicViewScope("friends")}
+                      className={`px-4 py-2 rounded-xl text-sm font-black border ${publicViewScope === "friends" ? "bg-blue-600 text-white border-blue-600 shadow-sm" : "bg-white border-gray-200"} ${hasFriendAccess ? "text-gray-400" : "text-gray-300 opacity-50 cursor-not-allowed"}`}
+                    >
+                      フレンドまとめて
+                    </button>
+                    <div className="w-2" />
+                    <button
+                      onClick={() => setPublicFilterMode("all")}
+                      className={`px-4 py-2 rounded-xl text-sm font-black border ${publicFilterMode === "all" ? "bg-gray-900 text-white border-gray-900" : "bg-white text-gray-400 border-gray-200"}`}
+                    >
+                      すべて
+                    </button>
+                    <button
+                      onClick={() => setPublicFilterMode("open")}
+                      className={`px-4 py-2 rounded-xl text-sm font-black border ${publicFilterMode === "open" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-400 border-gray-200"}`}
+                    >
+                      空きだけ
+                    </button>
+                    <button
+                      onClick={() => setPublicFilterMode("my_requests")}
+                      className={`px-4 py-2 rounded-xl text-sm font-black border ${publicFilterMode === "my_requests" ? "bg-amber-500 text-white border-amber-500" : "bg-white text-gray-400 border-gray-200"}`}
+                    >
+                      依頼中
+                    </button>
+                  </div>
+                </Card>
+
             <div className="grid gap-4">
               {isPublicHidden ? (
                 <div className="py-12 text-center bg-white rounded-3xl border border-dashed border-gray-200 text-gray-500 font-bold">
@@ -2123,6 +2168,8 @@ export default function App() {
           </div>
           {requestModalNode}
           {statusMessageNode}
+          </div>
+        </div>
         </div>
       </div>
     );
