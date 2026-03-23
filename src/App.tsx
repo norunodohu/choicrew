@@ -379,6 +379,7 @@ export default function App() {
   const [requestStart, setRequestStart] = useState("");
   const [requestEnd, setRequestEnd] = useState("");
   const [publicViewScope, setPublicViewScope] = useState<"single" | "friends">("single");
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [publicFilterMode, setPublicFilterMode] = useState<"all" | "open" | "my_requests">("all");
   const [showScheduleList, setShowScheduleList] = useState(false);
   const [scheduleFilter, setScheduleFilter] = useState<"all" | "confirmed" | "open" | "request">("all");
@@ -451,6 +452,7 @@ export default function App() {
   const avatarSrc = selectedAvatar || currentUser?.avatar_url || "";
   const isFriendView = isPublicView && viewKind === "friend";
   const isOwnPreview = isPublicView && Boolean(currentUser?.uid && publicUser?.uid && currentUser.uid === publicUser.uid);
+  const selectedFriendUsers = connectionUsers.filter(peer => selectedFriendIds.includes(peer.uid));
   const incomingRequests = currentUser
     ? requests.filter(r => r.staff_id === currentUser.uid && r.status === "pending")
     : [];
@@ -472,21 +474,13 @@ export default function App() {
     .filter(a => parseISO(a.date) >= new Date(new Date().setHours(0,0,0,0)))
     .filter(a => parseISO(a.date) < addDays(new Date(new Date().setHours(0,0,0,0)), publicSharePeriodDays))
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
-  const currentFriendIds = currentUser
-    ? connections
-        .filter(c => c.status === "active" && ([c.user1_id, c.user2_id].includes(currentUser.uid)))
-        .map(c => (c.user1_id === currentUser.uid ? c.user2_id : c.user1_id))
-    : [];
-  const publicFriendIds = currentFriendIds;
-  const publicFriendCount = currentFriendIds.length;
-  const hasFriendAccess = Boolean(currentUser && publicFriendCount >= 2);
   const publicFriendAvailabilities = availabilities
     .filter(() => !isPublicHidden)
-    .filter(a => hasFriendAccess ? publicFriendIds.includes(a.user_id) : false)
+    .filter(a => isFriendView ? selectedFriendIds.includes(a.user_id) : false)
     .filter(a => parseISO(a.date) >= new Date(new Date().setHours(0,0,0,0)))
     .filter(a => parseISO(a.date) < addDays(new Date(new Date().setHours(0,0,0,0)), publicSharePeriodDays))
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
-  const publicVisibleAvailabilities = publicViewScope === "friends" ? publicFriendAvailabilities : publicUpcomingAvailabilities;
+  const publicVisibleAvailabilities = isFriendView ? publicFriendAvailabilities : publicUpcomingAvailabilities;
   const filteredPublicAvailabilities = publicVisibleAvailabilities.filter(a => {
     if (publicFilterMode === "open") return a.status === "open";
     if (publicFilterMode === "my_requests") return currentUser ? requests.some(r => r.availability_id === a.id && r.manager_id === currentUser.uid && (r.status === "pending" || r.status === "approved")) : false;
@@ -1726,7 +1720,7 @@ export default function App() {
     setViewKind("friend");
     setIsPublicView(true);
     setPublicUser(friend);
-    setPublicViewScope("single");
+    setSelectedFriendIds([friend.uid]);
     setPublicFilterMode("all");
   }, [currentUser?.uid]);
 
@@ -1969,9 +1963,8 @@ export default function App() {
       <div className={`min-h-screen bg-[#F8FAFC] ${isLoggedIn ? "lg:pl-72" : ""}`}>
         {isLoggedIn && desktopSidebarNode}
         <div className={`mx-auto ${isLoggedIn ? "max-w-[100rem] px-4 py-6 lg:px-12" : "max-w-2xl px-6 py-6"} space-y-8`}>
-          {isLoggedIn ? (
-            <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)]">
-              <Card className="p-5 sm:p-6 space-y-4 xl:sticky xl:top-6 h-fit">
+          <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+              <Card className="p-5 sm:p-6 space-y-4 lg:sticky lg:top-6 h-fit">
                 <div>
                   <h2 className="text-xl font-black">フレンド一覧</h2>
                   <p className="text-sm text-gray-500">選ぶと右側に予定が表示されます。</p>
@@ -2310,7 +2303,7 @@ export default function App() {
                 今日に戻る
               </button>
             </div>
-          )}
+          }
         </header>
 
         <div className="pt-16 sm:pt-0 px-4 sm:px-6 lg:px-12 max-w-[100rem] mx-auto">
