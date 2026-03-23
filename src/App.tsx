@@ -2350,7 +2350,7 @@ export default function App() {
 
             </div>
           </div>
-          {view === "myboard" && (
+          {view === "myboard" ? (
             <div className="mt-3 flex items-center justify-between gap-3 lg:hidden">
               <button
                 onClick={() => setShowCalendarModal(true)}
@@ -2370,7 +2370,7 @@ export default function App() {
                 今日に戻る
               </button>
             </div>
-          }
+          ) : null}
         </header>
 
         <div className="pt-16 sm:pt-0 px-4 sm:px-6 lg:px-12 max-w-[100rem] mx-auto">
