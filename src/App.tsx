@@ -478,7 +478,7 @@ export default function App() {
   const publicVisibleAvailabilities = publicViewScope === "friends" ? publicFriendAvailabilities : publicUpcomingAvailabilities;
   const filteredPublicAvailabilities = publicVisibleAvailabilities.filter(a => {
     if (publicFilterMode === "open") return a.status === "open";
-    if (publicFilterMode === "my_requests") return currentUser ? requests.some(r => r.availability_id === a.id && r.staff_id === currentUser.uid && (r.status === "pending" || r.status === "approved")) : false;
+    if (publicFilterMode === "my_requests") return currentUser ? requests.some(r => r.availability_id === a.id && r.manager_id === currentUser.uid && (r.status === "pending" || r.status === "approved")) : false;
     return true;
   });
   const groupedPublicAvailabilities = filteredPublicAvailabilities.reduce<Record<string, Availability[]>>((acc, availability) => {
@@ -487,11 +487,11 @@ export default function App() {
   }, {});
   const publicScheduleDates = Array.from(new Set(filteredPublicAvailabilities.map(a => a.date))).sort();
   const isPendingMyRequest = (availabilityId: string) =>
-    requests.some(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && r.status === "pending");
+    requests.some(r => r.availability_id === availabilityId && r.manager_id === currentUser?.uid && r.status === "pending");
   const isApprovedMyRequest = (availabilityId: string) =>
-    requests.some(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && r.status === "approved");
+    requests.some(r => r.availability_id === availabilityId && r.manager_id === currentUser?.uid && r.status === "approved");
   const getMyRequest = (availabilityId: string) =>
-    requests.find(r => r.availability_id === availabilityId && r.staff_id === currentUser?.uid && (r.status === "pending" || r.status === "approved"));
+    requests.find(r => r.availability_id === availabilityId && r.manager_id === currentUser?.uid && (r.status === "pending" || r.status === "approved"));
   const selectedDayItems = displayedAvailabilities
     .filter(a => isSameDay(parseISO(a.date), selectedDate))
     .sort((a, b) => `${a.start_time}`.localeCompare(`${b.start_time}`));
