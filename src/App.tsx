@@ -414,10 +414,10 @@ export default function App() {
   const dayRowRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const isLineSignedIn = Boolean(auth.currentUser?.providerData.some(provider => provider.providerId === "oidc.line") || currentUser?.line_user_id);
-  const isGoogleSignedIn = Boolean(
-    auth.currentUser?.providerData.some(provider => provider.providerId === "google.com") ||
-    currentUser?.google_email
+  const isGoogleProviderLinked = Boolean(
+    auth.currentUser?.providerData.some(provider => provider.providerId === "google.com")
   );
+  const isGoogleSignedIn = isGoogleProviderLinked;
   const accountLabel = `${isLineSignedIn ? "LINE連携中" : "LINE未連携"} / ${isGoogleSignedIn ? "Google連携中" : "Google未連携"}`;
   const shareLink = currentUser ? `${window.location.origin}?share=${currentUser.share_token}` : "";
   const effectiveSharePeriodDays = publicUser?.share_period_days || currentUser?.share_period_days || 7;
@@ -706,7 +706,9 @@ export default function App() {
       return;
     }
     try {
-      await unlink(auth.currentUser, "google.com");
+      if (isGoogleProviderLinked) {
+        await unlink(auth.currentUser, "google.com");
+      }
       await updateDoc(doc(db, "users", auth.currentUser.uid), { google_email: deleteField() });
       if (currentUser) setCurrentUser({ ...currentUser, google_email: undefined });
       alert("Google連携を解除しました。");
@@ -723,6 +725,16 @@ export default function App() {
     if (!currentUser) return;
     setSelectedAvatar(currentUser.avatar_url || pickRandomAvatar());
   }, [currentUser?.uid, currentUser?.avatar_url]);
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    if (isGoogleProviderLinked || !currentUser.google_email) return;
+
+    updateDoc(doc(db, "users", currentUser.uid), { google_email: deleteField() }).catch(err => {
+      console.warn("Failed to clear stale google_email:", err);
+    });
+    setCurrentUser(prev => prev ? { ...prev, google_email: undefined } : prev);
+  }, [currentUser?.uid, currentUser?.google_email, isGoogleProviderLinked]);
   
   useEffect(() => {
     const handleResize = () => {}; // No longer needed for isDesktop
