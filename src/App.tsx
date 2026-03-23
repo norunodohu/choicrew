@@ -1366,11 +1366,13 @@ export default function App() {
         created_at: serverTimestamp()
       };
       const requestRef = await addDoc(collection(db, "requests"), reqData);
+      await updateDoc(doc(db, "availabilities", availability.id), { status: "pending" });
       setRequests(prev => {
         const nextRequest = { id: requestRef.id, ...reqData } as ShiftRequest;
         const withoutSamePair = prev.filter(r => !(r.availability_id === availability.id && r.manager_id === currentUser.uid));
         return [...withoutSamePair, nextRequest];
       });
+      setAvailabilities(prev => prev.map(item => item.id === availability.id ? { ...item, status: "pending" } : item));
 
       await createNotification(
         availability.user_id,
@@ -1411,6 +1413,7 @@ export default function App() {
       request.date
     );
     setRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: "approved" } : r));
+    setAvailabilities(prev => prev.map(item => item.id === request.availability_id ? { ...item, status: "confirmed" } : item));
     alert("承認しました。");
   };
 
@@ -1425,12 +1428,14 @@ export default function App() {
       request.date
     );
     setRequests(prev => prev.filter(r => r.id !== request.id));
+    setAvailabilities(prev => prev.map(item => item.id === request.availability_id ? { ...item, status: "open" } : item));
     alert("辞退しました。");
   };
 
   const handleCancelPendingRequest = async (request: ShiftRequest) => {
     if (!currentUser) return;
     await updateDoc(doc(db, "requests", request.id), { status: "canceled" });
+    await updateDoc(doc(db, "availabilities", request.availability_id), { status: "open" });
     await createNotification(
       request.manager_id,
       "decline",
@@ -1438,6 +1443,7 @@ export default function App() {
       request.date
     );
     setRequests(prev => prev.filter(r => r.id !== request.id));
+    setAvailabilities(prev => prev.map(item => item.id === request.availability_id ? { ...item, status: "open" } : item));
     alert("依頼を取り消しました。");
   };
 
