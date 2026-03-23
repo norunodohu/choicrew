@@ -2783,7 +2783,7 @@ export default function App() {
               initial={false}
               animate={false}
               exit={false}
-              className="relative w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl"
+              className="relative z-[91] w-full max-w-lg bg-white rounded-t-[2.5rem] sm:rounded-[2.5rem] p-8 shadow-2xl pointer-events-auto"
             >
               <div className="flex items-center justify-between mb-6">
                 <h3 className="text-xl font-black">依頼</h3>
