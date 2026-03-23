@@ -1792,9 +1792,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <Button onClick={() => openAvailabilityModal(undefined, selectedDate)} icon={Plus} className="hidden sm:flex">
-                予定を追加
-              </Button>
+
             </div>
           </div>
           {view === "myboard" && (
