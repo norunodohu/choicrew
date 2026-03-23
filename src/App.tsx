@@ -418,7 +418,7 @@ export default function App() {
     auth.currentUser?.providerData.some(provider => provider.providerId === "google.com")
   );
   const isGoogleSignedIn = isGoogleProviderLinked;
-  const accountLabel = `${isLineSignedIn ? "LINE連携中" : "LINE未連携"} / ${isGoogleSignedIn ? "Google連携中" : "Google未連携"}`;
+  const accountLabel = `${isLineSignedIn ? "LINE連携中" : "LINE未連携"} / ${currentUser?.search_id ? "ID設定済み" : "ID未設定"}`;
   const shareLink = currentUser ? `${window.location.origin}?share=${currentUser.share_token}` : "";
   const effectiveSharePeriodDays = publicUser?.share_period_days || currentUser?.share_period_days || 7;
   const publicSharePeriodDays = publicUser?.share_period_days || 7;
@@ -688,7 +688,7 @@ export default function App() {
   const handleUnlinkLine = async () => {
     if (!currentUser) return;
     if (!isGoogleSignedIn && currentUser.line_user_id) {
-      alert("LINE連携を解除するとログイン手段がなくなります。Google連携を先に追加してください。");
+      alert("LINE連携を解除するとログイン手段がなくなります。別のログイン手段を先に追加してください。");
       return;
     }
     await updateDoc(doc(db, "users", currentUser.uid), {
@@ -699,42 +699,10 @@ export default function App() {
     alert("LINE連携を解除しました。");
   };
 
-  const handleUnlinkGoogle = async () => {
-    if (!auth.currentUser) return;
-    if (!isLineSignedIn && auth.currentUser.providerData.some(provider => provider.providerId === "google.com")) {
-      alert("Google連携を解除するとログイン手段がなくなります。LINE連携を先に追加してください。");
-      return;
-    }
-    try {
-      if (isGoogleProviderLinked) {
-        await unlink(auth.currentUser, "google.com");
-      }
-      await updateDoc(doc(db, "users", auth.currentUser.uid), { google_email: deleteField() });
-      if (currentUser) setCurrentUser({ ...currentUser, google_email: undefined });
-      alert("Google連携を解除しました。");
-    } catch (error: unknown) {
-      console.error("Google unlink error:", error);
-      const errMsg = error instanceof Error && error.message.includes("requires-recent-login")
-        ? "もう一度サインインしてから解除してください。"
-        : "Google連携の解除に失敗しました。";
-      alert(errMsg);
-    }
-  };
-
   useEffect(() => {
     if (!currentUser) return;
     setSelectedAvatar(currentUser.avatar_url || pickRandomAvatar());
   }, [currentUser?.uid, currentUser?.avatar_url]);
-
-  useEffect(() => {
-    if (!currentUser?.uid) return;
-    if (isGoogleProviderLinked || !currentUser.google_email) return;
-
-    updateDoc(doc(db, "users", currentUser.uid), { google_email: deleteField() }).catch(err => {
-      console.warn("Failed to clear stale google_email:", err);
-    });
-    setCurrentUser(prev => prev ? { ...prev, google_email: undefined } : prev);
-  }, [currentUser?.uid, currentUser?.google_email, isGoogleProviderLinked]);
   
   useEffect(() => {
     const handleResize = () => {}; // No longer needed for isDesktop
@@ -1553,9 +1521,6 @@ export default function App() {
                 <div className="grid gap-4">
                   <Button onClick={handleLineLogin} variant="line" icon={MessageCircle} className="py-5 text-lg">
                     LINEでログイン
-                  </Button>
-                  <Button onClick={handleGoogleLogin} variant="outline" icon={User} className="py-5 text-lg">
-                    Googleでログイン
                   </Button>
                 </div>
               </>
