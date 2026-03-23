@@ -1462,6 +1462,14 @@ export default function App() {
     setFriendSearchStatus("sent");
   };
 
+  const handleCancelFriendRequest = async (target: UserProfile) => {
+    if (!currentUser) return;
+    const pairId = [currentUser.uid, target.uid].sort().join("_");
+    await deleteDoc(doc(db, "connections", pairId));
+    setConnections(prev => prev.filter(c => !((c.user1_id === currentUser.uid && c.user2_id === target.uid) || (c.user2_id === currentUser.uid && c.user1_id === target.uid))));
+    setFriendSearchStatus("found");
+  };
+
   const handleAcceptFriendRequest = async (peerId: string) => {
     if (!currentUser) return;
     const pairId = [currentUser.uid, peerId].sort().join("_");
