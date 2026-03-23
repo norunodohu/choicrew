@@ -1952,6 +1952,7 @@ export default function App() {
   }
 
 
+
   if (isPublicView && publicUser) {
     const publicViewHeaderTitle = isFriendView ? "フレンドの予定" : `${publicUser.name}さんの予定`;
     const publicViewHeaderSubtitle = isFriendView
