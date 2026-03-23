@@ -312,6 +312,8 @@ export default function App() {
   const [authId, setAuthId] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
+  const statusMessageTimerRef = useRef<number | null>(null);
 
   const [availabilities, setAvailabilities] = useState<Availability[]>([]);
   const [requests, setRequests] = useState<ShiftRequest[]>([]);
@@ -390,6 +392,16 @@ export default function App() {
   const [idPassword, setIdPassword] = useState("");
   const [showAvatarToast, setShowAvatarToast] = useState(false);
   const unreadNotificationCount = notifications.filter(n => !n.read).length;
+  const showStatusMessage = useCallback((message: string) => {
+    setStatusMessage(message);
+    if (statusMessageTimerRef.current !== null) {
+      window.clearTimeout(statusMessageTimerRef.current);
+    }
+    statusMessageTimerRef.current = window.setTimeout(() => {
+      setStatusMessage("");
+      statusMessageTimerRef.current = null;
+    }, 3000);
+  }, []);
 
   useEffect(() => {
     if (!currentUser?.uid || typeof window === "undefined") return;
@@ -1446,7 +1458,7 @@ export default function App() {
     );
     setRequests(prev => prev.filter(r => r.id !== request.id));
     setAvailabilities(prev => prev.map(item => item.id === request.availability_id ? { ...item, status: "open" } : item));
-    alert("依頼を取り消しました。");
+    showStatusMessage("依頼を取り消しました。");
   };
 
   const handleRefreshShareToken = async () => {
@@ -1703,6 +1715,11 @@ export default function App() {
           </div>
         </div>
       </div>
+    </div>
+  ) : null;
+  const statusMessageNode = statusMessage ? (
+    <div className="fixed left-1/2 top-4 z-[9998] -translate-x-1/2 rounded-2xl bg-gray-900 px-4 py-3 text-sm font-bold text-white shadow-2xl">
+      {statusMessage}
     </div>
   ) : null;
 
@@ -1978,6 +1995,7 @@ export default function App() {
             )}
           </div>
           {requestModalNode}
+          {statusMessageNode}
         </div>
       </div>
     );
@@ -2898,6 +2916,7 @@ export default function App() {
       </AnimatePresence>
 
       {requestModalNode}
+      {statusMessageNode}
 
       <AnimatePresence>
         {showCalendarModal && calendarMode === "day" && (
