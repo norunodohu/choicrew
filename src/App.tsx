@@ -2303,12 +2303,6 @@ export default function App() {
                   </div>
                 </Card>
 
-                <Card className="p-4 sm:p-6 bg-gray-50 border-dashed border-gray-200">
-                  <p className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Debug</p>
-                  <p className="text-sm text-gray-600">showRequestModal: {showRequestModal ? "true" : "false"}</p>
-                  <p className="text-sm text-gray-600 break-all">requestTarget: {requestTarget ? `${requestTarget.id} / ${requestTarget.date} ${requestTarget.start_time}-${requestTarget.end_time}` : "null"}</p>
-                </Card>
-
                 <Card className="p-6 sm:p-8 space-y-4">
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
