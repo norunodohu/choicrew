@@ -449,6 +449,7 @@ export default function App() {
   const publicSharePeriodDays = publicUser?.share_period_days || 7;
   const sharePeriodLabel = effectiveSharePeriodDays === 14 ? "2週間" : effectiveSharePeriodDays === 30 ? "1か月" : "1週間";
   const avatarSrc = selectedAvatar || currentUser?.avatar_url || "";
+  const isFriendView = isPublicView && viewKind === "friend";
   const isOwnPreview = isPublicView && Boolean(currentUser?.uid && publicUser?.uid && currentUser.uid === publicUser.uid);
   const incomingRequests = currentUser
     ? requests.filter(r => r.staff_id === currentUser.uid && r.status === "pending")
@@ -464,21 +465,24 @@ export default function App() {
     c.blocked_by === publicUser?.uid &&
     ([c.user1_id, c.user2_id].includes(currentUser.uid))
   ) : false;
-  const isPublicHidden = Boolean(publicUser?.share_paused || isBlockedByOwner);
+  const isPublicHidden = isFriendView ? false : Boolean(publicUser?.share_paused || isBlockedByOwner);
   const publicUpcomingAvailabilities = availabilities
     .filter(() => !isPublicHidden)
     .filter(a => a.user_id === publicUser?.uid)
     .filter(a => parseISO(a.date) >= new Date(new Date().setHours(0,0,0,0)))
     .filter(a => parseISO(a.date) < addDays(new Date(new Date().setHours(0,0,0,0)), publicSharePeriodDays))
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
-  const currentFriendIds = currentUser
+  const publicFriendIds = publicUser
     ? connections
-        .filter(c => c.status === "active" && ([c.user1_id, c.user2_id].includes(currentUser.uid)))
-        .map(c => (c.user1_id === currentUser.uid ? c.user2_id : c.user1_id))
+        .filter(c => c.status === "active" && ([c.user1_id, c.user2_id].includes(publicUser.uid)))
+        .map(c => (c.user1_id === publicUser.uid ? c.user2_id : c.user1_id))
     : [];
-  const publicFriendCount = currentFriendIds.length;
-  const hasFriendAccess = Boolean(currentUser && publicFriendCount >= 2);
-  const publicFriendIds = currentFriendIds;
+  const publicFriendCount = publicFriendIds.length;
+  const hasFriendAccess = Boolean(currentUser && publicUser && publicFriendCount >= 2 && connections.some(c =>
+    c.status === "active" &&
+    ([c.user1_id, c.user2_id].includes(currentUser.uid)) &&
+    ([c.user1_id, c.user2_id].includes(publicUser.uid))
+  ));
   const publicFriendAvailabilities = availabilities
     .filter(() => !isPublicHidden)
     .filter(a => hasFriendAccess ? publicFriendIds.includes(a.user_id) : false)
@@ -931,10 +935,13 @@ export default function App() {
     });
 
     const urlParams = new URLSearchParams(window.location.search);
+    const friendUidParam = urlParams.get("friend_uid");
+    if (friendUidParam) {
+      setPendingFriendUid(friendUidParam);
+    }
     const shareToken = urlParams.get('share');
-    if (shareToken) {
+    if (shareToken && !friendUidParam) {
       fetchPublicData(shareToken);
-      setIsPublicView(true);
     }
 
     const lineUserParam = urlParams.get('line_user');
@@ -1122,7 +1129,7 @@ export default function App() {
     : [];
 
   useEffect(() => {
-    if (!isPublicView || !currentUser?.uid || !publicUser?.uid) return;
+    if (!isPublicView || viewKind !== "share" || !currentUser?.uid || !publicUser?.uid) return;
     if (currentUser.uid === publicUser.uid) return;
 
     const pairId = [currentUser.uid, publicUser.uid].sort().join("_");
@@ -1133,7 +1140,7 @@ export default function App() {
     }, { merge: true }).catch(err => {
       console.error("Auto follow failed:", err);
     });
-  }, [isPublicView, currentUser?.uid, publicUser?.uid]);
+  }, [isPublicView, viewKind, currentUser?.uid, publicUser?.uid]);
 
   // Public View Listeners
   useEffect(() => {
@@ -1158,6 +1165,11 @@ export default function App() {
       unsubPublicAvail();
     };
   }, [isPublicView, publicUser?.uid]);
+
+  useEffect(() => {
+    if (!pendingFriendUid || !currentUser?.uid || !connections.length) return;
+    fetchFriendViewData(pendingFriendUid);
+  }, [pendingFriendUid, currentUser?.uid, connections]);
 
   // Handlers
   const handleGoogleLogin = async () => {
@@ -1294,6 +1306,7 @@ export default function App() {
       setPublicUser(friendData);
       setViewKind("friend");
       setIsPublicView(true);
+      setPendingFriendUid("");
     } catch (e) {
       console.error(e);
     }
@@ -2565,12 +2578,12 @@ export default function App() {
                             <div className="flex items-center gap-2 flex-wrap">
                               {!isBlocked && (
                                 <Button
-                                  onClick={() => window.open(`${window.location.origin}?share=${peer.share_token}`, "_blank", "noopener,noreferrer")}
+                                  onClick={() => window.open(`${window.location.origin}?friend_uid=${peer.uid}`, "_blank", "noopener,noreferrer")}
                                   variant="outline"
                                   className="whitespace-nowrap w-full sm:w-auto"
                                   icon={CalendarDays}
                                 >
-                                  プレビュー
+                                  フレンドの予定
                                 </Button>
                               )}
                               <Button
