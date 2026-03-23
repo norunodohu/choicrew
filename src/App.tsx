@@ -62,7 +62,6 @@ import {
 import { format, addDays, addMonths, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, isSameDay, isBefore, startOfDay, parseISO } from "date-fns";
 import { ja } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
-import { createPortal } from "react-dom";
 
 // Firebase Config
 import firebaseConfig from '../firebase-applet-config.json';
