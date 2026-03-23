@@ -1044,6 +1044,14 @@ export default function App() {
     });
   }, [currentUser?.uid, connections]);
 
+  const incomingFriendRequests = currentUser
+    ? connections.filter(conn =>
+        conn.status === "pending" &&
+        (conn.user1_id === currentUser.uid || conn.user2_id === currentUser.uid) &&
+        conn.requested_by !== currentUser.uid
+      )
+    : [];
+
   useEffect(() => {
     if (!isPublicView || !currentUser?.uid || !publicUser?.uid) return;
     if (currentUser.uid === publicUser.uid) return;
@@ -1445,6 +1453,31 @@ export default function App() {
       }];
     });
     setFriendSearchStatus("sent");
+  };
+
+  const handleAcceptFriendRequest = async (peerId: string) => {
+    if (!currentUser) return;
+    const pairId = [currentUser.uid, peerId].sort().join("_");
+    await setDoc(doc(db, "connections", pairId), {
+      user1_id: currentUser.uid,
+      user2_id: peerId,
+      status: "active",
+      requested_by: deleteField(),
+      requested_at: deleteField(),
+      blocked_by: deleteField(),
+    }, { merge: true });
+    setConnections(prev => prev.map(c =>
+      ((c.user1_id === currentUser.uid && c.user2_id === peerId) || (c.user2_id === currentUser.uid && c.user1_id === peerId))
+        ? { ...c, status: "active", requested_by: undefined, requested_at: undefined, blocked_by: undefined }
+        : c
+    ));
+  };
+
+  const handleDeclineFriendRequest = async (peerId: string) => {
+    if (!currentUser) return;
+    const pairId = [currentUser.uid, peerId].sort().join("_");
+    await deleteDoc(doc(db, "connections", pairId));
+    setConnections(prev => prev.filter(c => !((c.user1_id === currentUser.uid && c.user2_id === peerId) || (c.user2_id === currentUser.uid && c.user1_id === peerId))));
   };
 
   const handleBlock = async (peerId: string) => {
