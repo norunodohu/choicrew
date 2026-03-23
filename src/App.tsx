@@ -306,6 +306,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isPublicView, setIsPublicView] = useState(false);
   const [publicUser, setPublicUser] = useState<UserProfile | null>(null);
+  const [viewKind, setViewKind] = useState<"share" | "friend" | null>(null);
+  const [pendingFriendUid, setPendingFriendUid] = useState("");
   const [isProcessingLine, setIsProcessingLine] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [registerName, setRegisterName] = useState("");
@@ -465,6 +467,7 @@ export default function App() {
   const isPublicHidden = Boolean(publicUser?.share_paused || isBlockedByOwner);
   const publicUpcomingAvailabilities = availabilities
     .filter(() => !isPublicHidden)
+    .filter(a => a.user_id === publicUser?.uid)
     .filter(a => parseISO(a.date) >= new Date(new Date().setHours(0,0,0,0)))
     .filter(a => parseISO(a.date) < addDays(new Date(new Date().setHours(0,0,0,0)), publicSharePeriodDays))
     .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`));
@@ -1146,7 +1149,7 @@ export default function App() {
     );
 
     const unsubPublicAvail = onSnapshot(
-      query(collection(db, "availabilities"), where("user_id", "==", publicUser.uid), orderBy("date", "asc")),
+      query(collection(db, "availabilities"), orderBy("date", "asc")),
       (snap) => setAvailabilities(snap.docs.map(d => ({ id: d.id, ...d.data() } as Availability)))
     );
 
@@ -1270,8 +1273,30 @@ export default function App() {
       if (!snap.empty) {
         const userData = snap.docs[0].data() as UserProfile;
         setPublicUser(userData);
+        setViewKind("share");
+        setIsPublicView(true);
       }
     } catch (e) { console.error(e); }
+  };
+
+  const fetchFriendViewData = async (friendUid: string) => {
+    if (!currentUser?.uid) return;
+    try {
+      const friendSnap = await getDoc(doc(db, "users", friendUid));
+      if (!friendSnap.exists()) return;
+      const friendData = friendSnap.data() as UserProfile;
+      const isConnected = connections.some(conn =>
+        conn.status === "active" &&
+        ([conn.user1_id, conn.user2_id].includes(currentUser.uid)) &&
+        ([conn.user1_id, conn.user2_id].includes(friendUid))
+      );
+      if (!isConnected) return;
+      setPublicUser(friendData);
+      setViewKind("friend");
+      setIsPublicView(true);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handleSaveAvailability = async () => {
