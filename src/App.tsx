@@ -1160,6 +1160,7 @@ export default function App() {
   useEffect(() => {
     if (!pendingFriendUid || !currentUser?.uid || !connections.length) return;
     fetchFriendViewData(pendingFriendUid);
+    setSelectedFriendIds([pendingFriendUid]);
   }, [pendingFriendUid, currentUser?.uid, connections]);
 
   // Handlers
