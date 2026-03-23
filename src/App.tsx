@@ -2180,9 +2180,6 @@ export default function App() {
                           {isGoogleSignedIn ? "Google連携中" : "Google連携"}
                         </div>
                         <div className="text-xs space-y-1">
-                          <p className={isGoogleSignedIn ? "text-emerald-600" : "text-gray-400"}>
-                            {isGoogleSignedIn ? "連携済み" : "連携するとLINEなしでも入れます。"}
-                          </p>
                           {isGoogleSignedIn && currentUser?.google_email && (
                             <p className="text-emerald-700 font-semibold break-all">{maskEmailAfterFirstThree(currentUser.google_email)}</p>
                           )}
