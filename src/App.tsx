@@ -1857,6 +1857,7 @@ export default function App() {
                               }
                               alert("依頼ボタンは押されています。");
                               openRequestModal(a);
+                              alert("openRequestModal まで通りました。");
                             }}
                             className={`px-4 py-3 rounded-2xl font-black border whitespace-nowrap ${isBusy || isOwnPreview ? "border-gray-200 text-gray-300 bg-gray-50" : "border-blue-200 text-blue-600 bg-white"}`}
                           >
