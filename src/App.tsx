@@ -1399,7 +1399,6 @@ export default function App() {
         `${currentUser.name}さんから依頼が届きました。${availability.date} ${availability.start_time}-${availability.end_time}`, 
         availability.date
       );
-      alert("依頼を送信しました。");
       console.log("request created:", requestRef.id);
     } catch (e: unknown) {
       console.error(e);
