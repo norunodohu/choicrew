@@ -102,5 +102,23 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.user_id == request.auth.uid;
       allow update, delete: if isAuthenticated() && (request.auth.uid == resource.data.user_id || isAdmin() || isAuthorizedMigration(resource.data.user_id));
     }
+
+    // ===============================================================
+    // ChoiCrew Mini (anonymous sharing)
+    // ===============================================================
+    match /mini_shares/{shareId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if false;
+    }
+
+    match /mini_requests/{requestId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['share_id', 'requester_name', 'slot_date', 'slot_start', 'slot_end', 'created_at'])
+                    && request.resource.data.requester_name is string
+                    && request.resource.data.requester_name.size() > 0
+                    && request.resource.data.requester_name.size() <= 30;
+      allow update, delete: if false;
+    }
   }
 }
