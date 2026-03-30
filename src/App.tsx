@@ -2014,7 +2014,6 @@ export default function App() {
                               className="w-full h-full object-cover"
                             />
                           </div>
-<<<<<<< Updated upstream
                           <div className="min-w-0">
                             <p className="text-sm font-black text-gray-900 truncate">{owner?.name || "フレンド"}</p>
                             <p className="text-xs text-gray-500 truncate">{owner?.search_id ? `ID: ${owner.search_id}` : "ID未設定"}</p>
