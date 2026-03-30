@@ -2014,6 +2014,7 @@ export default function App() {
                               className="w-full h-full object-cover"
                             />
                           </div>
+<<<<<<< Updated upstream
                           <div className="min-w-0">
                             <p className="text-sm font-black text-gray-900 truncate">{owner?.name || "フレンド"}</p>
                             <p className="text-xs text-gray-500 truncate">{owner?.search_id ? `ID: ${owner.search_id}` : "ID未設定"}</p>
@@ -2145,6 +2146,40 @@ export default function App() {
                           {friend.name}
                         </span>
                       ))}
+=======
+                          <button
+                            onClick={async () => {
+                              if (isBusy) {
+                                alert("この予定はすでに埋まっています。");
+                                return;
+                              }
+                              if (isOwnPreview) {
+                                alert("これは自分のプレビューです。依頼は不要です。");
+                                return;
+                              }
+                              if (!isLoggedIn) {
+                                alert("依頼を送るにはログインが必要です。");
+                                return;
+                              }
+                              if (isMyPendingRequest) {
+                                alert("すでにほかの人とこの時間でやり取り中です。");
+                                return;
+                              }
+                              if (isMyApprovedRequest) {
+                                const req = requests.find(r => r.availability_id === a.id && r.staff_id === currentUser?.uid && r.status === "approved");
+                                if (req && window.confirm("キャンセル依頼しますか？")) await handleRejectRequest(req);
+                                return;
+                              }
+                              openRequestModal(a);
+                            }}
+                            className={`px-4 py-3 rounded-2xl font-black border whitespace-nowrap ${isBusy || isOwnPreview ? "border-gray-200 text-gray-300 bg-gray-50" : "border-blue-200 text-blue-600 bg-white"}`}
+                          >
+                            {buttonLabel}
+                          </button>
+                        </Card>
+                        );
+                      })}
+>>>>>>> Stashed changes
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
