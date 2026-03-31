@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import {
-  doc, setDoc, getDoc, collection, addDoc, getDocs,
+  doc, setDoc, getDoc, collection, addDoc, onSnapshot,
   query, where, Timestamp,
 } from 'firebase/firestore';
 import { format, addDays } from 'date-fns';
@@ -117,6 +117,45 @@ function saveSentSlot(shareId: string, key: string, current: Set<string>) {
   return next;
 }
 
+function saveOwnedShare(shareId: string) {
+  try {
+    const raw = localStorage.getItem('mini_owned_shares');
+    const ids: string[] = raw ? JSON.parse(raw) : [];
+    if (!ids.includes(shareId)) {
+      ids.push(shareId);
+      localStorage.setItem('mini_owned_shares', JSON.stringify(ids));
+    }
+  } catch { /* ignore */ }
+}
+
+function isOwnedShare(shareId: string): boolean {
+  try {
+    const raw = localStorage.getItem('mini_owned_shares');
+    if (raw) return (JSON.parse(raw) as string[]).includes(shareId);
+  } catch { /* ignore */ }
+  return false;
+}
+
+/* ================================================================
+   Toast hook
+   ================================================================ */
+
+function useToast(duration = 3000) {
+  const [msg, setMsg] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
+  const show = (text: string, type: 'error' | 'success' = 'error') => {
+    setMsg({ text, type });
+    setTimeout(() => setMsg(null), duration);
+  };
+  const UI = msg ? (
+    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl shadow-lg text-sm font-medium animate-[slideDown_0.2s_ease-out] ${
+      msg.type === 'error' ? 'bg-red-600 text-white' : 'bg-green-600 text-white'
+    }`}>
+      {msg.text}
+    </div>
+  ) : null;
+  return { show, UI };
+}
+
 /* ================================================================
    CreateView
    ================================================================ */
@@ -125,6 +164,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
   const [name, setName] = useState(loadDraftName);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
   const days = getDays(7);
 
   const slotsFor = (date: string) => slots.filter(s => s.date === date);
@@ -163,7 +203,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
       onCreated(id);
     } catch (err) {
       console.error('Failed to create share:', err);
-      alert('作成に失敗しました。もう一度お試しください。');
+      toast.show('作成に失敗しました。もう一度お試しください。');
     } finally {
       setSaving(false);
     }
@@ -171,6 +211,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-slate-100">
+      {toast.UI}
       <div className="max-w-lg mx-auto px-4 py-6 sm:py-10">
         {/* Header */}
         <div className="text-center mb-8">
@@ -201,9 +242,33 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
         </div>
 
         {/* Day slots */}
-        <div className="space-y-3 mb-6">
+        <div className="space-y-2 mb-6">
           {days.map(day => {
             const daySlots = slotsFor(day.date);
+
+            // Compact row for days without slots
+            if (daySlots.length === 0) {
+              return (
+                <button
+                  key={day.date}
+                  onClick={() => addSlot(day.date)}
+                  className={`w-full flex items-center justify-between rounded-xl px-4 py-3 border transition hover:shadow-sm ${
+                    day.isWeekend
+                      ? 'border-orange-100 bg-orange-50/30 hover:bg-orange-50/60'
+                      : 'border-gray-100 bg-white hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`text-sm font-semibold ${
+                    day.isWeekend ? 'text-orange-600' : 'text-gray-700'
+                  }`}>
+                    {day.label}
+                  </span>
+                  <span className="text-sm text-indigo-500 font-medium">＋ 追加</span>
+                </button>
+              );
+            }
+
+            // Expanded card for days with slots
             return (
               <div
                 key={day.date}
@@ -252,7 +317,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
                   onClick={() => addSlot(day.date)}
                   className="text-sm text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
                 >
-                  ＋ {daySlots.length > 0 ? 'もう1枠' : '空き時間を追加'}
+                  ＋ もう1枠
                 </button>
               </div>
             );
@@ -277,7 +342,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
         )}
         {name.trim() && slots.length === 0 && (
           <p className="text-center text-sm text-gray-400 mt-3">
-            ↑ 日付の「＋ 空き時間を追加」で時間帯を入力
+            ↑ 日付をタップして空き時間を追加
           </p>
         )}
 
@@ -303,6 +368,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
   const [name, setName] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSend = async () => {
     if (!name.trim()) return;
@@ -320,7 +386,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
       onSent();
     } catch (err) {
       console.error('Failed to send request:', err);
-      alert('送信に失敗しました。もう一度お試しください。');
+      setError('送信に失敗しました。もう一度お試しください。');
     } finally {
       setSending(false);
     }
@@ -369,6 +435,10 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
           />
         </div>
 
+        {error && (
+          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+        )}
+
         <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
@@ -404,6 +474,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [requestSlot, setRequestSlot] = useState<{ date: string; start: string; end: string } | null>(null);
   const [sentSlots, setSentSlots] = useState<Set<string>>(() => loadSentSlots(shareId));
   const [copied, setCopied] = useState(false);
+  const isOwner = justCreated || isOwnedShare(shareId);
 
   const url = makeShareUrl(shareId);
 
@@ -411,16 +482,11 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     const load = async () => {
       try {
         const snap = await getDoc(doc(db, 'mini_shares', shareId));
-        if (!snap.exists()) { setNotFound(true); return; }
+        if (!snap.exists()) { setNotFound(true); setLoading(false); return; }
 
         const data = snap.data() as ShareData;
         if (data.expires_at.toDate() < new Date()) setExpired(true);
         setShare(data);
-
-        // Load requests for this share
-        const reqQ = query(collection(db, 'mini_requests'), where('share_id', '==', shareId));
-        const reqSnap = await getDocs(reqQ);
-        setRequests(reqSnap.docs.map(d => ({ id: d.id, ...d.data() } as RequestEntry)));
       } catch (err) {
         console.error('Failed to load share:', err);
         setNotFound(true);
@@ -429,6 +495,13 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
       }
     };
     load();
+
+    // Real-time listener for requests
+    const reqQ = query(collection(db, 'mini_requests'), where('share_id', '==', shareId));
+    const unsub = onSnapshot(reqQ, (snap) => {
+      setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as RequestEntry)));
+    });
+    return () => unsub();
   }, [shareId]);
 
   const handleCopy = async () => {
@@ -514,7 +587,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         )}
 
         {/* Share URL + actions */}
-        {justCreated && (
+        {isOwner && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-6 print:hidden">
             <div className="flex items-center gap-2 mb-3">
               <input
@@ -571,7 +644,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           <p className="text-sm text-gray-400 mt-1">
             ⏰ {expiryLabel}まで有効
           </p>
-          {!justCreated && (
+          {!isOwner && (
             <button
               onClick={() => window.print()}
               className="text-xs text-gray-400 hover:text-gray-600 mt-2 transition print:hidden"
@@ -622,7 +695,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                 </div>
 
                 {/* Show requests for owner */}
-                {justCreated && reqs.length > 0 && (
+                {isOwner && reqs.length > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-50">
                     {reqs.map(r => (
                       <p key={r.id} className="text-sm text-gray-500">
@@ -656,7 +729,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         </div>
 
         {/* Footer CTA */}
-        {!justCreated && (
+        {!isOwner && (
           <div className="text-center border-t border-gray-100 pt-8 mt-4 print:hidden">
             <p className="text-sm text-gray-500 mb-3">自分も空き時間を共有しませんか？</p>
             <a
@@ -670,7 +743,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         )}
 
         {/* New share button for owner */}
-        {justCreated && (
+        {isOwner && (
           <div className="text-center print:hidden">
             <a
               href="/mini/"
@@ -739,6 +812,7 @@ export default function MiniApp() {
   }, []);
 
   const handleCreated = (id: string) => {
+    saveOwnedShare(id);
     window.history.pushState({}, '', `/mini/s/${id}`);
     setShareId(id);
     setJustCreated(true);
@@ -751,6 +825,10 @@ export default function MiniApp() {
     style.textContent = `
       @keyframes slideUp {
         from { transform: translateY(100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes slideDown {
+        from { transform: translateY(-20px); opacity: 0; }
         to { transform: translateY(0); opacity: 1; }
       }
     `;
