@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import {
   doc, setDoc, getDoc, collection, addDoc, onSnapshot,
@@ -115,6 +115,18 @@ function saveSentSlot(shareId: string, key: string, current: Set<string>) {
     localStorage.setItem(`mini_sent_${shareId}`, JSON.stringify([...next]));
   } catch { /* ignore */ }
   return next;
+}
+
+function loadRequesterName(): string {
+  try {
+    return localStorage.getItem('choicrew_mini_requester') || '';
+  } catch { return ''; }
+}
+
+function saveRequesterName(name: string) {
+  try {
+    localStorage.setItem('choicrew_mini_requester', name);
+  } catch { /* ignore */ }
 }
 
 function saveOwnedShare(shareId: string) {
@@ -272,7 +284,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
             return (
               <div
                 key={day.date}
-                className={`bg-white rounded-2xl shadow-sm border p-4 transition-all ${
+                className={`bg-white rounded-2xl shadow-sm border p-4 transition-all animate-[fadeIn_0.15s_ease-out] ${
                   day.isWeekend ? 'border-orange-100 bg-orange-50/30' : 'border-gray-100'
                 }`}
               >
@@ -283,7 +295,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
                 </p>
 
                 {daySlots.map(slot => (
-                  <div key={slot.id} className="flex items-center gap-2 mb-2">
+                  <div key={slot.id} className="flex items-center gap-2 mb-2 animate-[fadeIn_0.15s_ease-out]">
                     <input
                       type="time"
                       value={slot.start}
@@ -332,7 +344,15 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
                      hover:bg-indigo-700 disabled:opacity-40 transition text-lg
                      shadow-lg shadow-indigo-200"
         >
-          {saving ? '作成中...' : '🔗 共有リンクを作成'}
+          {saving ? (
+            <span className="inline-flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              作成中...
+            </span>
+          ) : '🔗 共有リンクを作成'}
         </button>
 
         {name.trim() && slots.length > 0 && validSlots.length === 0 && (
@@ -365,10 +385,34 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
   onClose: () => void;
   onSent: () => void;
 }) {
-  const [name, setName] = useState('');
+  const [name, setName] = useState(loadRequesterName);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // ESC to close
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [onClose]);
+
+  // Focus trap
+  useEffect(() => {
+    const el = modalRef.current;
+    if (!el) return;
+    const focusable = el.querySelectorAll<HTMLElement>('input,button,[tabindex]');
+    if (focusable.length === 0) return;
+    const first = focusable[0], last = focusable[focusable.length - 1];
+    const trap = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      if (e.shiftKey) { if (document.activeElement === first) { e.preventDefault(); last.focus(); } }
+      else { if (document.activeElement === last) { e.preventDefault(); first.focus(); } }
+    };
+    el.addEventListener('keydown', trap);
+    return () => el.removeEventListener('keydown', trap);
+  }, []);
 
   const handleSend = async () => {
     if (!name.trim()) return;
@@ -383,6 +427,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
         message: message.trim(),
         created_at: Timestamp.fromDate(new Date()),
       });
+      saveRequesterName(name.trim());
       onSent();
     } catch (err) {
       console.error('Failed to send request:', err);
@@ -397,7 +442,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
       className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4
+      <div ref={modalRef} className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4
                       animate-[slideUp_0.2s_ease-out]">
         <h3 className="text-lg font-bold text-gray-900">依頼を送る</h3>
         <p className="text-sm text-gray-500">
@@ -475,6 +520,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [sentSlots, setSentSlots] = useState<Set<string>>(() => loadSentSlots(shareId));
   const [copied, setCopied] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
+  const toast = useToast();
 
   const url = makeShareUrl(shareId);
 
@@ -527,6 +573,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     const next = saveSentSlot(shareId, key, sentSlots);
     setSentSlots(next);
     setRequestSlot(null);
+    toast.show('依頼を送信しました！', 'success');
   };
 
   const requestsForSlot = (s: { date: string; start: string; end: string }) =>
@@ -574,7 +621,15 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-slate-100 print:bg-white print:from-white print:to-white">
+      {toast.UI}
       <div className="max-w-lg mx-auto px-4 py-6 sm:py-10">
+
+        {/* Logo */}
+        <div className="text-center mb-4 print:hidden">
+          <a href="/mini/" className="text-lg font-bold text-gray-900 font-righteous tracking-wide hover:opacity-70 transition">
+            ChoiCrew <span className="text-indigo-600">Mini</span>
+          </a>
+        </div>
 
         {/* Just-created banner */}
         {justCreated && (
@@ -654,6 +709,15 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           )}
         </div>
 
+        {/* Request summary for owner */}
+        {isOwner && requests.length > 0 && (
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <span className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full">
+              📩 {requests.length}件の依頼
+            </span>
+          </div>
+        )}
+
         {/* Slot cards */}
         <div className="space-y-3 mb-8">
           {sortedSlots.map((slot, i) => {
@@ -673,6 +737,9 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                     <p className="text-xl font-bold text-gray-900 mt-0.5">
                       {slot.start} – {slot.end}
                     </p>
+                    {reqs.length > 0 && !isOwner && (
+                      <p className="text-xs text-indigo-500 font-medium mt-1">🙋 {reqs.length}人が希望</p>
+                    )}
                   </div>
                   <div className="print:hidden">
                     {expired ? (
@@ -830,6 +897,10 @@ export default function MiniApp() {
       @keyframes slideDown {
         from { transform: translateY(-20px); opacity: 0; }
         to { transform: translateY(0); opacity: 1; }
+      }
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-8px); }
+        to { opacity: 1; transform: translateY(0); }
       }
     `;
     document.head.appendChild(style);
