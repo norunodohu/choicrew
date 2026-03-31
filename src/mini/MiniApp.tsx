@@ -302,7 +302,7 @@ const TIME_PRESETS = [
 function CreateView({ onCreated }: { onCreated: (id: string, name: string) => void }) {
   const [name, setName] = useState(loadDraftName);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
-  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set([format(new Date(), 'yyyy-MM-dd')]));
   const [saving, setSaving] = useState(false);
   const toast = useToast();
   const days = getDays(7);
@@ -365,19 +365,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         {/* Header */}
         <div className="text-center mb-10">
           <Logo />
-          <p className="text-slate-400 mt-3 text-sm leading-relaxed">
-            空き時間を入力して共有リンクを作成
-          </p>
-          <div className="flex items-center justify-center gap-3 mt-2">
-            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-              ログイン不要
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-              7日間有効
-            </span>
-          </div>
+          <p className="text-slate-400 mt-2 text-xs tracking-wide">ログイン不要 · 7日間有効</p>
         </div>
 
         {/* Name */}
@@ -395,6 +383,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                        focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent
                        placeholder:text-slate-300 bg-white"
             maxLength={30}
+            autoFocus
           />
         </div>
 
@@ -508,16 +497,6 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
           })}
         </div>
 
-        {/* Empty state hint */}
-        {name.trim() && slots.length === 0 && expandedDays.size === 0 && (
-          <div className="text-center py-4 mb-6">
-            <svg className="w-10 h-10 text-slate-200 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-            </svg>
-            <p className="text-sm text-slate-400">日付をタップして空き時間を追加</p>
-          </div>
-        )}
-
         {/* Inline CTA — desktop */}
         <div className="hidden sm:block">
           <button
@@ -558,10 +537,6 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
           </div>
         )}
 
-        {/* Footer */}
-        <p className="text-center text-xs text-slate-300 mt-12">
-          ChoiCrew Mini
-        </p>
       </div>
 
       {/* Sticky CTA — mobile */}
@@ -855,10 +830,8 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         {/* Just-created banner */}
         {justCreated && (
           <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4 mb-5 print:hidden">
-            <p className="font-semibold text-teal-900">共有リンクを作成しました</p>
-            <p className="text-sm text-teal-700 mt-1">
-              下のリンクを相手に送ってください（{expiryLabel}まで有効）
-            </p>
+            <p className="font-semibold text-teal-900">作成しました</p>
+            <p className="text-sm text-teal-700 mt-1">リンクを相手に共有してください</p>
           </div>
         )}
 
@@ -936,6 +909,38 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           </div>
         </div>
 
+        {/* Owner: Request summary */}
+        {isOwner && requests.length > 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6 print:hidden">
+            <h2 className="text-sm font-semibold text-slate-700 mb-3">依頼一覧</h2>
+            <div className="space-y-2">
+              {requests
+                .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
+                .map(r => (
+                <div key={r.id} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50">
+                  <Avatar name={r.requester_name} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-slate-700">{r.requester_name}</span>
+                      <span className="text-[11px] text-slate-400">
+                        {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
+                      </span>
+                    </div>
+                    {r.message && (
+                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Visitor: brief instruction */}
+        {!isOwner && !expired && sortedSlots.length > 0 && (
+          <p className="text-center text-sm text-slate-400 mb-4">希望の時間帯を選んで依頼できます</p>
+        )}
+
         {/* Date-grouped slot cards */}
         <div className="space-y-6 mb-8">
           {Object.entries(groupedSlots).map(([date, dateSlots]) => {
@@ -958,7 +963,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                     const sent = sentSlots.has(key);
                     const reqs = requestsForSlot(slot);
                     return (
-                      <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 print:border-slate-300">
+                      <div key={i} className={`bg-white rounded-2xl border p-4 print:border-slate-300 transition-colors ${reqs.length > 0 && isOwner ? 'border-teal-200 border-l-[3px] border-l-teal-400' : 'border-slate-200'}`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="text-2xl font-semibold tracking-tight text-slate-800">
@@ -975,9 +980,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                                 <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
                                   {reqs.length}件
                                 </span>
-                              ) : (
-                                <span className="text-xs text-slate-300">依頼なし</span>
-                              )
+                              ) : null
                             ) : expired ? (
                               <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">期限切れ</span>
                             ) : sent ? (
@@ -988,7 +991,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                               <button
                                 onClick={() => setRequestSlot(slot)}
                                 className="bg-teal-600 text-white text-sm font-medium rounded-xl
-                                           px-5 py-2.5 hover:bg-teal-700 transition shadow-sm"
+                                           px-5 py-2.5 hover:bg-teal-700 active:scale-95 transition-all shadow-sm"
                               >
                                 依頼する
                               </button>
@@ -1001,9 +1004,10 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                           <div className="mt-3 pt-3 border-t border-slate-100">
                             <div className="flex flex-wrap gap-2">
                               {reqs.map(r => (
-                                <div key={r.id} className="flex items-center gap-1.5 bg-slate-50 rounded-full pl-1 pr-2.5 py-1">
+                                <div key={r.id} className="flex items-center gap-1.5 bg-slate-50 rounded-full pl-1 pr-2.5 py-1" title={r.message || undefined}>
                                   <Avatar name={r.requester_name} />
                                   <span className="text-xs font-medium text-slate-600">{r.requester_name}</span>
+                                  {r.message && <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />}
                                 </div>
                               ))}
                             </div>
@@ -1053,9 +1057,6 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           </div>
         )}
 
-        <p className="text-center text-xs text-slate-300 mt-12 print:mt-4">
-          ChoiCrew Mini
-        </p>
       </div>
 
       {requestSlot && (
