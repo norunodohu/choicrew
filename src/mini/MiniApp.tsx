@@ -8,24 +8,6 @@ import { format, addDays } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
 /* ================================================================
-   Design tokens — clean clinical palette
-   ================================================================ */
-
-const T = {
-  bg: 'bg-white',
-  bgSub: 'bg-slate-50',
-  border: 'border-slate-200',
-  accent: 'teal',               // primary hue
-  accentBg: 'bg-teal-600',
-  accentHover: 'hover:bg-teal-700',
-  accentText: 'text-teal-700',
-  accentLight: 'bg-teal-50',
-  accentBorder: 'border-teal-100',
-  accentShadow: 'shadow-teal-100',
-  ring: 'focus:ring-teal-400',
-} as const;
-
-/* ================================================================
    Types
    ================================================================ */
 
@@ -54,6 +36,12 @@ interface RequestEntry {
   created_at: Timestamp;
 }
 
+interface OwnedShareEntry {
+  id: string;
+  name: string;
+  created_at: number;
+}
+
 /* ================================================================
    Utilities
    ================================================================ */
@@ -76,6 +64,7 @@ function getDays(count = 7) {
       date: format(d, 'yyyy-MM-dd'),
       label: prefix + formatted,
       isWeekend: d.getDay() === 0 || d.getDay() === 6,
+      isToday: i === 0,
     };
   });
 }
@@ -83,6 +72,10 @@ function getDays(count = 7) {
 function formatSlotDate(dateStr: string): string {
   const d = new Date(dateStr + 'T00:00:00');
   return format(d, 'M/d(E)', { locale: ja });
+}
+
+function isDateToday(dateStr: string): boolean {
+  return dateStr === format(new Date(), 'yyyy-MM-dd');
 }
 
 function makeShareUrl(id: string): string {
@@ -100,6 +93,11 @@ function makeLineShareUrl(name: string, url: string): string {
 
 function slotKey(s: { date: string; start: string; end: string }): string {
   return `${s.date}_${s.start}_${s.end}`;
+}
+
+function timeToPercent(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return Math.max(0, Math.min(100, ((h * 60 + m - 360) / 1080) * 100));
 }
 
 async function nativeShare(title: string, url: string): Promise<boolean> {
@@ -134,31 +132,34 @@ function loadSentSlots(shareId: string): Set<string> {
 
 function saveSentSlot(shareId: string, key: string, current: Set<string>) {
   const next = new Set(current).add(key);
-  try {
-    localStorage.setItem(`mini_sent_${shareId}`, JSON.stringify([...next]));
-  } catch { /* ignore */ }
+  try { localStorage.setItem(`mini_sent_${shareId}`, JSON.stringify([...next])); } catch { /* */ }
   return next;
 }
 
 function loadRequesterName(): string {
-  try {
-    return localStorage.getItem('choicrew_mini_requester') || '';
-  } catch { return ''; }
+  try { return localStorage.getItem('choicrew_mini_requester') || ''; } catch { return ''; }
 }
 
 function saveRequesterName(name: string) {
-  try {
-    localStorage.setItem('choicrew_mini_requester', name);
-  } catch { /* ignore */ }
+  try { localStorage.setItem('choicrew_mini_requester', name); } catch { /* */ }
 }
 
-function saveOwnedShare(shareId: string) {
+function saveOwnedShare(shareId: string, name: string) {
   try {
     const raw = localStorage.getItem('mini_owned_shares');
-    const ids: string[] = raw ? JSON.parse(raw) : [];
-    if (!ids.includes(shareId)) {
-      ids.push(shareId);
-      localStorage.setItem('mini_owned_shares', JSON.stringify(ids));
+    let entries: OwnedShareEntry[] = [];
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+        entries = parsed.map((id: string) => ({ id, name: '', created_at: 0 }));
+      } else {
+        entries = parsed;
+      }
+    }
+    if (!entries.some(e => e.id === shareId)) {
+      entries.push({ id: shareId, name, created_at: Date.now() });
+      if (entries.length > 10) entries = entries.slice(-10);
+      localStorage.setItem('mini_owned_shares', JSON.stringify(entries));
     }
   } catch { /* ignore */ }
 }
@@ -166,9 +167,23 @@ function saveOwnedShare(shareId: string) {
 function isOwnedShare(shareId: string): boolean {
   try {
     const raw = localStorage.getItem('mini_owned_shares');
-    if (raw) return (JSON.parse(raw) as string[]).includes(shareId);
-  } catch { /* ignore */ }
-  return false;
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return false;
+    if (typeof parsed[0] === 'string') return parsed.includes(shareId);
+    return (parsed as OwnedShareEntry[]).some(e => e.id === shareId);
+  } catch { return false; }
+}
+
+function loadOwnedShares(): OwnedShareEntry[] {
+  try {
+    const raw = localStorage.getItem('mini_owned_shares');
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) return [];
+    if (typeof parsed[0] === 'string') return parsed.map((id: string) => ({ id, name: '', created_at: 0 }));
+    return parsed;
+  } catch { return []; }
 }
 
 /* ================================================================
@@ -179,7 +194,7 @@ function Logo({ size = 'lg' }: { size?: 'sm' | 'lg' }) {
   const cls = size === 'lg' ? 'text-xl' : 'text-base';
   return (
     <span className={`${cls} font-bold text-slate-800 font-righteous tracking-wide`}>
-      ChoiCrew <span className={T.accentText}>Mini</span>
+      ChoiCrew <span className="text-teal-600">Mini</span>
     </span>
   );
 }
@@ -190,6 +205,63 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
+  );
+}
+
+function TimeBar({ start, end }: { start: string; end: string }) {
+  const l = timeToPercent(start);
+  const w = Math.max(timeToPercent(end) - l, 3);
+  return (
+    <div className="h-1 bg-slate-100 rounded-full overflow-hidden mt-2" aria-hidden="true">
+      <div
+        className="h-full bg-gradient-to-r from-teal-400 to-teal-300 rounded-full"
+        style={{ marginLeft: `${l}%`, width: `${w}%` }}
+      />
+    </div>
+  );
+}
+
+const AVATAR_COLORS = ['bg-teal-500', 'bg-sky-500', 'bg-amber-500', 'bg-rose-400', 'bg-violet-500', 'bg-emerald-500', 'bg-orange-500'];
+
+function nameToColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function Avatar({ name }: { name: string }) {
+  return (
+    <div
+      className={`w-6 h-6 rounded-full ${nameToColor(name)} flex items-center justify-center text-white text-[10px] font-bold shrink-0`}
+      title={name}
+    >
+      {name.charAt(0)}
+    </div>
+  );
+}
+
+function SkeletonBlock({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse bg-slate-200 rounded-lg ${className}`} />;
+}
+
+function ShareViewSkeleton() {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className="max-w-lg mx-auto px-4 py-8 sm:py-12">
+        <div className="text-center mb-8">
+          <SkeletonBlock className="h-5 w-28 mx-auto mb-4" />
+          <SkeletonBlock className="h-7 w-48 mx-auto mb-2" />
+          <SkeletonBlock className="h-4 w-32 mx-auto" />
+        </div>
+        {[1, 2, 3].map(i => (
+          <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5 mb-3">
+            <SkeletonBlock className="h-3 w-16 mb-3" />
+            <SkeletonBlock className="h-8 w-32 mb-3" />
+            <SkeletonBlock className="h-1 w-full" />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -205,7 +277,7 @@ function useToast(duration = 3000) {
   }, [duration]);
   const UI = msg ? (
     <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl shadow-lg text-sm font-medium animate-[slideDown_0.25s_ease-out] ${
-      msg.type === 'error' ? 'bg-red-600 text-white' : `${T.accentBg} text-white`
+      msg.type === 'error' ? 'bg-red-600 text-white' : 'bg-teal-600 text-white'
     }`}>
       {msg.text}
     </div>
@@ -214,20 +286,41 @@ function useToast(duration = 3000) {
 }
 
 /* ================================================================
+   Time presets
+   ================================================================ */
+
+const TIME_PRESETS = [
+  { label: '午前', start: '09:00', end: '12:00', sub: '9–12' },
+  { label: '午後', start: '13:00', end: '17:00', sub: '13–17' },
+  { label: '夕方', start: '17:00', end: '21:00', sub: '17–21' },
+];
+
+/* ================================================================
    CreateView
    ================================================================ */
 
-function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
+function CreateView({ onCreated }: { onCreated: (id: string, name: string) => void }) {
   const [name, setName] = useState(loadDraftName);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const toast = useToast();
   const days = getDays(7);
+  const ownedShares = loadOwnedShares().filter(e => e.name);
 
   const slotsFor = (date: string) => slots.filter(s => s.date === date);
 
-  const addSlot = (date: string) => {
-    setSlots(prev => [...prev, { id: genId(6), date, start: '10:00', end: '17:00' }]);
+  const toggleDay = (date: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
+  const addSlot = (date: string, start = '10:00', end = '17:00') => {
+    setSlots(prev => [...prev, { id: genId(6), date, start, end }]);
   };
 
   const updateSlot = (id: string, field: 'start' | 'end', value: string) => {
@@ -255,7 +348,7 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
         expires_at: Timestamp.fromDate(expires),
       });
       saveDraftName(name.trim());
-      onCreated(id);
+      onCreated(id, name.trim());
     } catch (err) {
       console.error('Failed to create share:', err);
       toast.show('作成に失敗しました。もう一度お試しください。');
@@ -265,26 +358,30 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
   };
 
   return (
-    <div className={`min-h-screen ${T.bgSub}`}>
+    <div className="min-h-screen bg-slate-50">
       {toast.UI}
-      <div className="max-w-lg mx-auto px-4 py-8 sm:py-12">
+      <div className="max-w-lg mx-auto px-4 py-8 sm:py-12 pb-28 sm:pb-12">
 
         {/* Header */}
         <div className="text-center mb-10">
           <Logo />
           <p className="text-slate-400 mt-3 text-sm leading-relaxed">
-            空き時間を入力して共有リンクを作成<br />
-            <span className="inline-flex items-center gap-1.5 mt-2 text-xs text-slate-400">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-400" />
+            空き時間を入力して共有リンクを作成
+          </p>
+          <div className="flex items-center justify-center gap-3 mt-2">
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
               ログイン不要
-              <span className="inline-block w-1 h-1 rounded-full bg-slate-300 mx-1" />
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
               7日間有効
             </span>
-          </p>
+          </div>
         </div>
 
         {/* Name */}
-        <div className={`${T.bg} rounded-2xl border ${T.border} p-5 mb-5`}>
+        <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6">
           <label htmlFor="creator-name" className="block text-sm font-semibold text-slate-600 mb-2">
             あなたの名前
           </label>
@@ -294,31 +391,38 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="たなか"
-            className={`w-full rounded-xl border ${T.border} px-4 py-3 text-base
-                       focus:outline-none focus:ring-2 ${T.ring} focus:border-transparent
-                       placeholder:text-slate-300 bg-white`}
+            className="w-full rounded-xl border border-slate-200 px-4 py-3 text-base
+                       focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent
+                       placeholder:text-slate-300 bg-white"
             maxLength={30}
           />
         </div>
 
         {/* Day slots */}
         <div className="space-y-2 mb-8">
+          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">
+            空き時間
+          </p>
+
           {days.map(day => {
             const daySlots = slotsFor(day.date);
+            const isExpanded = expandedDays.has(day.date) || daySlots.length > 0;
 
-            if (daySlots.length === 0) {
+            if (!isExpanded) {
               return (
                 <button
                   key={day.date}
-                  onClick={() => addSlot(day.date)}
+                  onClick={() => toggleDay(day.date)}
                   className={`w-full flex items-center justify-between rounded-xl px-4 py-3 border transition
-                    hover:shadow-sm ${T.bg} ${T.border}
-                    ${day.isWeekend ? 'bg-amber-50/40 border-amber-100' : ''}`}
+                    hover:shadow-sm bg-white border-slate-200
+                    ${day.isWeekend ? 'bg-amber-50/40 border-amber-100' : ''}
+                    ${day.isToday ? 'border-l-[3px] border-l-teal-400' : ''}`}
                 >
-                  <span className={`text-sm font-semibold ${day.isWeekend ? 'text-amber-700' : 'text-slate-600'}`}>
+                  <span className={`text-sm font-semibold ${day.isToday ? 'text-teal-700' : day.isWeekend ? 'text-amber-700' : 'text-slate-600'}`}>
+                    {day.isToday && <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 align-middle" />}
                     {day.label}
                   </span>
-                  <span className={`text-sm ${T.accentText} font-medium`}>＋ 追加</span>
+                  <span className="text-sm text-teal-600 font-medium">＋</span>
                 </button>
               );
             }
@@ -326,83 +430,156 @@ function CreateView({ onCreated }: { onCreated: (id: string) => void }) {
             return (
               <div
                 key={day.date}
-                className={`${T.bg} rounded-2xl border p-4 transition-all animate-[fadeIn_0.15s_ease-out]
-                  ${day.isWeekend ? 'border-amber-100 bg-amber-50/30' : T.border}`}
+                className={`bg-white rounded-2xl border p-4 transition-all animate-[fadeIn_0.15s_ease-out]
+                  ${day.isWeekend ? 'border-amber-100 bg-amber-50/30' : 'border-slate-200'}
+                  ${day.isToday ? 'border-l-[3px] border-l-teal-400' : ''}`}
               >
-                <p className={`text-sm font-semibold mb-2 ${day.isWeekend ? 'text-amber-700' : 'text-slate-600'}`}>
-                  {day.label}
-                </p>
+                <div className="flex items-center justify-between mb-3">
+                  <p className={`text-sm font-semibold ${day.isToday ? 'text-teal-700' : day.isWeekend ? 'text-amber-700' : 'text-slate-600'}`}>
+                    {day.isToday && <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 align-middle" />}
+                    {day.label}
+                  </p>
+                  {daySlots.length === 0 && (
+                    <button onClick={() => toggleDay(day.date)} className="text-xs text-slate-400 hover:text-slate-600 transition">
+                      閉じる
+                    </button>
+                  )}
+                </div>
 
                 {daySlots.map(slot => (
-                  <div key={slot.id} className="flex items-center gap-2 mb-2 animate-[fadeIn_0.15s_ease-out]">
-                    <label className="sr-only" htmlFor={`start-${slot.id}`}>開始時間</label>
-                    <input
-                      id={`start-${slot.id}`}
-                      type="time"
-                      value={slot.start}
-                      onChange={e => updateSlot(slot.id, 'start', e.target.value)}
-                      className={`flex-1 rounded-lg border ${T.border} px-2 py-2 text-base text-center bg-white`}
-                    />
-                    <span className="text-slate-400 text-sm">〜</span>
-                    <label className="sr-only" htmlFor={`end-${slot.id}`}>終了時間</label>
-                    <input
-                      id={`end-${slot.id}`}
-                      type="time"
-                      value={slot.end}
-                      onChange={e => updateSlot(slot.id, 'end', e.target.value)}
-                      className={`flex-1 rounded-lg border ${T.border} px-2 py-2 text-base text-center bg-white`}
-                    />
-                    <button
-                      onClick={() => removeSlot(slot.id)}
-                      className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg
-                                 focus:outline-none focus:ring-2 focus:ring-red-300"
-                      aria-label="この時間枠を削除"
-                    >
-                      ✕
-                    </button>
+                  <div key={slot.id} className="mb-3 animate-[fadeIn_0.15s_ease-out]">
+                    <div className="flex items-center gap-2">
+                      <label className="sr-only" htmlFor={`start-${slot.id}`}>開始時間</label>
+                      <input
+                        id={`start-${slot.id}`}
+                        type="time"
+                        value={slot.start}
+                        onChange={e => updateSlot(slot.id, 'start', e.target.value)}
+                        className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-base text-center bg-white"
+                      />
+                      <span className="text-slate-300 text-sm">–</span>
+                      <label className="sr-only" htmlFor={`end-${slot.id}`}>終了時間</label>
+                      <input
+                        id={`end-${slot.id}`}
+                        type="time"
+                        value={slot.end}
+                        onChange={e => updateSlot(slot.id, 'end', e.target.value)}
+                        className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-base text-center bg-white"
+                      />
+                      <button
+                        onClick={() => removeSlot(slot.id)}
+                        className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg
+                                   focus:outline-none focus:ring-2 focus:ring-red-300"
+                        aria-label="この時間枠を削除"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    {slot.start < slot.end && <TimeBar start={slot.start} end={slot.end} />}
+                    {slot.start >= slot.end && (
+                      <p className="text-xs text-red-500 mt-1">開始は終了より前にしてください</p>
+                    )}
                   </div>
                 ))}
 
-                {daySlots.some(s => s.start >= s.end) && (
-                  <p className="text-xs text-red-500 mb-1">開始は終了より前にしてください</p>
-                )}
-
-                <button
-                  onClick={() => addSlot(day.date)}
-                  className={`text-sm ${T.accentText} hover:text-teal-800 font-medium transition-colors`}
-                >
-                  ＋ もう1枠
-                </button>
+                {/* Presets */}
+                <div className="flex flex-wrap gap-1.5 mt-1">
+                  {TIME_PRESETS.map(p => (
+                    <button
+                      key={p.label}
+                      onClick={() => addSlot(day.date, p.start, p.end)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium
+                                 bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-100/50 transition"
+                    >
+                      {p.label}
+                      <span className="text-teal-400">{p.sub}</span>
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => addSlot(day.date)}
+                    className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium
+                               bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-100/50 transition"
+                  >
+                    カスタム
+                  </button>
+                </div>
               </div>
             );
           })}
         </div>
 
-        {/* Create button */}
-        <button
-          onClick={handleCreate}
-          disabled={!canCreate || saving}
-          className={`w-full ${T.accentBg} text-white rounded-xl py-3.5 font-bold
-                     ${T.accentHover} disabled:opacity-40 transition text-base
-                     shadow-lg ${T.accentShadow}`}
-        >
-          {saving ? (
-            <span className="inline-flex items-center justify-center gap-2">
-              <Spinner /> 作成中...
-            </span>
-          ) : '共有リンクを作成'}
-        </button>
-
-        {name.trim() && slots.length > 0 && validSlots.length === 0 && (
-          <p className="text-center text-sm text-red-400 mt-2">有効な時間帯がありません</p>
-        )}
-        {name.trim() && slots.length === 0 && (
-          <p className="text-center text-sm text-slate-400 mt-3">↑ 日付をタップして空き時間を追加</p>
+        {/* Empty state hint */}
+        {name.trim() && slots.length === 0 && expandedDays.size === 0 && (
+          <div className="text-center py-4 mb-6">
+            <svg className="w-10 h-10 text-slate-200 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
+            <p className="text-sm text-slate-400">日付をタップして空き時間を追加</p>
+          </div>
         )}
 
+        {/* Inline CTA — desktop */}
+        <div className="hidden sm:block">
+          <button
+            onClick={handleCreate}
+            disabled={!canCreate || saving}
+            className="w-full bg-teal-600 text-white rounded-xl py-3.5 font-bold
+                       hover:bg-teal-700 disabled:opacity-40 transition text-base shadow-sm"
+          >
+            {saving ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <Spinner /> 作成中...
+              </span>
+            ) : '共有リンクを作成'}
+          </button>
+          {name.trim() && slots.length > 0 && validSlots.length === 0 && (
+            <p className="text-center text-sm text-red-400 mt-2">有効な時間帯がありません</p>
+          )}
+        </div>
+
+        {/* Recent shares */}
+        {ownedShares.length > 0 && (
+          <div className="mt-10 pt-6 border-t border-slate-100">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">最近の共有</p>
+            <div className="space-y-1">
+              {ownedShares.slice(-3).reverse().map(entry => (
+                <a
+                  key={entry.id}
+                  href={`/mini/s/${entry.id}`}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white transition group border border-transparent hover:border-slate-200"
+                >
+                  <span className="text-sm text-slate-500 group-hover:text-slate-700 transition truncate">
+                    {entry.name}の空き時間
+                  </span>
+                  <span className="text-slate-300 group-hover:text-teal-500 transition ml-2 shrink-0">→</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
         <p className="text-center text-xs text-slate-300 mt-12">
-          ChoiCrew Mini — ちょっと空き共有
+          ChoiCrew Mini
         </p>
+      </div>
+
+      {/* Sticky CTA — mobile */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-slate-100 p-4 sm:hidden z-30">
+        <div className="max-w-lg mx-auto">
+          <button
+            onClick={handleCreate}
+            disabled={!canCreate || saving}
+            className="w-full bg-teal-600 text-white rounded-xl py-3.5 font-bold
+                       hover:bg-teal-700 disabled:opacity-40 transition text-base"
+          >
+            {saving ? (
+              <span className="inline-flex items-center justify-center gap-2">
+                <Spinner /> 作成中...
+              </span>
+            ) : `共有リンクを作成${validSlots.length > 0 ? ` (${validSlots.length}枠)` : ''}`}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -477,12 +654,19 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
       aria-modal="true"
       aria-label="依頼を送る"
     >
-      <div ref={modalRef} className={`${T.bg} rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4
-                      animate-[slideUp_0.2s_ease-out]`}>
+      <div ref={modalRef} className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4 animate-[slideUp_0.2s_ease-out]">
+        {/* Drag handle — mobile */}
+        <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
+
         <h3 className="text-lg font-bold text-slate-800">依頼を送る</h3>
-        <p className="text-sm text-slate-500">
-          {formatSlotDate(slot.date)} {slot.start}〜{slot.end}
-        </p>
+
+        {/* Selected slot with time bar */}
+        <div className="bg-slate-50 rounded-xl p-3">
+          <p className="text-base font-semibold tracking-tight text-slate-700">
+            {formatSlotDate(slot.date)} {slot.start}–{slot.end}
+          </p>
+          <TimeBar start={slot.start} end={slot.end} />
+        </div>
 
         <div>
           <label htmlFor="req-name" className="block text-sm font-medium text-slate-600 mb-1">
@@ -493,8 +677,8 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
-            className={`w-full rounded-lg border ${T.border} px-3 py-2.5 text-base
-                       focus:outline-none focus:ring-2 ${T.ring} bg-white`}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base
+                       focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
             placeholder="山田太郎"
             maxLength={30}
             autoFocus
@@ -510,8 +694,8 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
             type="text"
             value={message}
             onChange={e => setMessage(e.target.value)}
-            className={`w-full rounded-lg border ${T.border} px-3 py-2.5 text-base
-                       focus:outline-none focus:ring-2 ${T.ring} bg-white`}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base
+                       focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
             placeholder="よろしくお願いします"
             maxLength={200}
           />
@@ -524,16 +708,16 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
         <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
-            className={`flex-1 py-2.5 rounded-xl border ${T.border} text-slate-600
-                       hover:bg-slate-50 font-medium transition`}
+            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
+                       hover:bg-slate-50 font-medium transition"
           >
             キャンセル
           </button>
           <button
             onClick={handleSend}
             disabled={!name.trim() || sending}
-            className={`flex-1 py-2.5 rounded-xl ${T.accentBg} text-white font-medium
-                       ${T.accentHover} disabled:opacity-40 transition`}
+            className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium
+                       hover:bg-teal-700 disabled:opacity-40 transition"
           >
             {sending ? '送信中...' : '送信する'}
           </button>
@@ -618,29 +802,22 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const requestsForSlot = (s: { date: string; start: string; end: string }) =>
     requests.filter(r => r.slot_date === s.date && r.slot_start === s.start && r.slot_end === s.end);
 
-  if (loading) {
-    return (
-      <div className={`min-h-screen ${T.bgSub} flex items-center justify-center`}>
-        <div className="text-center">
-          <Spinner className="h-8 w-8 text-teal-500 mx-auto mb-3" />
-          <p className="text-slate-400 text-sm">読み込み中...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <ShareViewSkeleton />;
 
   if (notFound) {
     return (
-      <div className={`min-h-screen ${T.bgSub} flex items-center justify-center px-4`}>
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
         <div className="text-center">
           <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">🔍</span>
+            <svg className="w-7 h-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
           </div>
           <p className="text-slate-700 text-lg font-semibold mb-1">リンクが見つかりません</p>
           <p className="text-slate-400 text-sm mb-6">期限切れまたは無効なリンクです</p>
           <a
             href="/mini/"
-            className={`inline-block ${T.accentBg} text-white rounded-xl px-6 py-3 font-medium ${T.accentHover} transition`}
+            className="inline-block bg-teal-600 text-white rounded-xl px-6 py-3 font-medium hover:bg-teal-700 transition"
           >
             空き時間を作成する
           </a>
@@ -656,11 +833,17 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     return a.start.localeCompare(b.start);
   });
 
+  const groupedSlots: Record<string, typeof sortedSlots> = {};
+  for (const slot of sortedSlots) {
+    if (!groupedSlots[slot.date]) groupedSlots[slot.date] = [];
+    groupedSlots[slot.date].push(slot);
+  }
+
   const expiryLabel = format(share.expires_at.toDate(), 'M/d(E)', { locale: ja });
-  const canShare = typeof navigator.share === 'function';
+  const canShareNative = typeof navigator.share === 'function';
 
   return (
-    <div className={`min-h-screen ${T.bgSub} print:bg-white`}>
+    <div className="min-h-screen bg-slate-50 print:bg-white">
       {toast.UI}
       <div className="max-w-lg mx-auto px-4 py-8 sm:py-12">
 
@@ -671,7 +854,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
         {/* Just-created banner */}
         {justCreated && (
-          <div className={`${T.accentLight} border ${T.accentBorder} rounded-2xl p-4 mb-5 print:hidden`}>
+          <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4 mb-5 print:hidden">
             <p className="font-semibold text-teal-900">共有リンクを作成しました</p>
             <p className="text-sm text-teal-700 mt-1">
               下のリンクを相手に送ってください（{expiryLabel}まで有効）
@@ -681,29 +864,29 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
         {/* Share URL + actions (owner) */}
         {isOwner && (
-          <div className={`${T.bg} rounded-2xl border ${T.border} p-4 mb-6 print:hidden`}>
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-6 print:hidden">
             <div className="flex items-center gap-2 mb-3">
               <input
                 type="text"
                 value={url}
                 readOnly
-                className={`flex-1 rounded-lg border ${T.border} px-3 py-2 text-sm bg-slate-50 text-slate-500 truncate`}
+                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm bg-slate-50 text-slate-500 truncate"
               />
               <button
                 onClick={handleCopy}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-                  copied ? `${T.accentLight} ${T.accentText}` : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  copied ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 {copied ? 'コピー済み' : 'コピー'}
               </button>
             </div>
             <div className="flex gap-2">
-              {canShare ? (
+              {canShareNative ? (
                 <button
                   onClick={handleShare}
-                  className={`flex-1 py-2.5 rounded-xl text-center text-sm font-medium
-                             ${T.accentBg} text-white ${T.accentHover} transition`}
+                  className="flex-1 py-2.5 rounded-xl text-center text-sm font-medium
+                             bg-teal-600 text-white hover:bg-teal-700 transition"
                 >
                   共有する
                 </button>
@@ -738,84 +921,98 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         )}
 
         {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-xl font-bold text-slate-800">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
             {share.name}さんの空き時間
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
-            {expiryLabel}まで有効
-          </p>
+          <div className="flex items-center justify-center gap-3 mt-2 text-sm text-slate-400">
+            <span>{expiryLabel}まで有効</span>
+            {isOwner && requests.length > 0 && (
+              <>
+                <span className="w-1 h-1 rounded-full bg-slate-300" />
+                <span className="text-teal-600 font-medium">{requests.length}件の依頼</span>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Request summary for owner */}
-        {isOwner && requests.length > 0 && (
-          <div className="flex items-center gap-2 mb-4 px-1">
-            <span className={`inline-flex items-center gap-1.5 ${T.accentLight} ${T.accentText} text-sm font-medium px-3 py-1.5 rounded-full`}>
-              {requests.length}件の依頼
-            </span>
-          </div>
-        )}
-
-        {/* Slot cards */}
-        <div className="space-y-3 mb-8">
-          {sortedSlots.map((slot, i) => {
-            const key = slotKey(slot);
-            const sent = sentSlots.has(key);
-            const reqs = requestsForSlot(slot);
+        {/* Date-grouped slot cards */}
+        <div className="space-y-6 mb-8">
+          {Object.entries(groupedSlots).map(([date, dateSlots]) => {
+            const today = isDateToday(date);
             return (
-              <div
-                key={i}
-                className={`${T.bg} rounded-2xl border ${T.border} p-4 print:border-slate-300`}
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-400">
-                      {formatSlotDate(slot.date)}
-                    </p>
-                    <p className="text-xl font-bold text-slate-800 mt-0.5">
-                      {slot.start} – {slot.end}
-                    </p>
-                    {!expired && reqs.length > 0 && !isOwner && (
-                      <p className={`text-xs ${T.accentText} font-medium mt-1`}>{reqs.length}人が希望</p>
-                    )}
-                  </div>
-                  <div className="print:hidden">
-                    {isOwner ? (
-                      reqs.length > 0 ? (
-                        <span className={`text-sm ${T.accentText} font-medium ${T.accentLight} px-3 py-1.5 rounded-lg`}>
-                          {reqs.length}件
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-300">依頼なし</span>
-                      )
-                    ) : expired ? (
-                      <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">期限切れ</span>
-                    ) : sent ? (
-                      <span className={`text-sm ${T.accentText} font-medium ${T.accentLight} px-3 py-1.5 rounded-lg`}>
-                        依頼済み
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => setRequestSlot(slot)}
-                        className={`${T.accentBg} text-white text-sm font-medium rounded-xl
-                                   px-5 py-2.5 ${T.accentHover} transition shadow-sm`}
-                      >
-                        依頼する
-                      </button>
-                    )}
-                  </div>
+              <div key={date}>
+                {/* Date header */}
+                <div className="flex items-center gap-2 mb-2.5 px-1">
+                  {today && <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />}
+                  <h2 className={`text-sm font-semibold ${today ? 'text-teal-700' : 'text-slate-400'}`}>
+                    {formatSlotDate(date)}
+                    {today && <span className="ml-1.5 text-xs font-normal text-teal-500">今日</span>}
+                  </h2>
                 </div>
 
-                {isOwner && reqs.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-100 space-y-1">
-                    {reqs.map(r => (
-                      <p key={r.id} className="text-sm text-slate-500">
-                        <span className="font-medium text-slate-600">{r.requester_name}</span>
-                        {r.message && <span className="text-slate-400">「{r.message}」</span>}
-                      </p>
-                    ))}
-                  </div>
-                )}
+                {/* Slots for this date */}
+                <div className="space-y-2.5">
+                  {dateSlots.map((slot, i) => {
+                    const key = slotKey(slot);
+                    const sent = sentSlots.has(key);
+                    const reqs = requestsForSlot(slot);
+                    return (
+                      <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 print:border-slate-300">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-2xl font-semibold tracking-tight text-slate-800">
+                              {slot.start}<span className="text-slate-300 mx-1.5">–</span>{slot.end}
+                            </p>
+                            <TimeBar start={slot.start} end={slot.end} />
+                            {!expired && reqs.length > 0 && !isOwner && (
+                              <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}人が希望</p>
+                            )}
+                          </div>
+                          <div className="ml-3 shrink-0 print:hidden">
+                            {isOwner ? (
+                              reqs.length > 0 ? (
+                                <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
+                                  {reqs.length}件
+                                </span>
+                              ) : (
+                                <span className="text-xs text-slate-300">依頼なし</span>
+                              )
+                            ) : expired ? (
+                              <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">期限切れ</span>
+                            ) : sent ? (
+                              <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
+                                依頼済み
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setRequestSlot(slot)}
+                                className="bg-teal-600 text-white text-sm font-medium rounded-xl
+                                           px-5 py-2.5 hover:bg-teal-700 transition shadow-sm"
+                              >
+                                依頼する
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Owner: requester avatars */}
+                        {isOwner && reqs.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-slate-100">
+                            <div className="flex flex-wrap gap-2">
+                              {reqs.map(r => (
+                                <div key={r.id} className="flex items-center gap-1.5 bg-slate-50 rounded-full pl-1 pr-2.5 py-1">
+                                  <Avatar name={r.requester_name} />
+                                  <span className="text-xs font-medium text-slate-600">{r.requester_name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
@@ -834,14 +1031,14 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           <p className="text-xs text-slate-400 mt-2">QRコードを読み取ると空き時間を確認できます</p>
         </div>
 
-        {/* Footer CTA */}
+        {/* Footer CTA (visitor) */}
         {!isOwner && (
           <div className="text-center border-t border-slate-100 pt-8 mt-4 print:hidden">
             <p className="text-sm text-slate-500 mb-3">自分も空き時間を共有しませんか？</p>
             <a
               href="/mini/"
-              className={`inline-block ${T.accentBg} text-white rounded-xl px-8 py-3
-                         font-medium ${T.accentHover} transition shadow-sm`}
+              className="inline-block bg-teal-600 text-white rounded-xl px-8 py-3
+                         font-medium hover:bg-teal-700 transition shadow-sm"
             >
               空き時間を作成する
             </a>
@@ -857,7 +1054,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         )}
 
         <p className="text-center text-xs text-slate-300 mt-12 print:mt-4">
-          ChoiCrew Mini — ちょっと空き共有
+          ChoiCrew Mini
         </p>
       </div>
 
@@ -900,8 +1097,8 @@ export default function MiniApp() {
     return () => window.removeEventListener('popstate', handlePop);
   }, []);
 
-  const handleCreated = (id: string) => {
-    saveOwnedShare(id);
+  const handleCreated = (id: string, name: string) => {
+    saveOwnedShare(id, name);
     window.history.pushState({}, '', `/mini/s/${id}`);
     setShareId(id);
     setJustCreated(true);
@@ -930,11 +1127,7 @@ export default function MiniApp() {
 
   switch (view) {
     case 'loading':
-      return (
-        <div className={`min-h-screen ${T.bgSub} flex items-center justify-center`}>
-          <Spinner className="h-8 w-8 text-teal-500" />
-        </div>
-      );
+      return <ShareViewSkeleton />;
     case 'create':
       return <CreateView onCreated={handleCreated} />;
     case 'share':
