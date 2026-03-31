@@ -18,6 +18,7 @@ interface TimeSlot {
   end: string;
 }
 
+
 interface ShareData {
   name: string;
   slots: { date: string; start: string; end: string }[];
