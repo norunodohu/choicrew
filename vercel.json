@@ -18,6 +18,10 @@
       "dest": "server.ts"
     },
     {
+      "src": "/mini/s/(.*)",
+      "dest": "server.ts"
+    },
+    {
       "src": "/mini/(.*)",
       "dest": "/index.html"
     },

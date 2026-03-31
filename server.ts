@@ -5,6 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -257,6 +258,61 @@ app.post("/api/auth/google/firebase-token", async (req, res) => {
   } catch (error: unknown) {
     const err = error as { message?: string };
     res.status(500).json({ error: err.message || "Failed to create custom token" });
+  }
+});
+
+/* ================================================================
+   OGP for Mini share pages
+   ================================================================ */
+
+const OGP_BOT_UA = /bot|crawler|spider|preview|slack|discord|twitter|facebook|line|telegram|whatsapp|signal|embedly|quora|pinterest|facebookexternalhit|Twitterbot|LinkedInBot/i;
+
+app.get("/mini/s/:shareId", async (req, res, next) => {
+  const ua = req.get("user-agent") || "";
+  if (!OGP_BOT_UA.test(ua)) return next();  // let SPA handle it
+
+  const { shareId } = req.params;
+  const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+
+  try {
+    const adminDb = getFirestore();
+    const snap = await adminDb.doc(`mini_shares/${shareId}`).get();
+
+    if (!snap.exists) {
+      return next();
+    }
+
+    const data = snap.data()!;
+    const name = data.name || "";
+    const slotCount = Array.isArray(data.slots) ? data.slots.length : 0;
+    const title = `${name}さんの空き時間 | ChoiCrew Mini`;
+    const desc = `${slotCount}件の空き時間が共有されています。タップして依頼を送りましょう。`;
+    const pageUrl = `${appUrl}/mini/s/${shareId}`;
+
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.send(`<!DOCTYPE html>
+<html lang="ja"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(desc)}">
+<meta property="og:type" content="website">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(desc)}">
+<meta property="og:url" content="${esc(pageUrl)}">
+<meta property="og:site_name" content="ChoiCrew Mini">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(desc)}">
+</head><body>
+<p>${esc(title)}</p>
+<script>window.location.replace("${esc(pageUrl)}");</script>
+</body></html>`);
+  } catch (e) {
+    console.error("OGP generation error:", e);
+    next();
   }
 });
 
