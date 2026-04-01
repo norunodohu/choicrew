@@ -60,7 +60,7 @@ const BellIcon = ({ className }: { className?: string }) => (
    Types
    ================================================================ */
 
-type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern' | 'anime' | 'konbini' | 'sunset';
+type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern' | 'anime' | 'konbini' | 'sunset' | 'darkbg';
 
 interface TimeSlot {
   id: string;
@@ -506,6 +506,16 @@ const THEMES: Record<ThemeKey, {
     subText: 'text-orange-400', timeText: 'text-rose-900', labelText: 'text-rose-700',
     cardPreviewFrom: '#fb923c', cardPreviewTo: '#f43f5e',
     previewBg: 'linear-gradient(135deg,#fff7ed,#fce7f3,#fef3c7)', previewCard: '#ffffff', previewBorder: '#fed7aa',
+  },
+  darkbg: {
+    label: 'ダークフォト', emoji: '🌃',
+    pageBg: 'bg-gray-950',
+    card: 'bg-black/60 backdrop-blur border border-white/10',
+    accentBtn: 'bg-white/90 text-gray-900 hover:bg-white active:scale-95',
+    accentText: 'text-white', headingText: 'text-white',
+    subText: 'text-white/50', timeText: 'text-white', labelText: 'text-white/80',
+    cardPreviewFrom: '#1a1a2e', cardPreviewTo: '#16213e',
+    previewBg: 'linear-gradient(135deg,#1a1a2e,#16213e,#0f3460)', previewCard: 'rgba(255,255,255,0.08)', previewBorder: 'rgba(255,255,255,0.15)',
   },
 };
 
@@ -1415,6 +1425,14 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     <div className={`min-h-screen ${T.pageBg} print:bg-white relative overflow-x-hidden`}>
       {toast.UI}
       {/* ── コンビニテーマ背景画像 ── */}
+      {themeKey === 'darkbg' && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+          backgroundImage: "url('/dark-bg.jpg')",
+          backgroundSize: 'cover', backgroundPosition: 'center',
+          opacity: 0.55,
+        }} />
+      )}
       {themeKey === 'konbini' && (
         <div
           className="pointer-events-none fixed inset-0 print:hidden"
