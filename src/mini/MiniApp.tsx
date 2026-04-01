@@ -1445,6 +1445,18 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           }}
         />
       )}
+      {themeKey === 'himawari' && (
+        <div
+          className="pointer-events-none fixed inset-0 print:hidden"
+          aria-hidden="true"
+          style={{
+            backgroundImage: "url('/himawari-bg.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.22,
+          }}
+        />
+      )}
       {/* ── アニメテーマ装飾 ── */}
       {themeKey === 'anime' && (
         <div className="pointer-events-none select-none print:hidden" aria-hidden="true">
