@@ -424,9 +424,21 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   const [bookingMode, setBookingMode] = useState<'multiple' | 'exclusive'>('multiple');
   const [theme, setTheme] = useState<ThemeKey>('simple');
   const [saving, setSaving] = useState(false);
+  const [confirmDeleteShareId, setConfirmDeleteShareId] = useState<string | null>(null);
   const toast = useToast();
   const days = getDays(7);
   const ownedShares = loadOwnedShares();
+
+  const removeOwnedShare = (id: string) => {
+    try {
+      const raw = localStorage.getItem('mini_owned_shares');
+      if (raw) {
+        const entries = JSON.parse(raw) as OwnedShareEntry[];
+        localStorage.setItem('mini_owned_shares', JSON.stringify(entries.filter(e => e.id !== id)));
+      }
+    } catch { /* */ }
+    location.reload();
+  };
 
   const slotsFor = (date: string) => slots.filter(s => s.date === date);
 
@@ -606,23 +618,39 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
               if (activeShares.length === 0) return null;
               return (
                 <div className="mt-10 pt-6 border-t border-slate-100">
-                  <div className="flex items-center justify-between mb-3 px-1">
+                  <div className="flex items-center mb-3 px-1">
                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">作成済みの予定</p>
-                    <button
-                      onClick={() => { localStorage.removeItem('mini_owned_shares'); location.reload(); }}
-                      className="text-xs text-slate-400 hover:text-red-500 transition"
-                    >リストをクリア</button>
                   </div>
                   <div className="space-y-1">
                     {activeShares.slice(-5).reverse().map(entry => (
-                      <a key={entry.id} href={`/mini/s/${entry.id}`}
-                        className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white transition group border border-transparent hover:border-slate-200">
-                        <span className="text-sm text-slate-600 group-hover:text-slate-800 transition truncate font-medium">{entry.name}</span>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          {entry.dateRange && <span className="text-xs text-slate-400">{entry.dateRange}</span>}
-                          <span className="text-slate-300 group-hover:text-teal-500 transition">→</span>
-                        </div>
-                      </a>
+                      <div key={entry.id} className="flex items-center gap-1 group">
+                        <a href={`/mini/s/${entry.id}`}
+                          className="flex-1 flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white transition border border-transparent hover:border-slate-200 min-w-0">
+                          <span className="text-sm text-slate-600 group-hover:text-slate-800 transition truncate font-medium">{entry.name}</span>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            {entry.dateRange && <span className="text-xs text-slate-400">{entry.dateRange}</span>}
+                            <span className="text-slate-300 group-hover:text-teal-500 transition">→</span>
+                          </div>
+                        </a>
+                        {confirmDeleteShareId === entry.id ? (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={() => removeOwnedShare(entry.id)}
+                              className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition"
+                            >削除</button>
+                            <button
+                              onClick={() => setConfirmDeleteShareId(null)}
+                              className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition"
+                            >戻る</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteShareId(entry.id)}
+                            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
+                            aria-label="削除"
+                          >✕</button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1170,10 +1198,13 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     }
   };
 
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+
   const handleCancel = async (requestId: string) => {
     try {
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'cancelled' });
-      toast.show('キャンセルしました', 'success');
+      setConfirmCancelId(null);
+      toast.show('承認を取り消しました', 'success');
     } catch (err) {
       console.error(err);
       toast.show('エラーが発生しました', 'error');
@@ -1439,12 +1470,26 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                       </div>
                     ) : r.status === 'approved' ? (
                       <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => handleCancel(r.id)}
-                          className="px-3 py-1 rounded-lg bg-red-50 text-red-500 text-xs font-medium hover:bg-red-100 active:scale-95 transition-all border border-red-100"
-                        >
-                          承認をキャンセル
-                        </button>
+                        {confirmCancelId === r.id ? (
+                          <>
+                            <span className="text-xs text-slate-500 self-center">本当に取り消しますか？</span>
+                            <button
+                              onClick={() => handleCancel(r.id)}
+                              className="px-3 py-1 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 active:scale-95 transition-all"
+                            >取り消す</button>
+                            <button
+                              onClick={() => setConfirmCancelId(null)}
+                              className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium hover:bg-slate-200 active:scale-95 transition-all"
+                            >戻る</button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmCancelId(r.id)}
+                            className="px-3 py-1 rounded-lg bg-red-50 text-red-500 text-xs font-medium hover:bg-red-100 active:scale-95 transition-all border border-red-100"
+                          >
+                            承認を取り消す
+                          </button>
+                        )}
                       </div>
                     ) : null}
                   </div>
