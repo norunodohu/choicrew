@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { db } from '../firebase';
+import { db, messaging } from '../firebase';
 import {
   doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot,
   query, where, Timestamp,
 } from 'firebase/firestore';
+import { getToken } from 'firebase/messaging';
 import { format, addDays } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -632,6 +633,22 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
         status: 'pending',
         created_at: Timestamp.fromDate(new Date()),
       });
+      // オーナーにFCMプッシュ通知を送信
+      try {
+        const shareSnap = await getDoc(doc(db, 'mini_shares', shareId));
+        const fcmToken = shareSnap.data()?.fcm_token;
+        if (fcmToken) {
+          await fetch('/api/notify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token: fcmToken,
+              title: '新着依頼があります',
+              body: `${name.trim()}さんから依頼が届きました`,
+            }),
+          });
+        }
+      } catch { /* 通知失敗は無視 */ }
       saveRequesterName(name.trim());
       onSent();
     } catch (err) {
@@ -740,6 +757,8 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const toast = useToast();
 
   const url = makeShareUrl(shareId);
+  const prevPendingIdsRef = useRef<Set<string> | null>(null);
+  const fcmRegisteredRef = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -765,9 +784,53 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
       // windowにrequestsをセットしイベント発火（MiniAppでバッジ用に参照）
       (window as any).__mini_requests = reqArr;
       window.dispatchEvent(new Event('mini_requests_update'));
+      // ページ内通知: 新着pending依頼を検知
+      if (isOwner) {
+        const pendingMap = new Map(
+          reqArr
+            .filter(r => !r.status || r.status === 'pending')
+            .map(r => [r.id, r] as [string, RequestEntry])
+        );
+        if (prevPendingIdsRef.current !== null) {
+          const newReqs = [...pendingMap.values()].filter(r => !prevPendingIdsRef.current!.has(r.id));
+          if (newReqs.length > 0 && Notification.permission === 'granted') {
+            const r = newReqs[0];
+            new Notification('新着依頼があります', {
+              body: `${r.requester_name}さんから ${formatSlotDate(r.slot_date)} ${r.slot_start}–${r.slot_end} の依頼`,
+              icon: '/choicrew-mark.svg',
+              tag: 'choicrew-new-request',
+            });
+          }
+        }
+        prevPendingIdsRef.current = new Set(pendingMap.keys());
+      }
     });
     return () => unsub();
   }, [shareId]);
+
+  // FCM Web Push: オーナーのみトークンを取得し Firestore に保存
+  useEffect(() => {
+    if (!isOwner || fcmRegisteredRef.current) return;
+    fcmRegisteredRef.current = true;
+    const registerFCM = async () => {
+      if (!('Notification' in window)) return;
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') return;
+      if (!messaging) return;
+      const vapidKey = (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY;
+      if (!vapidKey) return;
+      try {
+        const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
+        if (token) {
+          await updateDoc(doc(db, 'mini_shares', shareId), { fcm_token: token });
+        }
+      } catch (err) {
+        console.error('FCM registration failed:', err);
+      }
+    };
+    registerFCM();
+  }, [isOwner, shareId]);
 
   const handleCopy = async () => {
     try {

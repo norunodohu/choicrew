@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
 import { fileURLToPath } from "url";
 
 dotenv.config();
@@ -46,6 +47,30 @@ if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 }
+
+// FCM Web Push 通知送信エンドポイント
+app.post("/api/notify", async (req, res) => {
+  const { token, title, body } = req.body as { token?: string; title?: string; body?: string };
+  if (!token || typeof token !== "string") {
+    return res.status(400).json({ error: "token required" });
+  }
+  if (!getApps().length) {
+    return res.status(503).json({ error: "admin not configured" });
+  }
+  try {
+    await getMessaging().send({
+      token,
+      notification: {
+        title: title || "新着依頼があります",
+        body: body || "依頼が届きました",
+      },
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("FCM send error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
 
 app.get("/api/health", (req, res) => {
   res.json({

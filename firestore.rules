@@ -109,7 +109,10 @@ service cloud.firestore {
     match /mini_shares/{shareId} {
       allow read: if true;
       allow create: if true;
-      allow update, delete: if false;
+      // fcm_token フィールドのみ更新を許可（プッシュ通知トークン登録用）
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcm_token'])
+                    && request.resource.data.fcm_token is string;
+      allow delete: if false;
     }
 
     match /mini_requests/{requestId} {
