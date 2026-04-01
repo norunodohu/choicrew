@@ -291,6 +291,55 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
   );
 }
 
+function TimeSpinner({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const intervalRef = useRef<number | null>(null);
+  const valueRef = useRef(value);
+  valueRef.current = value;
+
+  const adjust = (field: 'h' | 'm', delta: number) => {
+    const [h, m] = valueRef.current.split(':').map(Number);
+    let newH = h, newM = m;
+    if (field === 'h') {
+      newH = (h + delta + 24) % 24;
+    } else {
+      newM = ((m + delta) % 60 + 60) % 60;
+    }
+    const newVal = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+    valueRef.current = newVal;
+    onChange(newVal);
+  };
+
+  const startRepeat = (field: 'h' | 'm', delta: number) => {
+    adjust(field, delta);
+    intervalRef.current = window.setInterval(() => adjust(field, delta), 130);
+  };
+
+  const stopRepeat = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+  };
+
+  useEffect(() => () => stopRepeat(), []);
+
+  const [hStr, mStr] = value.split(':');
+  const btnCls = "px-2 py-0.5 text-slate-300 hover:text-teal-500 active:text-teal-600 text-xs leading-none select-none transition-colors";
+
+  return (
+    <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 px-2 py-1 bg-white">
+      <div className="flex flex-col items-center">
+        <button onMouseDown={() => startRepeat('h', 1)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('h', 1); }} onTouchEnd={stopRepeat} className={btnCls}>▲</button>
+        <span className="w-7 text-center font-mono text-base font-semibold tabular-nums">{hStr}</span>
+        <button onMouseDown={() => startRepeat('h', -1)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('h', -1); }} onTouchEnd={stopRepeat} className={btnCls}>▼</button>
+      </div>
+      <span className="text-slate-400 font-bold text-lg leading-none px-0.5">:</span>
+      <div className="flex flex-col items-center">
+        <button onMouseDown={() => startRepeat('m', 15)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('m', 15); }} onTouchEnd={stopRepeat} className={btnCls}>▲</button>
+        <span className="w-7 text-center font-mono text-base font-semibold tabular-nums">{mStr}</span>
+        <button onMouseDown={() => startRepeat('m', -15)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('m', -15); }} onTouchEnd={stopRepeat} className={btnCls}>▼</button>
+      </div>
+    </div>
+  );
+}
+
 function TimeBar({ start, end }: { start: string; end: string }) {
   const l = timeToPercent(start);
   const w = Math.max(timeToPercent(end) - l, 3);
@@ -570,9 +619,9 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             {daySlots.map(slot => (
               <div key={slot.id} className="mb-3 animate-[fadeIn_0.15s_ease-out]">
                 <div className="flex items-center gap-2">
-                  <input type="time" value={slot.start} onChange={e => updateSlot(slot.id, 'start', e.target.value)} className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-base text-center bg-white" />
+                  <TimeSpinner value={slot.start} onChange={v => updateSlot(slot.id, 'start', v)} />
                   <span className="text-slate-300 text-sm">–</span>
-                  <input type="time" value={slot.end} onChange={e => updateSlot(slot.id, 'end', e.target.value)} className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-base text-center bg-white" />
+                  <TimeSpinner value={slot.end} onChange={v => updateSlot(slot.id, 'end', v)} />
                   <button onClick={() => removeSlot(slot.id)} className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg" aria-label="削除">✕</button>
                 </div>
                 {slot.start < slot.end && <TimeBar start={slot.start} end={slot.end} />}
