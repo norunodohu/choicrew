@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../firebase';
 import {
-  doc, setDoc, getDoc, collection, addDoc, onSnapshot,
+  doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot,
   query, where, Timestamp,
 } from 'firebase/firestore';
 import { format, addDays } from 'date-fns';
@@ -52,6 +52,7 @@ interface RequestEntry {
   slot_end: string;
   requester_name: string;
   message: string;
+  status?: 'pending' | 'approved' | 'declined';
   created_at: Timestamp;
 }
 
@@ -800,6 +801,26 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const requestsForSlot = (s: { date: string; start: string; end: string }) =>
     requests.filter(r => r.slot_date === s.date && r.slot_start === s.start && r.slot_end === s.end);
 
+  const handleApprove = async (requestId: string) => {
+    try {
+      await updateDoc(doc(db, 'mini_requests', requestId), { status: 'approved' });
+      toast.show('承認しました', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('エラーが発生しました', 'error');
+    }
+  };
+
+  const handleDecline = async (requestId: string) => {
+    try {
+      await updateDoc(doc(db, 'mini_requests', requestId), { status: 'declined' });
+      toast.show('辞退しました', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('エラーが発生しました', 'error');
+    }
+  };
+
   if (loading) return <ShareViewSkeleton />;
 
   if (notFound) {
@@ -940,7 +961,11 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
               {requests
                 .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
                 .map(r => (
-                <div key={r.id} className="flex items-start gap-3 p-2.5 rounded-xl bg-slate-50">
+                <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
+                  r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
+                  r.status === 'declined' ? 'bg-slate-100 border border-slate-200 opacity-60' :
+                  'bg-slate-50'
+                }`}>
                   <Avatar name={r.requester_name} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2 flex-wrap">
@@ -948,10 +973,32 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                       <span className="text-[11px] text-slate-400">
                         {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
                       </span>
+                      {r.status === 'approved' && (
+                        <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
+                      )}
+                      {r.status === 'declined' && (
+                        <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
+                      )}
                     </div>
                     {r.message && (
                       <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
                     )}
+                    {!r.status || r.status === 'pending' ? (
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => handleApprove(r.id)}
+                          className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 active:scale-95 transition-all"
+                        >
+                          承認
+                        </button>
+                        <button
+                          onClick={() => handleDecline(r.id)}
+                          className="px-3 py-1 rounded-lg bg-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-300 active:scale-95 transition-all"
+                        >
+                          辞退
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -1104,6 +1151,18 @@ export default function MiniApp() {
   const [justCreated, setJustCreated] = useState(false);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
   const [badgeCounts, setBadgeCounts] = useState({ approved: 0, pending: 0 });
+
+  useEffect(() => {
+    const update = () => {
+      const reqs: RequestEntry[] = (window as any).__mini_requests || [];
+      const approved = reqs.filter(r => r.status === 'approved').length;
+      const pending = reqs.filter(r => !r.status || r.status === 'pending').length;
+      setBadgeCounts({ approved, pending });
+      if (pending > 0) setShowBadgeModal(true);
+    };
+    window.addEventListener('mini_requests_update', update);
+    return () => window.removeEventListener('mini_requests_update', update);
+  }, []);
 
   useEffect(() => {
     const path = window.location.pathname;
