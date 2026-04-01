@@ -109,10 +109,15 @@ service cloud.firestore {
     match /mini_shares/{shareId} {
       allow read: if true;
       allow create: if true;
-      // fcm_token フィールドのみ更新を許可（プッシュ通知トークン登録用）
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcm_token'])
-                    && request.resource.data.fcm_token is string;
-      allow delete: if false;
+      // fcm_token or slots フィールドの更新を許可
+      allow update: if (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcm_token'])
+                    ) || (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['slots'])
+                      && request.resource.data.slots is list
+                    );
+      // オーナーが削除できる（認証なしのためクライアント信頼）
+      allow delete: if true;
     }
 
     match /mini_requests/{requestId} {
@@ -121,9 +126,9 @@ service cloud.firestore {
                     && request.resource.data.requester_name is string
                     && request.resource.data.requester_name.size() > 0
                     && request.resource.data.requester_name.size() <= 30;
-      // statusフィールドのみ approved/declined への更新を許可（承認・辞退操作）
+      // statusフィールドのみ approved/declined/cancelled への更新を許可
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-                    && request.resource.data.status in ['approved', 'declined'];
+                    && request.resource.data.status in ['approved', 'declined', 'cancelled'];
       allow delete: if false;
     }
   }

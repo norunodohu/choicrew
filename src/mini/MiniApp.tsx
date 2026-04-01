@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { db, messaging } from '../firebase';
 import {
-  doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot,
+  doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot,
   query, where, Timestamp,
 } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
@@ -53,7 +53,7 @@ interface RequestEntry {
   slot_end: string;
   requester_name: string;
   message: string;
-  status?: 'pending' | 'approved' | 'declined';
+  status?: 'pending' | 'approved' | 'declined' | 'cancelled';
   created_at: Timestamp;
 }
 
@@ -163,6 +163,19 @@ function loadRequesterName(): string {
 
 function saveRequesterName(name: string) {
   try { localStorage.setItem('choicrew_mini_requester', name); } catch { /* */ }
+}
+
+function loadSentRequestIds(shareId: string): Map<string, string> {
+  try {
+    const raw = localStorage.getItem(`mini_sent_ids_${shareId}`);
+    return raw ? new Map(JSON.parse(raw)) : new Map();
+  } catch { return new Map(); }
+}
+
+function saveSentRequestId(shareId: string, key: string, requestId: string) {
+  const map = loadSentRequestIds(shareId);
+  map.set(key, requestId);
+  try { localStorage.setItem(`mini_sent_ids_${shareId}`, JSON.stringify([...map.entries()])); } catch { /* */ }
 }
 
 function saveOwnedShare(shareId: string, name: string) {
@@ -589,7 +602,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
   shareId: string;
   slot: { date: string; start: string; end: string };
   onClose: () => void;
-  onSent: () => void;
+  onSent: (requestId: string) => void;
 }) {
   const [name, setName] = useState(loadRequesterName);
   const [message, setMessage] = useState('');
@@ -623,7 +636,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
     setSending(true);
     setError('');
     try {
-      await addDoc(collection(db, 'mini_requests'), {
+      const reqRef = await addDoc(collection(db, 'mini_requests'), {
         share_id: shareId,
         slot_date: slot.date,
         slot_start: slot.start,
@@ -650,7 +663,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
         }
       } catch { /* 通知失敗は無視 */ }
       saveRequesterName(name.trim());
-      onSent();
+      onSent(reqRef.id);
     } catch (err) {
       console.error('Failed to send request:', err);
       setError('送信に失敗しました。もう一度お試しください。');
@@ -759,12 +772,19 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     try { return localStorage.getItem(`mini_notif_${shareId}`) !== 'off'; } catch { return true; }
   });
   const [showNotifExpand, setShowNotifExpand] = useState(false);
+  const [editingSlots, setEditingSlots] = useState(false);
+  const [draftSlots, setDraftSlots] = useState<TimeSlot[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [savingSlots, setSavingSlots] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [myRequestStatuses, setMyRequestStatuses] = useState<Map<string, { status: string; id: string }>>(new Map());
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
 
   const url = makeShareUrl(shareId);
   const prevPendingIdsRef = useRef<Set<string> | null>(null);
   const fcmRegisteredRef = useRef(false);
+  const myStatusRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     const load = async () => {
@@ -809,6 +829,30 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           }
         }
         prevPendingIdsRef.current = new Set(pendingMap.keys());
+      } else {
+        // 依頼者: 自分の依頼のステータス変化を検知
+        const sentIds = loadSentRequestIds(shareId);
+        const newStatusMap = new Map<string, { status: string; id: string }>();
+        for (const [key, reqId] of sentIds.entries()) {
+          const req = reqArr.find(r => r.id === reqId);
+          if (req) {
+            const prevStatus = myStatusRef.current.get(key);
+            const newStatus = req.status || 'pending';
+            newStatusMap.set(key, { status: newStatus, id: reqId });
+            if (prevStatus !== undefined && prevStatus !== newStatus) {
+              const msgs: Record<string, string> = {
+                approved: '依頼が承認されました！',
+                declined: '依頼が辞退されました',
+                cancelled: '依頼がキャンセルされました',
+              };
+              if ('Notification' in window && Notification.permission === 'granted' && msgs[newStatus]) {
+                new Notification(msgs[newStatus], { icon: '/choicrew-mark.svg', tag: 'choicrew-status-change' });
+              }
+            }
+            myStatusRef.current.set(key, newStatus);
+          }
+        }
+        if (newStatusMap.size > 0) setMyRequestStatuses(newStatusMap);
       }
     });
     return () => unsub();
@@ -868,8 +912,9 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     if (!shared) handleCopy();
   };
 
-  const handleSent = (slot: { date: string; start: string; end: string }) => {
+  const handleSent = (slot: { date: string; start: string; end: string }, requestId: string) => {
     const key = slotKey(slot);
+    saveSentRequestId(shareId, key, requestId);
     const next = saveSentSlot(shareId, key, sentSlots);
     setSentSlots(next);
     setRequestSlot(null);
@@ -896,6 +941,58 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     } catch (err) {
       console.error(err);
       toast.show('エラーが発生しました', 'error');
+    }
+  };
+
+  const handleCancel = async (requestId: string) => {
+    try {
+      await updateDoc(doc(db, 'mini_requests', requestId), { status: 'cancelled' });
+      toast.show('キャンセルしました', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('エラーが発生しました', 'error');
+    }
+  };
+
+  const handleSaveSlots = async () => {
+    setSavingSlots(true);
+    try {
+      const validSlots = draftSlots
+        .filter(s => s.start < s.end)
+        .map(({ date, start, end }) => ({ date, start, end }));
+      if (validSlots.length === 0) {
+        toast.show('有効な時間帯がありません', 'error');
+        setSavingSlots(false);
+        return;
+      }
+      await updateDoc(doc(db, 'mini_shares', shareId), { slots: validSlots });
+      setShare(prev => prev ? { ...prev, slots: validSlots } : prev);
+      setEditingSlots(false);
+      toast.show('時間を更新しました', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('更新に失敗しました', 'error');
+    } finally {
+      setSavingSlots(false);
+    }
+  };
+
+  const handleDeleteShare = async () => {
+    setDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'mini_shares', shareId));
+      try {
+        const raw = localStorage.getItem('mini_owned_shares');
+        if (raw) {
+          const entries = JSON.parse(raw) as OwnedShareEntry[];
+          localStorage.setItem('mini_owned_shares', JSON.stringify(entries.filter(e => e.id !== shareId)));
+        }
+      } catch { /* */ }
+      window.location.href = '/mini/';
+    } catch (err) {
+      console.error(err);
+      toast.show('削除に失敗しました', 'error');
+      setDeleting(false);
     }
   };
 
@@ -1004,6 +1101,25 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                 印刷する
               </button>
             </div>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={() => {
+                  setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s })));
+                  setEditingSlots(true);
+                }}
+                className="flex-1 py-2 rounded-xl text-center text-sm font-medium
+                           bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+              >
+                時間を編集
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="py-2 px-4 rounded-xl text-sm font-medium text-red-500
+                           hover:bg-red-50 border border-red-100 transition"
+              >
+                削除
+              </button>
+            </div>
 
             {/* 通知トグル */}
             {'Notification' in window && Notification.permission !== 'denied' && (
@@ -1098,6 +1214,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                 <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
                   r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
                   r.status === 'declined' ? 'bg-slate-100 border border-slate-200 opacity-60' :
+                  r.status === 'cancelled' ? 'bg-red-50/50 border border-red-100 opacity-60' :
                   'bg-slate-50'
                 }`}>
                   <Avatar name={r.requester_name} />
@@ -1113,11 +1230,14 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                       {r.status === 'declined' && (
                         <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
                       )}
+                      {r.status === 'cancelled' && (
+                        <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
+                      )}
                     </div>
                     {r.message && (
                       <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
                     )}
-                    {!r.status || r.status === 'pending' ? (
+                    {(!r.status || r.status === 'pending') ? (
                       <div className="flex gap-2 mt-2">
                         <button
                           onClick={() => handleApprove(r.id)}
@@ -1130,6 +1250,15 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                           className="px-3 py-1 rounded-lg bg-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-300 active:scale-95 transition-all"
                         >
                           辞退
+                        </button>
+                      </div>
+                    ) : r.status === 'approved' ? (
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => handleCancel(r.id)}
+                          className="px-3 py-1 rounded-lg bg-red-50 text-red-500 text-xs font-medium hover:bg-red-100 active:scale-95 transition-all border border-red-100"
+                        >
+                          承認をキャンセル
                         </button>
                       </div>
                     ) : null}
@@ -1166,8 +1295,16 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                     const key = slotKey(slot);
                     const sent = sentSlots.has(key);
                     const reqs = requestsForSlot(slot);
+                    const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
+                    const borderClass = isOwner && reqs.length > 0
+                      ? 'border-teal-200 border-l-[3px] border-l-teal-400'
+                      : myReqStatus?.status === 'approved'
+                      ? 'border-blue-200 border-l-[3px] border-l-blue-400'
+                      : myReqStatus?.status === 'declined' || myReqStatus?.status === 'cancelled'
+                      ? 'border-slate-200 opacity-70'
+                      : 'border-slate-200';
                     return (
-                      <div key={i} className={`bg-white rounded-2xl border p-4 print:border-slate-300 transition-colors ${reqs.length > 0 && isOwner ? 'border-teal-200 border-l-[3px] border-l-teal-400' : 'border-slate-200'}`}>
+                      <div key={i} className={`bg-white rounded-2xl border p-4 print:border-slate-300 transition-colors ${borderClass}`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <p className="text-2xl font-semibold tracking-tight text-slate-800">
@@ -1187,9 +1324,21 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                               ) : null
                             ) : expired ? (
                               <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">期限切れ</span>
+                            ) : myReqStatus?.status === 'approved' ? (
+                              <span className="text-sm text-blue-600 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg">
+                                承認済み ✓
+                              </span>
+                            ) : myReqStatus?.status === 'declined' ? (
+                              <span className="text-sm text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
+                                辞退されました
+                              </span>
+                            ) : myReqStatus?.status === 'cancelled' ? (
+                              <span className="text-sm text-red-400 font-medium bg-red-50 px-3 py-1.5 rounded-lg">
+                                キャンセル済み
+                              </span>
                             ) : sent ? (
                               <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
-                                依頼済み
+                                依頼済み（審査中）
                               </span>
                             ) : (
                               <button
@@ -1268,8 +1417,117 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           shareId={shareId}
           slot={requestSlot}
           onClose={() => setRequestSlot(null)}
-          onSent={() => handleSent(requestSlot)}
+          onSent={(requestId) => handleSent(requestSlot, requestId)}
         />
+      )}
+
+      {/* 削除確認モーダル */}
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 bg-black/30 flex items-center justify-center z-50"
+          onClick={() => setShowDeleteConfirm(false)}
+        >
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-slate-800 mb-2">この共有を削除しますか？</h3>
+            <p className="text-sm text-slate-500 mb-5">削除すると復元できません。受け取った依頼も確認できなくなります。</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleDeleteShare}
+                disabled={deleting}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold hover:bg-red-600 disabled:opacity-40 transition"
+              >
+                {deleting ? '削除中...' : '削除する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 時間帯編集オーバーレイ */}
+      {editingSlots && (
+        <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
+          <div className="max-w-lg mx-auto px-4 py-6 pb-28">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-bold text-slate-800">時間帯を編集</h2>
+              <button onClick={() => setEditingSlots(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">各日の時間帯を編集・追加・削除できます</p>
+            <div className="space-y-3">
+              {getDays(7).map(day => {
+                const daySlots = draftSlots.filter(s => s.date === day.date);
+                return (
+                  <div key={day.date} className={`rounded-xl p-4 border ${day.isToday ? 'border-teal-200 bg-teal-50/30' : 'border-slate-200 bg-slate-50'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className={`text-sm font-semibold ${day.isToday ? 'text-teal-700' : 'text-slate-600'}`}>
+                        {day.isToday && <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 align-middle" />}
+                        {day.label}
+                      </p>
+                      <button
+                        onClick={() => setDraftSlots(prev => [...prev, { id: genId(6), date: day.date, start: '10:00', end: '17:00' }])}
+                        className="text-xs text-teal-600 font-medium hover:text-teal-800 transition"
+                      >
+                        ＋追加
+                      </button>
+                    </div>
+                    {daySlots.length === 0 && (
+                      <p className="text-xs text-slate-300">時間帯なし</p>
+                    )}
+                    {daySlots.map(slot => (
+                      <div key={slot.id} className="flex items-center gap-2 mb-2 animate-[fadeIn_0.15s_ease-out]">
+                        <input
+                          type="time"
+                          value={slot.start}
+                          onChange={e => setDraftSlots(prev => prev.map(s => s.id === slot.id ? { ...s, start: e.target.value } : s))}
+                          className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-center bg-white"
+                        />
+                        <span className="text-slate-300 text-sm">–</span>
+                        <input
+                          type="time"
+                          value={slot.end}
+                          onChange={e => setDraftSlots(prev => prev.map(s => s.id === slot.id ? { ...s, end: e.target.value } : s))}
+                          className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-center bg-white"
+                        />
+                        <button
+                          onClick={() => setDraftSlots(prev => prev.filter(s => s.id !== slot.id))}
+                          className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg"
+                          aria-label="削除"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    {daySlots.some(s => s.start >= s.end) && (
+                      <p className="text-xs text-red-400 mt-1">開始は終了より前にしてください</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-4">
+            <div className="max-w-lg mx-auto flex gap-3">
+              <button
+                onClick={() => setEditingSlots(false)}
+                className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveSlots}
+                disabled={savingSlots}
+                className="flex-1 py-3 rounded-xl bg-teal-600 text-white font-bold hover:bg-teal-700 disabled:opacity-40 transition"
+              >
+                {savingSlots ? '保存中...' : '保存する'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
