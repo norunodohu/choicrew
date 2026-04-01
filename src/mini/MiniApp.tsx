@@ -1,4 +1,34 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
+
+/* ================================================================
+   Error Boundary — クラッシュ時に白画面にならないように
+   ================================================================ */
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: Error }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+          <div className="text-center">
+            <p className="text-slate-700 text-lg font-semibold mb-2">表示エラーが発生しました</p>
+            <p className="text-slate-400 text-sm mb-6">ページをリロードしてみてください</p>
+            <button onClick={() => window.location.reload()}
+              className="bg-teal-600 text-white rounded-xl px-6 py-3 font-medium hover:bg-teal-700 transition">
+              リロード
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 import { db, messaging } from '../firebase';
 import {
   doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot,
@@ -463,7 +493,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
     try {
       const id = genId(8);
       const now = new Date();
-      const expires = addDays(now, 7);
+      const expires = addDays(now, 365);
       const slotData = validSlots.map(({ date, start, end }) => ({ date, start, end }));
       await setDoc(doc(db, 'mini_shares', id), {
         name: displayName.trim() || title.trim(),
@@ -1305,7 +1335,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     groupedSlots[slot.date].push(slot);
   }
 
-  const expiryLabel = format(share.expires_at.toDate(), 'M/d(E)', { locale: ja });
+  const expiryLabel = share.expires_at ? format(share.expires_at.toDate(), 'M/d(E)', { locale: ja }) : '';
   const canShareNative = typeof navigator.share === 'function';
   const themeKey: ThemeKey = (share.theme || 'simple') as ThemeKey;
   const T = THEMES[themeKey] || THEMES.simple;
@@ -1950,10 +1980,10 @@ export default function MiniApp() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       {content}
       <BadgeHeader />
       <BadgeModal />
-    </>
+    </ErrorBoundary>
   );
 }
