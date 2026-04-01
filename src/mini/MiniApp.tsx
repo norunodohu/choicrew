@@ -1830,17 +1830,30 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
       {/* 受付停止トグル（オーナーのみ・右下固定） */}
       {isOwner && (
-        <button
-          onClick={handleTogglePause}
-          className={`fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-medium transition-all print:hidden ${
-            isPaused
-              ? 'bg-amber-500 text-white hover:bg-amber-600'
-              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <span className={`w-3 h-3 rounded-full ${isPaused ? 'bg-white' : 'bg-teal-500'}`} />
-          {isPaused ? '受付停止中　再開する' : '受付中'}
-        </button>
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-1.5 print:hidden">
+          <button
+            onClick={handleTogglePause}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-medium transition-all ${
+              isPaused
+                ? 'bg-amber-500 text-white hover:bg-amber-600'
+                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+            }`}
+          >
+            <span className={`w-3 h-3 rounded-full ${isPaused ? 'bg-white' : 'bg-teal-500'}`} />
+            {isPaused ? '依頼受付オフ（再開する）' : '依頼受付中'}
+          </button>
+          {isPaused && (
+            <p className="text-xs text-slate-500 bg-white/90 rounded-xl px-3 py-1.5 shadow text-right leading-relaxed">
+              ※予定は公開されたままです。削除する場合は
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-red-500 underline font-medium ml-0.5"
+              >
+                コチラ
+              </button>
+            </p>
+          )}
+        </div>
       )}
 
       {requestSlot && (
