@@ -126,9 +126,9 @@ service cloud.firestore {
                     && request.resource.data.requester_name is string
                     && request.resource.data.requester_name.size() > 0
                     && request.resource.data.requester_name.size() <= 30;
-      // statusフィールドのみ approved/declined/cancelled への更新を許可
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-                    && request.resource.data.status in ['approved', 'declined', 'cancelled'];
+      // status フィールドを approved/declined/cancelled に変更することを許可
+      allow update: if request.resource.data.status in ['approved', 'declined', 'cancelled']
+                    && request.resource.data.keys().hasAll(resource.data.keys());
       allow delete: if false;
     }
   }

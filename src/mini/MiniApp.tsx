@@ -30,6 +30,8 @@ const BellIcon = ({ className }: { className?: string }) => (
    Types
    ================================================================ */
 
+type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern';
+
 interface TimeSlot {
   id: string;
   date: string;
@@ -37,12 +39,13 @@ interface TimeSlot {
   end: string;
 }
 
-
 interface ShareData {
   name: string;
   slots: { date: string; start: string; end: string }[];
   created_at: Timestamp;
   expires_at: Timestamp;
+  theme?: ThemeKey;
+  bookingMode?: 'multiple' | 'exclusive';
 }
 
 interface RequestEntry {
@@ -328,6 +331,58 @@ const TIME_PRESETS = [
   { label: '午後', start: '13:00', end: '17:00', sub: '13–17' },
   { label: '夕方', start: '17:00', end: '21:00', sub: '17–21' },
 ];
+
+/* ================================================================
+   Themes
+   ================================================================ */
+
+const THEMES: Record<ThemeKey, {
+  label: string; emoji: string;
+  pageBg: string; card: string;
+  accentBtn: string; accentText: string;
+  headingText: string; subText: string;
+  timeText: string; labelText: string;
+  cardPreviewFrom: string; cardPreviewTo: string;
+  previewBg: string; previewCard: string;
+  previewBorder: string;
+}> = {
+  simple: {
+    label: 'シンプル', emoji: '🌿',
+    pageBg: 'bg-slate-50', card: 'bg-white border border-slate-200',
+    accentBtn: 'bg-teal-600 text-white hover:bg-teal-700 active:scale-95',
+    accentText: 'text-teal-600', headingText: 'text-slate-800',
+    subText: 'text-slate-400', timeText: 'text-slate-800', labelText: 'text-slate-600',
+    cardPreviewFrom: '#2dd4bf', cardPreviewTo: '#0d9488',
+    previewBg: '#f8fafc', previewCard: '#ffffff', previewBorder: '#e2e8f0',
+  },
+  dark: {
+    label: 'ダーク', emoji: '🌙',
+    pageBg: 'bg-slate-900', card: 'bg-slate-800 border border-slate-700',
+    accentBtn: 'bg-teal-400 text-slate-900 hover:bg-teal-300 active:scale-95',
+    accentText: 'text-teal-400', headingText: 'text-white',
+    subText: 'text-slate-500', timeText: 'text-white', labelText: 'text-slate-300',
+    cardPreviewFrom: '#2dd4bf', cardPreviewTo: '#134e4a',
+    previewBg: '#0f172a', previewCard: '#1e293b', previewBorder: '#334155',
+  },
+  pop: {
+    label: 'ポップ', emoji: '🎨',
+    pageBg: 'bg-fuchsia-50', card: 'bg-white border-2 border-fuchsia-200',
+    accentBtn: 'bg-fuchsia-500 text-white hover:bg-fuchsia-600 active:scale-95',
+    accentText: 'text-fuchsia-500', headingText: 'text-fuchsia-900',
+    subText: 'text-fuchsia-400', timeText: 'text-fuchsia-900', labelText: 'text-fuchsia-700',
+    cardPreviewFrom: '#e879f9', cardPreviewTo: '#f97316',
+    previewBg: '#fdf4ff', previewCard: '#ffffff', previewBorder: '#f0abfc',
+  },
+  modern: {
+    label: 'モダン', emoji: '⚫',
+    pageBg: 'bg-white', card: 'bg-gray-50 border border-gray-200',
+    accentBtn: 'bg-gray-900 text-white hover:bg-gray-700 active:scale-95',
+    accentText: 'text-gray-900', headingText: 'text-gray-900',
+    subText: 'text-gray-400', timeText: 'text-gray-900', labelText: 'text-gray-700',
+    cardPreviewFrom: '#374151', cardPreviewTo: '#111827',
+    previewBg: '#ffffff', previewCard: '#f9fafb', previewBorder: '#e5e7eb',
+  },
+};
 
 /* ================================================================
    CreateView
