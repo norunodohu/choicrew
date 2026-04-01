@@ -908,6 +908,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [savingSlots, setSavingSlots] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [myRequestStatuses, setMyRequestStatuses] = useState<Map<string, { status: string; id: string }>>(new Map());
+  const [showOwnerMenu, setShowOwnerMenu] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
 
@@ -1165,9 +1166,11 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
   const expiryLabel = format(share.expires_at.toDate(), 'M/d(E)', { locale: ja });
   const canShareNative = typeof navigator.share === 'function';
+  const themeKey: ThemeKey = (share.theme || 'simple') as ThemeKey;
+  const T = THEMES[themeKey] || THEMES.simple;
 
   return (
-    <div className="min-h-screen bg-slate-50 print:bg-white">
+    <div className={`min-h-screen ${T.pageBg} print:bg-white`}>
       {toast.UI}
       <div className="max-w-lg mx-auto px-4 py-8 sm:py-12">
 
@@ -1184,128 +1187,63 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           </div>
         )}
 
-        {/* Share URL + actions (owner) */}
+        {/* Owner: compact URL strip */}
         {isOwner && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-6 print:hidden">
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                type="text"
-                value={url}
-                readOnly
-                className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm bg-slate-50 text-slate-500 truncate"
-              />
+          <div className="flex items-center gap-2 mb-5 print:hidden">
+            <button
+              onClick={handleCopy}
+              className="flex-1 flex items-center gap-2 bg-white/80 backdrop-blur border border-slate-200 rounded-xl px-3 py-2 text-sm hover:bg-white transition min-w-0"
+            >
+              <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+              <span className="truncate text-xs text-slate-400 font-mono">{url.replace('https://', '')}</span>
+              <span className={`shrink-0 text-xs font-semibold ml-auto ${copied ? 'text-teal-600' : 'text-slate-500'}`}>{copied ? '✓ コピー済み' : 'コピー'}</span>
+            </button>
+            <div className="relative shrink-0">
               <button
-                onClick={handleCopy}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition whitespace-nowrap ${
-                  copied ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                onClick={() => setShowOwnerMenu(v => !v)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 transition text-lg"
+                aria-label="メニュー"
               >
-                {copied ? 'コピー済み' : 'コピー'}
+                ⋯
               </button>
-            </div>
-            <div className="flex gap-2">
-              {canShareNative ? (
-                <button
-                  onClick={handleShare}
-                  className="flex-1 py-2.5 rounded-xl text-center text-sm font-medium
-                             bg-teal-600 text-white hover:bg-teal-700 transition"
-                >
-                  共有する
-                </button>
-              ) : (
-                <a
-                  href={makeLineShareUrl(share.name, url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-2.5 rounded-xl text-center text-sm font-medium
-                             bg-[#06C755] text-white hover:bg-[#05b34d] transition"
-                >
-                  LINEで送る
-                </a>
-              )}
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-2.5 rounded-xl text-center text-sm font-medium
-                           bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
-              >
-                印刷する
-              </button>
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => {
-                  setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s })));
-                  setEditingSlots(true);
-                }}
-                className="flex-1 py-2 rounded-xl text-center text-sm font-medium
-                           bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
-              >
-                時間を編集
-              </button>
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="py-2 px-4 rounded-xl text-sm font-medium text-red-500
-                           hover:bg-red-50 border border-red-100 transition"
-              >
-                削除
-              </button>
-            </div>
-
-            {/* 通知トグル */}
-            {'Notification' in window && Notification.permission !== 'denied' && (
-              <div className="mt-3 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <BellIcon className="w-4 h-4 text-slate-400" />
-                    <span className="text-sm text-slate-500">依頼通知</span>
-                    {notifEnabled && (
-                      <span className="text-[10px] text-teal-600 font-medium bg-teal-50 rounded-full px-1.5 py-0.5">ON</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={async () => {
-                      if (notifEnabled) {
-                        await unregisterFCMToken();
-                        setNotifEnabled(false);
-                        setShowNotifExpand(false);
-                      } else {
-                        setShowNotifExpand(v => !v);
-                      }
-                    }}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      notifEnabled ? 'bg-teal-500 hover:bg-teal-600' : 'bg-slate-200 hover:bg-slate-300'
-                    }`}
-                    aria-label="依頼通知のON/OFF"
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                      notifEnabled ? 'translate-x-[18px]' : 'translate-x-[3px]'
-                    }`} />
-                  </button>
-                </div>
-                {showNotifExpand && !notifEnabled && (
-                  <div className="mt-2.5 bg-slate-50 rounded-xl p-3 animate-[fadeIn_0.15s_ease-out]">
-                    <p className="text-xs text-slate-600 leading-relaxed mb-2.5">
-                      依頼が届いたとき、タブを閉じていてもお知らせします。<br />
-                      許可画面では「<strong>常に許可</strong>」を選ぶと確実に届きます。
-                    </p>
+              {showOwnerMenu && (
+                <div className="absolute right-0 top-11 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[170px] z-20 animate-[fadeIn_0.15s_ease-out]">
+                  {canShareNative && (
+                    <button onClick={() => { handleShare(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">共有する</button>
+                  )}
+                  <a href={makeLineShareUrl(share.name, url)} target="_blank" rel="noopener noreferrer" onClick={() => setShowOwnerMenu(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">LINEで送る</a>
+                  <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">時間を編集</button>
+                  <button onClick={() => { window.print(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">印刷する</button>
+                  {'Notification' in window && Notification.permission !== 'denied' && (
                     <button
                       onClick={async () => {
-                        setShowNotifExpand(false);
-                        const perm = await Notification.requestPermission();
-                        if (perm === 'granted') {
-                          try { localStorage.removeItem(`mini_notif_${shareId}`); } catch { /* */ }
-                          setNotifEnabled(true);
-                          registerFCMToken();
+                        setShowOwnerMenu(false);
+                        if (notifEnabled) {
+                          await unregisterFCMToken(); setNotifEnabled(false);
+                        } else {
+                          if (Notification.permission === 'granted') {
+                            try { localStorage.removeItem(`mini_notif_${shareId}`); } catch { /* */ }
+                            setNotifEnabled(true); registerFCMToken();
+                          } else {
+                            const perm = await Notification.requestPermission();
+                            if (perm === 'granted') {
+                              try { localStorage.removeItem(`mini_notif_${shareId}`); } catch { /* */ }
+                              setNotifEnabled(true); registerFCMToken();
+                            }
+                          }
                         }
                       }}
-                      className="w-full py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 transition"
+                      className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                     >
-                      通知を許可する
+                      <BellIcon className="w-3.5 h-3.5" />
+                      依頼通知 {notifEnabled ? <span className="text-[10px] text-teal-600 bg-teal-50 rounded-full px-1.5 py-0.5 font-medium">ON</span> : <span className="text-[10px] text-slate-400 bg-slate-100 rounded-full px-1.5 py-0.5 font-medium">OFF</span>}
                     </button>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                  <hr className="my-1 border-slate-100" />
+                  <button onClick={() => { setShowDeleteConfirm(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50">削除する</button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -1319,10 +1257,10 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
+          <h1 className={`text-2xl font-bold ${T.headingText} tracking-tight`}>
             {share.name}さんの空き時間
           </h1>
-          <div className="flex items-center justify-center gap-3 mt-2 text-sm text-slate-400">
+          <div className={`flex items-center justify-center gap-3 mt-2 text-sm ${T.subText}`}>
             <span>{expiryLabel}まで有効</span>
             {isOwner && requests.length > 0 && (
               <>
@@ -1434,10 +1372,10 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                       ? 'border-slate-200 opacity-70'
                       : 'border-slate-200';
                     return (
-                      <div key={i} className={`bg-white rounded-2xl border p-4 print:border-slate-300 transition-colors ${borderClass}`}>
+                      <div key={i} className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${borderClass}`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
-                            <p className="text-2xl font-semibold tracking-tight text-slate-800">
+                            <p className={`text-2xl font-semibold tracking-tight ${T.timeText}`}>
                               {slot.start}<span className="text-slate-300 mx-1.5">–</span>{slot.end}
                             </p>
                             <TimeBar start={slot.start} end={slot.end} />
@@ -1473,8 +1411,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                             ) : (
                               <button
                                 onClick={() => setRequestSlot(slot)}
-                                className="bg-teal-600 text-white text-sm font-medium rounded-xl
-                                           px-5 py-2.5 hover:bg-teal-700 active:scale-95 transition-all shadow-sm"
+                                className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
                               >
                                 依頼する
                               </button>
