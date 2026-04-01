@@ -606,7 +606,13 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
               if (activeShares.length === 0) return null;
               return (
                 <div className="mt-10 pt-6 border-t border-slate-100">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">作成済みの予定</p>
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">作成済みの予定</p>
+                    <button
+                      onClick={() => { localStorage.removeItem('mini_owned_shares'); location.reload(); }}
+                      className="text-xs text-slate-400 hover:text-red-500 transition"
+                    >リストをクリア</button>
+                  </div>
                   <div className="space-y-1">
                     {activeShares.slice(-5).reverse().map(entry => (
                       <a key={entry.id} href={`/mini/s/${entry.id}`}
