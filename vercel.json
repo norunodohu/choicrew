@@ -22,12 +22,20 @@
       "dest": "server.ts"
     },
     {
+      "src": "/assets/(.*)",
+      "dest": "/assets/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|ico|svg|png|jpg|jpeg|woff|woff2|ttf|json))",
+      "dest": "/$1"
+    },
+    {
       "src": "/mini/(.*)",
       "dest": "/index.html"
     },
     {
       "src": "/(.*)",
-      "dest": "/$1"
+      "dest": "/index.html"
     }
   ]
 }
