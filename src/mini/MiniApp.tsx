@@ -60,7 +60,7 @@ const BellIcon = ({ className }: { className?: string }) => (
    Types
    ================================================================ */
 
-type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern' | 'anime' | 'konbini' | 'sunset' | 'darkbg';
+type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern' | 'anime' | 'konbini' | 'himawari' | 'darkbg';
 
 interface TimeSlot {
   id: string;
@@ -497,15 +497,15 @@ const THEMES: Record<ThemeKey, {
     cardPreviewFrom: '#38bdf8', cardPreviewTo: '#0284c7',
     previewBg: 'linear-gradient(135deg,#e0f2fe,#bae6fd,#f0fdf4)', previewCard: 'rgba(255,255,255,0.85)', previewBorder: '#bae6fd',
   },
-  sunset: {
-    label: 'サンセット', emoji: '🌅',
-    pageBg: 'bg-gradient-to-br from-orange-50 via-rose-50 to-amber-50',
-    card: 'bg-white/80 border border-orange-200',
-    accentBtn: 'bg-gradient-to-r from-orange-500 to-rose-500 text-white hover:from-orange-600 hover:to-rose-600 active:scale-95',
-    accentText: 'text-orange-500', headingText: 'text-rose-900',
-    subText: 'text-orange-400', timeText: 'text-rose-900', labelText: 'text-rose-700',
-    cardPreviewFrom: '#fb923c', cardPreviewTo: '#f43f5e',
-    previewBg: 'linear-gradient(135deg,#fff7ed,#fce7f3,#fef3c7)', previewCard: '#ffffff', previewBorder: '#fed7aa',
+  himawari: {
+    label: 'ひまわり', emoji: '🌻',
+    pageBg: 'bg-amber-50',
+    card: 'bg-white/80 border border-yellow-200',
+    accentBtn: 'bg-gradient-to-r from-yellow-400 to-orange-400 text-white hover:from-yellow-500 hover:to-orange-500 active:scale-95',
+    accentText: 'text-yellow-600', headingText: 'text-amber-900',
+    subText: 'text-yellow-500', timeText: 'text-amber-900', labelText: 'text-amber-700',
+    cardPreviewFrom: '#fbbf24', cardPreviewTo: '#f97316',
+    previewBg: 'linear-gradient(135deg,#fef9c3,#fef3c7,#fff7ed)', previewCard: '#ffffff', previewBorder: '#fde68a',
   },
   darkbg: {
     label: 'ダークフォト', emoji: '🌃',
