@@ -18,11 +18,33 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || '新着依頼があります';
   const body = payload.notification?.body || '依頼が届きました';
+  const url = payload.data?.url || '/';
   self.registration.showNotification(title, {
     body,
     icon: '/choicrew-mark.svg',
     badge: '/choicrew-mark.svg',
     tag: 'choicrew-new-request',
     requireInteraction: false,
+    data: { url },
   });
+});
+
+// 通知クリック時にURLを開く
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // すでに同じURLのタブが開いていればフォーカス
+      for (const client of clientList) {
+        if (client.url === url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // なければ新しいタブで開く
+      if (clients.openWindow) {
+        return clients.openWindow(url);
+      }
+    })
+  );
 });

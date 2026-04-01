@@ -57,12 +57,17 @@ app.post("/api/notify", async (req, res) => {
   if (!getApps().length) {
     return res.status(503).json({ error: "admin not configured" });
   }
+  const { url } = req.body as { url?: string };
   try {
     await getMessaging().send({
       token,
       notification: {
         title: title || "新着依頼があります",
         body: body || "依頼が届きました",
+      },
+      webpush: {
+        data: { url: url || "/" },
+        fcmOptions: { link: url || "/" },
       },
     });
     res.json({ ok: true });

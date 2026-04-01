@@ -781,6 +781,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
         const shareSnap = await getDoc(doc(db, 'mini_shares', shareId));
         const fcmToken = shareSnap.data()?.fcm_token;
         if (fcmToken) {
+          const shareUrl = `${location.origin}${location.pathname}?share=${shareId}`;
           await fetch('/api/notify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -788,6 +789,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
               token: fcmToken,
               title: '新着依頼があります',
               body: `${name.trim()}さんから依頼が届きました`,
+              url: shareUrl,
             }),
           });
         }
