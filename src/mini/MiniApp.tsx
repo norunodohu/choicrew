@@ -78,6 +78,7 @@ interface ShareData {
   expires_at: Timestamp;
   theme?: ThemeKey;
   bookingMode?: 'multiple' | 'exclusive';
+  paused?: boolean;
 }
 
 interface RequestEntry {
@@ -1142,12 +1143,26 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [myRequestStatuses, setMyRequestStatuses] = useState<Map<string, { status: string; id: string }>>(new Map());
   const [showOwnerMenu, setShowOwnerMenu] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
 
   const url = makeShareUrl(shareId);
   const prevPendingIdsRef = useRef<Set<string> | null>(null);
   const fcmRegisteredRef = useRef(false);
+
+  const handleTogglePause = async () => {
+    if (!share) return;
+    const next = !isPaused;
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { paused: next });
+      setIsPaused(next);
+      setShare(prev => prev ? { ...prev, paused: next } : prev);
+      toast.show(next ? '受付を停止しました' : '受付を再開しました');
+    } catch {
+      toast.show('更新に失敗しました');
+    }
+  };
   const myStatusRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -1156,7 +1171,8 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         const snap = await getDoc(doc(db, 'mini_shares', shareId));
         if (!snap.exists()) { setNotFound(true); setLoading(false); return; }
         const data = snap.data() as ShareData;
-        if (data.expires_at.toDate() < new Date()) setExpired(true);
+        if (data.expires_at?.toDate() < new Date()) setExpired(true);
+        setIsPaused(!!data.paused);
         setShare(data);
       } catch (err) {
         console.error('Failed to load share:', err);
@@ -1730,6 +1746,10 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                               <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
                                 依頼中
                               </span>
+                            ) : isPaused ? (
+                              <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
+                                閲覧のみ
+                              </span>
                             ) : (
                               <button
                                 onClick={() => setRequestSlot(slot)}
@@ -1777,6 +1797,13 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           <p className="text-xs text-slate-400 mt-2">QRコードを読み取ると空き時間を確認できます</p>
         </div>
 
+        {/* 閲覧用メッセージ */}
+        {!isOwner && isPaused && (
+          <div className="mx-4 mb-4 p-4 bg-slate-50 border border-slate-200 rounded-xl text-center">
+            <p className="text-sm text-slate-500">閲覧用として公開されています。確認がしたい場合は、予定の作成者に直接ご連絡ください。</p>
+          </div>
+        )}
+
         {/* Footer CTA (visitor) */}
         {!isOwner && (
           <div className="text-center border-t border-slate-100 pt-8 mt-4 print:hidden">
@@ -1800,6 +1827,21 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         )}
 
       </div>
+
+      {/* 受付停止トグル（オーナーのみ・右下固定） */}
+      {isOwner && (
+        <button
+          onClick={handleTogglePause}
+          className={`fixed bottom-6 right-6 z-40 flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-medium transition-all print:hidden ${
+            isPaused
+              ? 'bg-amber-500 text-white hover:bg-amber-600'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <span className={`w-3 h-3 rounded-full ${isPaused ? 'bg-white' : 'bg-teal-500'}`} />
+          {isPaused ? '受付停止中　再開する' : '受付中'}
+        </button>
+      )}
 
       {requestSlot && (
         <RequestModal
