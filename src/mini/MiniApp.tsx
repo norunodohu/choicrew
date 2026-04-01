@@ -389,13 +389,340 @@ const THEMES: Record<ThemeKey, {
    ================================================================ */
 
 function CreateView({ onCreated }: { onCreated: (id: string, name: string) => void }) {
+  const [step, setStep] = useState(1);
   const [name, setName] = useState(loadDraftName);
+  const [createMode, setCreateMode] = useState<'quick' | 'custom' | null>(null);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(() => new Set([format(new Date(), 'yyyy-MM-dd')]));
+  const [bookingMode, setBookingMode] = useState<'multiple' | 'exclusive'>('multiple');
+  const [theme, setTheme] = useState<ThemeKey>('simple');
   const [saving, setSaving] = useState(false);
   const toast = useToast();
   const days = getDays(7);
   const ownedShares = loadOwnedShares().filter(e => e.name);
+
+  const slotsFor = (date: string) => slots.filter(s => s.date === date);
+
+  const toggleDay = (date: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
+
+  const addSlot = (date: string, start = '10:00', end = '17:00') => {
+    setSlots(prev => [...prev, { id: genId(6), date, start, end }]);
+  };
+
+  const updateSlot = (id: string, field: 'start' | 'end', value: string) => {
+    setSlots(prev => prev.map(s => s.id === id ? { ...s, [field]: value } : s));
+  };
+
+  const removeSlot = (id: string) => {
+    setSlots(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleQuickCreate = () => {
+    const quickSlots: TimeSlot[] = [];
+    const futureDays = getDays(4).slice(1);
+    for (const day of futureDays) {
+      TIME_PRESETS.forEach(p => {
+        quickSlots.push({ id: genId(6), date: day.date, start: p.start, end: p.end });
+      });
+    }
+    setSlots(quickSlots);
+    setCreateMode('quick');
+    setStep(3);
+  };
+
+  const validSlots = slots.filter(s => s.start < s.end);
+
+  const handleCreate = async () => {
+    if (!name.trim() || validSlots.length === 0) return;
+    setSaving(true);
+    try {
+      const id = genId(8);
+      const now = new Date();
+      const expires = addDays(now, 7);
+      await setDoc(doc(db, 'mini_shares', id), {
+        name: name.trim(),
+        slots: validSlots.map(({ date, start, end }) => ({ date, start, end })),
+        theme,
+        bookingMode,
+        created_at: Timestamp.fromDate(now),
+        expires_at: Timestamp.fromDate(expires),
+      });
+      saveDraftName(name.trim());
+      onCreated(id, name.trim());
+    } catch (err) {
+      console.error('Failed to create share:', err);
+      toast.show('作成に失敗しました。もう一度お試しください。');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const StepIndicator = () => (
+    <div className="flex items-center justify-center gap-1.5 mb-8">
+      {[1, 2, 3, 4].map(s => (
+        <div key={s} className="flex items-center gap-1.5">
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+            step === s ? 'bg-teal-600 text-white ring-4 ring-teal-100' :
+            step > s ? 'bg-teal-100 text-teal-600' : 'bg-slate-100 text-slate-400'
+          }`}>
+            {step > s ? '✓' : s}
+          </div>
+          {s < 4 && <div className={`w-8 h-0.5 rounded-full transition-all ${step > s ? 'bg-teal-300' : 'bg-slate-200'}`} />}
+        </div>
+      ))}
+    </div>
+  );
+
+  const stepLabels = ['名前', '時間帯', '受け方', 'デザイン'];
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      {toast.UI}
+      <div className="max-w-lg mx-auto px-4 py-8 sm:py-12 pb-28 sm:pb-12">
+
+        {/* Header */}
+        <div className="text-center mb-8">
+          <Logo />
+          <p className="text-slate-400 mt-2 text-xs tracking-wide">ログイン不要 · 7日間有効</p>
+        </div>
+
+        <StepIndicator />
+        <p className="text-center text-xs text-slate-400 mb-6 -mt-4">{stepLabels[step - 1]}</p>
+
+        {/* ── Step 1: Name ── */}
+        {step === 1 && (
+          <div className="animate-[fadeIn_0.2s_ease-out]">
+            <h2 className="text-xl font-bold text-slate-800 mb-1">名前を教えてください</h2>
+            <p className="text-sm text-slate-400 mb-6">依頼する相手に表示されます</p>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && name.trim()) setStep(2); }}
+              placeholder="たなか"
+              className="w-full rounded-xl border border-slate-200 px-4 py-4 text-lg
+                         focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent
+                         placeholder:text-slate-300 bg-white mb-6"
+              maxLength={30}
+              autoFocus
+            />
+            <button
+              onClick={() => name.trim() && setStep(2)}
+              disabled={!name.trim()}
+              className="w-full bg-teal-600 text-white rounded-xl py-3.5 font-bold
+                         hover:bg-teal-700 disabled:opacity-40 transition text-base shadow-sm"
+            >
+              次へ →
+            </button>
+            {ownedShares.length > 0 && (
+              <div className="mt-10 pt-6 border-t border-slate-100">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">最近の共有</p>
+                <div className="space-y-1">
+                  {ownedShares.slice(-3).reverse().map(entry => (
+                    <a key={entry.id} href={`/mini/s/${entry.id}`}
+                      className="flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white transition group border border-transparent hover:border-slate-200">
+                      <span className="text-sm text-slate-500 group-hover:text-slate-700 transition truncate">{entry.name}の空き時間</span>
+                      <span className="text-slate-300 group-hover:text-teal-500 transition ml-2 shrink-0">→</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Step 2: Mode + time slots ── */}
+        {step === 2 && (
+          <div className="animate-[fadeIn_0.2s_ease-out]">
+            <h2 className="text-xl font-bold text-slate-800 mb-1">作り方を選んでください</h2>
+            <p className="text-sm text-slate-400 mb-6">{name}さんの空き時間をどう作りますか？</p>
+
+            {createMode === null ? (
+              <div className="space-y-3">
+                <button onClick={handleQuickCreate}
+                  className="w-full text-left bg-white border-2 border-teal-200 rounded-2xl p-5 hover:border-teal-400 hover:shadow-md transition-all group">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center text-xl shrink-0 group-hover:bg-teal-200 transition">⚡</div>
+                    <div>
+                      <p className="font-bold text-slate-800 text-base">かんたん作成</p>
+                      <p className="text-sm text-slate-500 mt-0.5">明日から3日分の時間帯を自動で追加します</p>
+                    </div>
+                  </div>
+                </button>
+                <button onClick={() => setCreateMode('custom')}
+                  className="w-full text-left bg-white border-2 border-slate-200 rounded-2xl p-5 hover:border-slate-400 hover:shadow-md transition-all group">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-xl shrink-0 group-hover:bg-slate-200 transition">🎛</div>
+                    <div>
+                      <p className="font-bold text-slate-800 text-base">カスタム作成</p>
+                      <p className="text-sm text-slate-500 mt-0.5">日時を自分で細かく指定する</p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="space-y-2 mb-6">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">空き時間</p>
+                  {days.map(day => {
+                    const daySlots = slotsFor(day.date);
+                    const isExpanded = expandedDays.has(day.date) || daySlots.length > 0;
+                    if (!isExpanded) {
+                      return (
+                        <button key={day.date} onClick={() => toggleDay(day.date)}
+                          className={`w-full flex items-center justify-between rounded-xl px-4 py-3 border transition hover:shadow-sm bg-white border-slate-200 ${day.isWeekend ? 'bg-amber-50/40 border-amber-100' : ''} ${day.isToday ? 'border-l-[3px] border-l-teal-400' : ''}`}>
+                          <span className={`text-sm font-semibold ${day.isToday ? 'text-teal-700' : day.isWeekend ? 'text-amber-700' : 'text-slate-600'}`}>
+                            {day.isToday && <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 align-middle" />}
+                            {day.label}
+                          </span>
+                          <span className="text-sm text-teal-600 font-medium">＋</span>
+                        </button>
+                      );
+                    }
+                    return (
+                      <div key={day.date} className={`bg-white rounded-2xl border p-4 animate-[fadeIn_0.15s_ease-out] ${day.isWeekend ? 'border-amber-100 bg-amber-50/30' : 'border-slate-200'} ${day.isToday ? 'border-l-[3px] border-l-teal-400' : ''}`}>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className={`text-sm font-semibold ${day.isToday ? 'text-teal-700' : day.isWeekend ? 'text-amber-700' : 'text-slate-600'}`}>
+                            {day.isToday && <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 align-middle" />}
+                            {day.label}
+                          </p>
+                          {daySlots.length === 0 && (
+                            <button onClick={() => toggleDay(day.date)} className="text-xs text-slate-400 hover:text-slate-600 transition">閉じる</button>
+                          )}
+                        </div>
+                        {daySlots.map(slot => (
+                          <div key={slot.id} className="mb-3 animate-[fadeIn_0.15s_ease-out]">
+                            <div className="flex items-center gap-2">
+                              <input type="time" value={slot.start} onChange={e => updateSlot(slot.id, 'start', e.target.value)} className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-base text-center bg-white" />
+                              <span className="text-slate-300 text-sm">–</span>
+                              <input type="time" value={slot.end} onChange={e => updateSlot(slot.id, 'end', e.target.value)} className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-base text-center bg-white" />
+                              <button onClick={() => removeSlot(slot.id)} className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg" aria-label="削除">✕</button>
+                            </div>
+                            {slot.start < slot.end && <TimeBar start={slot.start} end={slot.end} />}
+                            {slot.start >= slot.end && <p className="text-xs text-red-500 mt-1">開始は終了より前にしてください</p>}
+                          </div>
+                        ))}
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          {TIME_PRESETS.map(p => (
+                            <button key={p.label} onClick={() => addSlot(day.date, p.start, p.end)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-100/50 transition">
+                              {p.label}<span className="text-teal-400">{p.sub}</span>
+                            </button>
+                          ))}
+                          <button onClick={() => addSlot(day.date)} className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-100/50 transition">カスタム</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button onClick={() => validSlots.length > 0 && setStep(3)} disabled={validSlots.length === 0}
+                  className="w-full bg-teal-600 text-white rounded-xl py-3.5 font-bold hover:bg-teal-700 disabled:opacity-40 transition">
+                  次へ → ({validSlots.length}枠)
+                </button>
+              </div>
+            )}
+            <button onClick={() => { setStep(1); setCreateMode(null); setSlots([]); }}
+              className="w-full mt-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 transition">← 戻る</button>
+          </div>
+        )}
+
+        {/* ── Step 3: Booking mode ── */}
+        {step === 3 && (
+          <div className="animate-[fadeIn_0.2s_ease-out]">
+            <h2 className="text-xl font-bold text-slate-800 mb-1">依頼の受け方</h2>
+            <p className="text-sm text-slate-400 mb-6">複数人から依頼を受けますか？</p>
+            {createMode === 'quick' && (
+              <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 mb-5">
+                <p className="text-xs font-semibold text-teal-700 mb-0.5">⚡ かんたん作成 — 自動で追加しました</p>
+                <p className="text-xs text-teal-600">{validSlots.length}枠（明日から3日分・午前/午後/夕方）</p>
+              </div>
+            )}
+            <div className="space-y-3">
+              {(['multiple', 'exclusive'] as const).map(mode => (
+                <button key={mode} onClick={() => setBookingMode(mode)}
+                  className={`w-full text-left rounded-2xl p-5 border-2 transition-all ${bookingMode === mode ? 'border-teal-500 bg-teal-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${bookingMode === mode ? 'border-teal-500 bg-teal-500' : 'border-slate-300'}`}>
+                      {bookingMode === mode && <div className="w-2 h-2 bg-white rounded-full" />}
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800">{mode === 'multiple' ? '複数人から受ける' : '1人決まったら締め切る'}</p>
+                      <p className="text-sm text-slate-500 mt-0.5">{mode === 'multiple' ? '複数の依頼を受け取って、自分で選んで承認する' : '最初に承認した時点で自動的に締め切られる'}</p>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setStep(4)} className="w-full mt-6 bg-teal-600 text-white rounded-xl py-3.5 font-bold hover:bg-teal-700 transition">次へ →</button>
+            <button onClick={() => { setStep(2); if (createMode === 'quick') { setCreateMode(null); setSlots([]); } }}
+              className="w-full mt-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 transition">← 戻る</button>
+          </div>
+        )}
+
+        {/* ── Step 4: Design ── */}
+        {step === 4 && (
+          <div className="animate-[fadeIn_0.2s_ease-out]">
+            <h2 className="text-xl font-bold text-slate-800 mb-1">デザインを選ぶ</h2>
+            <p className="text-sm text-slate-400 mb-6">自分の予定表と、相手が見る画面に反映されます</p>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {(Object.entries(THEMES) as [ThemeKey, typeof THEMES[ThemeKey]][]).map(([key, t]) => (
+                <button key={key} onClick={() => setTheme(key)}
+                  className={`relative rounded-2xl overflow-hidden transition-all ${theme === key ? 'ring-2 ring-teal-500 ring-offset-2 shadow-lg scale-[1.02]' : 'ring-1 ring-slate-200 hover:ring-slate-400'}`}>
+                  {/* Preview card */}
+                  <div style={{ background: t.previewBg }} className="p-3 pb-0">
+                    <div style={{ background: t.previewCard, borderRadius: 8, padding: '8px', border: `1px solid ${t.previewBorder}` }}>
+                      <div style={{ height: 7, borderRadius: 4, background: `linear-gradient(to right, ${t.cardPreviewFrom}, ${t.cardPreviewTo})`, marginBottom: 5 }} />
+                      <div style={{ height: 3, borderRadius: 2, background: t.previewBorder, width: '55%' }} />
+                    </div>
+                    <div style={{ height: 5 }} />
+                    <div style={{ background: `linear-gradient(to right, ${t.cardPreviewFrom}, ${t.cardPreviewTo})`, borderRadius: 6, height: 22, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div style={{ height: 3, width: 36, background: 'rgba(255,255,255,0.7)', borderRadius: 2 }} />
+                    </div>
+                  </div>
+                  <div style={{ background: t.previewBg, paddingBlock: 8, paddingInline: 12, borderTop: `1px solid ${t.previewBorder}` }}>
+                    <span className="text-xs font-bold" style={{ color: key === 'dark' ? '#fff' : key === 'pop' ? '#701a75' : '#1e293b' }}>
+                      {t.emoji} {t.label}
+                    </span>
+                  </div>
+                  {theme === key && (
+                    <div className="absolute top-2 right-2 w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center shadow">
+                      <svg viewBox="0 0 12 12" className="w-3 h-3"><path d="M2 6l3 3 5-5" stroke="white" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button onClick={handleCreate} disabled={saving}
+              className="w-full bg-teal-600 text-white rounded-xl py-3.5 font-bold hover:bg-teal-700 disabled:opacity-40 transition text-base shadow-sm">
+              {saving ? <span className="inline-flex items-center justify-center gap-2"><Spinner /> 作成中...</span> : '🎉 共有リンクを作成'}
+            </button>
+            <button onClick={() => setStep(3)} className="w-full mt-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 transition">← 戻る</button>
+          </div>
+        )}
+
+      </div>
+
+      {/* Sticky next button — mobile step 2 custom */}
+      {step === 2 && createMode === 'custom' && validSlots.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-slate-100 p-4 sm:hidden z-30">
+          <div className="max-w-lg mx-auto">
+            <button onClick={() => setStep(3)} className="w-full bg-teal-600 text-white rounded-xl py-3.5 font-bold hover:bg-teal-700 transition text-base">
+              次へ → ({validSlots.length}枠)
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
   const slotsFor = (date: string) => slots.filter(s => s.date === date);
 
