@@ -1444,7 +1444,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                               </span>
                             ) : sent ? (
                               <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
-                                依頼済み（審査中）
+                                依頼中
                               </span>
                             ) : (
                               <button
