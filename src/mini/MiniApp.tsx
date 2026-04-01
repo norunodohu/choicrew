@@ -60,7 +60,7 @@ const BellIcon = ({ className }: { className?: string }) => (
    Types
    ================================================================ */
 
-type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern' | 'anime';
+type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern' | 'anime' | 'konbini' | 'sunset';
 
 interface TimeSlot {
   id: string;
@@ -437,6 +437,26 @@ const THEMES: Record<ThemeKey, {
     subText: 'text-pink-400', timeText: 'text-purple-800', labelText: 'text-purple-700',
     cardPreviewFrom: '#f472b6', cardPreviewTo: '#a855f7',
     previewBg: 'linear-gradient(135deg,#fce7f3,#ede9fe,#e0f2fe)', previewCard: '#ffffff', previewBorder: '#f9a8d4',
+  },
+  konbini: {
+    label: 'コンビニ', emoji: '🏪',
+    pageBg: 'bg-sky-50',
+    card: 'bg-white/90 backdrop-blur border border-sky-200',
+    accentBtn: 'bg-sky-500 text-white hover:bg-sky-600 active:scale-95',
+    accentText: 'text-sky-600', headingText: 'text-sky-900',
+    subText: 'text-sky-400', timeText: 'text-sky-900', labelText: 'text-sky-700',
+    cardPreviewFrom: '#38bdf8', cardPreviewTo: '#0284c7',
+    previewBg: 'linear-gradient(135deg,#e0f2fe,#bae6fd,#f0fdf4)', previewCard: 'rgba(255,255,255,0.85)', previewBorder: '#bae6fd',
+  },
+  sunset: {
+    label: 'サンセット', emoji: '🌅',
+    pageBg: 'bg-gradient-to-br from-orange-50 via-rose-50 to-amber-50',
+    card: 'bg-white/80 border border-orange-200',
+    accentBtn: 'bg-gradient-to-r from-orange-500 to-rose-500 text-white hover:from-orange-600 hover:to-rose-600 active:scale-95',
+    accentText: 'text-orange-500', headingText: 'text-rose-900',
+    subText: 'text-orange-400', timeText: 'text-rose-900', labelText: 'text-rose-700',
+    cardPreviewFrom: '#fb923c', cardPreviewTo: '#f43f5e',
+    previewBg: 'linear-gradient(135deg,#fff7ed,#fce7f3,#fef3c7)', previewCard: '#ffffff', previewBorder: '#fed7aa',
   },
 };
 
@@ -1246,10 +1266,12 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     if (!share) return;
     try {
       await updateDoc(doc(db, 'mini_shares', shareId), { theme: newTheme });
+      setShare(prev => prev ? { ...prev, theme: newTheme } : prev);
       setShowThemePicker(false);
-      toast.show('テーマを変更しました');
-    } catch {
-      toast.show('変更に失敗しました');
+      toast.show('テーマを変更しました', 'success');
+    } catch (err) {
+      console.error('theme change error:', err);
+      toast.show('変更に失敗しました', 'error');
     }
   };
 
@@ -1343,6 +1365,19 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   return (
     <div className={`min-h-screen ${T.pageBg} print:bg-white relative overflow-x-hidden`}>
       {toast.UI}
+      {/* ── コンビニテーマ背景画像 ── */}
+      {themeKey === 'konbini' && (
+        <div
+          className="pointer-events-none fixed inset-0 print:hidden"
+          aria-hidden="true"
+          style={{
+            backgroundImage: "url('/konbini-bg.jpg')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.18,
+          }}
+        />
+      )}
       {/* ── アニメテーマ装飾 ── */}
       {themeKey === 'anime' && (
         <div className="pointer-events-none select-none print:hidden" aria-hidden="true">
@@ -1739,8 +1774,8 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                   className={`relative rounded-2xl p-4 text-left border-2 transition-all ${themeKey === key ? 'border-teal-500 shadow-md scale-[1.02]' : 'border-slate-200 hover:border-slate-300'}`}
                   style={{  }}
                 >
-                  <div className={`w-full h-12 rounded-xl mb-3 ${t.previewBg}`} />
-                  <p className="text-xs font-bold text-slate-700">{t.label}</p>
+                  <div className="w-full h-12 rounded-xl mb-3" style={{ background: t.previewBg }} />
+                  <p className="text-xs font-bold text-slate-700">{t.emoji} {t.label}</p>
                   {themeKey === key && <span className="absolute top-2 right-2 text-teal-500 text-xs font-bold">✓ 現在</span>}
                 </button>
               ))}
@@ -1756,21 +1791,8 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
               <h2 className="text-lg font-bold text-slate-800">時間帯を編集</h2>
               <button onClick={() => setEditingSlots(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
             </div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="mb-4">
               <p className="text-xs text-slate-400">各日の時間帯を編集・追加・削除できます</p>
-              <button
-                onClick={() => {
-                  const template = getDays(7).map(day => ({ id: genId(6), date: day.date, start: '10:00', end: '17:00' }));
-                  setDraftSlots(prev => {
-                    const existing = new Set(prev.map(s => s.date));
-                    const toAdd = template.filter(s => !existing.has(s.date));
-                    return [...prev, ...toAdd];
-                  });
-                }}
-                className="text-xs text-teal-600 font-semibold bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg px-3 py-1.5 transition"
-              >
-                ⚡ テンプレから追加
-              </button>
             </div>
             <div className="space-y-3">
               {getDays(7).map(day => {
