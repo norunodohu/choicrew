@@ -740,7 +740,11 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
     const reqQ = query(collection(db, 'mini_requests'), where('share_id', '==', shareId));
     const unsub = onSnapshot(reqQ, (snap) => {
-      setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as RequestEntry)));
+      const reqArr = snap.docs.map(d => ({ id: d.id, ...d.data() } as RequestEntry));
+      setRequests(reqArr);
+      // windowにrequestsをセットしイベント発火（MiniAppでバッジ用に参照）
+      (window as any).__mini_requests = reqArr;
+      window.dispatchEvent(new Event('mini_requests_update'));
     });
     return () => unsub();
   }, [shareId]);
@@ -1080,6 +1084,8 @@ export default function MiniApp() {
   const [view, setView] = useState<'loading' | 'create' | 'share'>('loading');
   const [shareId, setShareId] = useState<string | null>(null);
   const [justCreated, setJustCreated] = useState(false);
+  const [showBadgeModal, setShowBadgeModal] = useState(false);
+  const [badgeCounts, setBadgeCounts] = useState({ approved: 0, pending: 0 });
 
   useEffect(() => {
     const path = window.location.pathname;
@@ -1135,4 +1141,55 @@ export default function MiniApp() {
     case 'share':
       return <ShareView shareId={shareId!} justCreated={justCreated} />;
   }
+}
+
+// 右上バッジUI
+  const BadgeHeader = () => (
+    <div className="fixed top-4 right-4 z-50 flex gap-3">
+      {/* 依頼一覧バッジ（青） */}
+      <button
+        className="relative"
+        onClick={() => setShowBadgeModal(true)}
+        aria-label="承認済み依頼一覧"
+      >
+        <TaskIcon className="w-7 h-7 text-blue-500" />
+        {badgeCounts.approved > 0 && (
+          <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.5em] text-center border border-white">
+            {badgeCounts.approved}
+          </span>
+        )}
+      </button>
+      {/* 通知ベルバッジ（赤） */}
+      <button
+        className="relative"
+        onClick={() => setShowBadgeModal(true)}
+        aria-label="未承認通知一覧"
+      >
+        <BellIcon className="w-7 h-7 text-red-500" />
+        {badgeCounts.pending > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.5em] text-center border border-white animate-pulse">
+            {badgeCounts.pending}
+          </span>
+        )}
+      </button>
+    </div>
+  );
+
+  // バッジモーダルUI
+  const BadgeModal = () => (
+    showBadgeModal ? (
+      <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[100]" onClick={() => setShowBadgeModal(false)}>
+        <div className="bg-white rounded-2xl p-6 min-w-[320px] max-w-[90vw] shadow-xl relative" onClick={e => e.stopPropagation()}>
+          <h2 className="text-lg font-bold mb-3">依頼・通知一覧</h2>
+          <div className="mb-2">
+            <span className="inline-flex items-center gap-2 text-blue-600 font-semibold"><TaskIcon className="w-5 h-5" />承認済み: {badgeCounts.approved}件</span>
+          </div>
+          <div className="mb-4">
+            <span className="inline-flex items-center gap-2 text-red-600 font-semibold"><BellIcon className="w-5 h-5" />未承認: {badgeCounts.pending}件</span>
+          </div>
+          <button className="absolute top-2 right-2 text-slate-400 hover:text-red-400" onClick={() => setShowBadgeModal(false)} aria-label="閉じる">✕</button>
+        </div>
+      </div>
+    ) : null
+  );
 }
