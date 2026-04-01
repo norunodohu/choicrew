@@ -629,6 +629,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
         slot_end: slot.end,
         requester_name: name.trim(),
         message: message.trim(),
+        status: 'pending',
         created_at: Timestamp.fromDate(new Date()),
       });
       saveRequesterName(name.trim());

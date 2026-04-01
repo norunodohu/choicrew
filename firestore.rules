@@ -118,7 +118,10 @@ service cloud.firestore {
                     && request.resource.data.requester_name is string
                     && request.resource.data.requester_name.size() > 0
                     && request.resource.data.requester_name.size() <= 30;
-      allow update, delete: if false;
+      // statusフィールドのみ approved/declined への更新を許可（承認・辞退操作）
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+                    && request.resource.data.status in ['approved', 'declined'];
+      allow delete: if false;
     }
   }
 }
