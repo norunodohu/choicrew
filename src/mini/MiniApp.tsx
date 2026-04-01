@@ -1032,6 +1032,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [deleting, setDeleting] = useState(false);
   const [myRequestStatuses, setMyRequestStatuses] = useState<Map<string, { status: string; id: string }>>(new Map());
   const [showOwnerMenu, setShowOwnerMenu] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
 
@@ -1211,6 +1212,17 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     }
   };
 
+  const handleChangeTheme = async (newTheme: ThemeKey) => {
+    if (!share) return;
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { theme: newTheme });
+      setShowThemePicker(false);
+      toast.show('テーマを変更しました');
+    } catch {
+      toast.show('変更に失敗しました');
+    }
+  };
+
   const handleSaveSlots = async () => {
     setSavingSlots(true);
     try {
@@ -1365,6 +1377,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                   <a href={makeLineShareUrl(share.title || share.name, url)} target="_blank" rel="noopener noreferrer" onClick={() => setShowOwnerMenu(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">LINEで送る</a>
                   <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">時間を編集</button>
                   <button onClick={() => { window.print(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">印刷する</button>
+                  <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">テーマを変更</button>
                   {'Notification' in window && Notification.permission !== 'denied' && (
                     <button
                       onClick={async () => {
@@ -1681,6 +1694,31 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
       )}
 
       {/* 時間帯編集オーバーレイ */}
+      {showThemePicker && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4" onClick={() => setShowThemePicker(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-slate-800">テーマを変更</h2>
+              <button onClick={() => setShowThemePicker(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {(Object.entries(THEMES) as [ThemeKey, typeof THEMES[ThemeKey]][]).map(([key, t]) => (
+                <button
+                  key={key}
+                  onClick={() => handleChangeTheme(key)}
+                  className={`relative rounded-2xl p-4 text-left border-2 transition-all ${themeKey === key ? 'border-teal-500 shadow-md scale-[1.02]' : 'border-slate-200 hover:border-slate-300'}`}
+                  style={{  }}
+                >
+                  <div className={`w-full h-12 rounded-xl mb-3 ${t.previewBg}`} />
+                  <p className="text-xs font-bold text-slate-700">{t.label}</p>
+                  {themeKey === key && <span className="absolute top-2 right-2 text-teal-500 text-xs font-bold">✓ 現在</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {editingSlots && (
         <div className="fixed inset-0 bg-white z-50 overflow-y-auto">
           <div className="max-w-lg mx-auto px-4 py-6 pb-28">
@@ -1688,7 +1726,22 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
               <h2 className="text-lg font-bold text-slate-800">時間帯を編集</h2>
               <button onClick={() => setEditingSlots(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
             </div>
-            <p className="text-xs text-slate-400 mb-4">各日の時間帯を編集・追加・削除できます</p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs text-slate-400">各日の時間帯を編集・追加・削除できます</p>
+              <button
+                onClick={() => {
+                  const template = getDays(7).map(day => ({ id: genId(6), date: day.date, start: '10:00', end: '17:00' }));
+                  setDraftSlots(prev => {
+                    const existing = new Set(prev.map(s => s.date));
+                    const toAdd = template.filter(s => !existing.has(s.date));
+                    return [...prev, ...toAdd];
+                  });
+                }}
+                className="text-xs text-teal-600 font-semibold bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded-lg px-3 py-1.5 transition"
+              >
+                ⚡ テンプレから追加
+              </button>
+            </div>
             <div className="space-y-3">
               {getDays(7).map(day => {
                 const daySlots = draftSlots.filter(s => s.date === day.date);
