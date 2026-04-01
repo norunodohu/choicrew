@@ -753,7 +753,10 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [requestSlot, setRequestSlot] = useState<{ date: string; start: string; end: string } | null>(null);
   const [sentSlots, setSentSlots] = useState<Set<string>>(() => loadSentSlots(shareId));
   const [copied, setCopied] = useState(false);
-  const [showNotifGuide, setShowNotifGuide] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(() =>
+    typeof Notification !== 'undefined' && Notification.permission === 'granted'
+  );
+  const [showNotifExpand, setShowNotifExpand] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
 
@@ -809,21 +812,14 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
     return () => unsub();
   }, [shareId]);
 
-  // FCM Web Push: オーナーのみトークンを取得し Firestore に保存
+  // FCM Web Push: オーナーのみ、許可済みならトークンを取得
   useEffect(() => {
     if (!isOwner || fcmRegisteredRef.current) return;
     fcmRegisteredRef.current = true;
-
     if (!('Notification' in window)) return;
     if (Notification.permission === 'granted') {
-      // すでに許可済みならそのまま登録
       registerFCMToken();
-      return;
     }
-    if (Notification.permission === 'denied') return;
-
-    // 許可ダイアログの前にカスタムガイドを表示
-    setShowNotifGuide(true);
   }, [isOwner, shareId]);
 
   const registerFCMToken = async () => {
@@ -999,6 +995,53 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                 印刷する
               </button>
             </div>
+
+            {/* 通知トグル */}
+            {'Notification' in window && Notification.permission !== 'denied' && (
+              <div className="mt-3 pt-3 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <BellIcon className="w-4 h-4 text-slate-400" />
+                    <span className="text-sm text-slate-500">依頼通知</span>
+                    {notifEnabled && (
+                      <span className="text-[10px] text-teal-600 font-medium bg-teal-50 rounded-full px-1.5 py-0.5">ON</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => { if (!notifEnabled) setShowNotifExpand(v => !v); }}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      notifEnabled ? 'bg-teal-500 cursor-default' : 'bg-slate-200 hover:bg-slate-300'
+                    }`}
+                    aria-label="依頼通知のON/OFF"
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                      notifEnabled ? 'translate-x-[18px]' : 'translate-x-[3px]'
+                    }`} />
+                  </button>
+                </div>
+                {showNotifExpand && !notifEnabled && (
+                  <div className="mt-2.5 bg-slate-50 rounded-xl p-3 animate-[fadeIn_0.15s_ease-out]">
+                    <p className="text-xs text-slate-600 leading-relaxed mb-2.5">
+                      依頼が届いたとき、タブを閉じていてもお知らせします。<br />
+                      許可画面では「<strong>常に許可</strong>」を選ぶと確実に届きます。
+                    </p>
+                    <button
+                      onClick={async () => {
+                        setShowNotifExpand(false);
+                        const perm = await Notification.requestPermission();
+                        if (perm === 'granted') {
+                          setNotifEnabled(true);
+                          registerFCMToken();
+                        }
+                      }}
+                      className="w-full py-1.5 rounded-lg bg-teal-600 text-white text-xs font-semibold hover:bg-teal-700 transition"
+                    >
+                      通知を許可する
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -1211,49 +1254,6 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         />
       )}
 
-      {/* 通知許可ガイドモーダル */}
-      {showNotifGuide && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[200]" onClick={() => setShowNotifGuide(false)}>
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center shrink-0">
-                <BellIcon className="w-5 h-5 text-teal-600" />
-              </div>
-              <h3 className="text-base font-bold text-slate-800">依頼が届いたら通知します</h3>
-            </div>
-            <p className="text-sm text-slate-600 leading-relaxed mb-1">
-              次の画面でブラウザの通知許可を求めます。
-            </p>
-            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
-              <p className="text-sm font-semibold text-amber-800 mb-1">⚠️ 重要</p>
-              <p className="text-sm text-amber-700 leading-relaxed">
-                「<strong>常に許可</strong>」または「<strong>無期限で許可</strong>」を選んでください。<br />
-                「このサイトが閉じるまで」を選ぶとタブを閉じた後は通知が届きません。
-              </p>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowNotifGuide(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition"
-              >
-                あとで
-              </button>
-              <button
-                onClick={async () => {
-                  setShowNotifGuide(false);
-                  const permission = await Notification.requestPermission();
-                  if (permission === 'granted') {
-                    registerFCMToken();
-                  }
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition"
-              >
-                通知を許可する
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
