@@ -753,9 +753,11 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [requestSlot, setRequestSlot] = useState<{ date: string; start: string; end: string } | null>(null);
   const [sentSlots, setSentSlots] = useState<Set<string>>(() => loadSentSlots(shareId));
   const [copied, setCopied] = useState(false);
-  const [notifEnabled, setNotifEnabled] = useState(() =>
-    typeof Notification !== 'undefined' && Notification.permission === 'granted'
-  );
+  const [notifEnabled, setNotifEnabled] = useState(() => {
+    if (typeof Notification === 'undefined') return false;
+    if (Notification.permission !== 'granted') return false;
+    try { return localStorage.getItem(`mini_notif_${shareId}`) !== 'off'; } catch { return true; }
+  });
   const [showNotifExpand, setShowNotifExpand] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
@@ -821,6 +823,13 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
       registerFCMToken();
     }
   }, [isOwner, shareId]);
+
+  const unregisterFCMToken = async () => {
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { fcm_token: null });
+    } catch { /* ignore */ }
+    try { localStorage.setItem(`mini_notif_${shareId}`, 'off'); } catch { /* */ }
+  };
 
   const registerFCMToken = async () => {
     if (!messaging) return;
@@ -1008,9 +1017,17 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                     )}
                   </div>
                   <button
-                    onClick={() => { if (!notifEnabled) setShowNotifExpand(v => !v); }}
+                    onClick={async () => {
+                      if (notifEnabled) {
+                        await unregisterFCMToken();
+                        setNotifEnabled(false);
+                        setShowNotifExpand(false);
+                      } else {
+                        setShowNotifExpand(v => !v);
+                      }
+                    }}
                     className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      notifEnabled ? 'bg-teal-500 cursor-default' : 'bg-slate-200 hover:bg-slate-300'
+                      notifEnabled ? 'bg-teal-500 hover:bg-teal-600' : 'bg-slate-200 hover:bg-slate-300'
                     }`}
                     aria-label="依頼通知のON/OFF"
                   >
@@ -1030,6 +1047,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                         setShowNotifExpand(false);
                         const perm = await Notification.requestPermission();
                         if (perm === 'granted') {
+                          try { localStorage.removeItem(`mini_notif_${shareId}`); } catch { /* */ }
                           setNotifEnabled(true);
                           registerFCMToken();
                         }
