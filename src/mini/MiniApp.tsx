@@ -109,7 +109,7 @@ function genId(len = 8): string {
   return Array.from({ length: len }, () => c[Math.floor(Math.random() * c.length)]).join('');
 }
 
-function getDays(count = 7) {
+function getDays(count = 14) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return Array.from({ length: count }, (_, i) => {
@@ -1670,10 +1670,11 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                 {/* Date header */}
                 <div className="flex items-center gap-2 mb-2.5 px-1">
                   {today && <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />}
-                  <h2 className={`text-sm font-semibold ${today ? 'text-teal-700' : 'text-slate-400'}`}>
+                  <h2 className={`text-base font-bold tracking-wide ${today ? 'text-teal-600' : 'text-slate-600'}`}>
                     {formatSlotDate(date)}
-                    {today && <span className="ml-1.5 text-xs font-normal text-teal-500">今日</span>}
+                    {today && <span className="ml-2 text-xs font-semibold bg-teal-100 text-teal-600 rounded-full px-2 py-0.5">今日</span>}
                   </h2>
+                  <div className="flex-1 h-px bg-slate-200" />
                 </div>
 
                 {/* Slots for this date */}
