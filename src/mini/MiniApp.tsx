@@ -753,6 +753,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [requestSlot, setRequestSlot] = useState<{ date: string; start: string; end: string } | null>(null);
   const [sentSlots, setSentSlots] = useState<Set<string>>(() => loadSentSlots(shareId));
   const [copied, setCopied] = useState(false);
+  const [showNotifGuide, setShowNotifGuide] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
 
@@ -812,25 +813,33 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   useEffect(() => {
     if (!isOwner || fcmRegisteredRef.current) return;
     fcmRegisteredRef.current = true;
-    const registerFCM = async () => {
-      if (!('Notification' in window)) return;
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') return;
-      if (!messaging) return;
-      const vapidKey = (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY;
-      if (!vapidKey) return;
-      try {
-        const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
-        if (token) {
-          await updateDoc(doc(db, 'mini_shares', shareId), { fcm_token: token });
-        }
-      } catch (err) {
-        console.error('FCM registration failed:', err);
-      }
-    };
-    registerFCM();
+
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'granted') {
+      // すでに許可済みならそのまま登録
+      registerFCMToken();
+      return;
+    }
+    if (Notification.permission === 'denied') return;
+
+    // 許可ダイアログの前にカスタムガイドを表示
+    setShowNotifGuide(true);
   }, [isOwner, shareId]);
+
+  const registerFCMToken = async () => {
+    if (!messaging) return;
+    const vapidKey = (import.meta as any).env?.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKey) return;
+    try {
+      const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
+      if (token) {
+        await updateDoc(doc(db, 'mini_shares', shareId), { fcm_token: token });
+      }
+    } catch (err) {
+      console.error('FCM registration failed:', err);
+    }
+  };
 
   const handleCopy = async () => {
     try {
@@ -1200,6 +1209,50 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
           onClose={() => setRequestSlot(null)}
           onSent={() => handleSent(requestSlot)}
         />
+      )}
+
+      {/* 通知許可ガイドモーダル */}
+      {showNotifGuide && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-[200]" onClick={() => setShowNotifGuide(false)}>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-teal-50 flex items-center justify-center shrink-0">
+                <BellIcon className="w-5 h-5 text-teal-600" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800">依頼が届いたら通知します</h3>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed mb-1">
+              次の画面でブラウザの通知許可を求めます。
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-5">
+              <p className="text-sm font-semibold text-amber-800 mb-1">⚠️ 重要</p>
+              <p className="text-sm text-amber-700 leading-relaxed">
+                「<strong>常に許可</strong>」または「<strong>無期限で許可</strong>」を選んでください。<br />
+                「このサイトが閉じるまで」を選ぶとタブを閉じた後は通知が届きません。
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowNotifGuide(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition"
+              >
+                あとで
+              </button>
+              <button
+                onClick={async () => {
+                  setShowNotifGuide(false);
+                  const permission = await Notification.requestPermission();
+                  if (permission === 'granted') {
+                    registerFCMToken();
+                  }
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white text-sm font-semibold hover:bg-teal-700 transition"
+              >
+                通知を許可する
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
