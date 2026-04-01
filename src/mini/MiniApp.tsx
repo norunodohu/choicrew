@@ -30,7 +30,7 @@ const BellIcon = ({ className }: { className?: string }) => (
    Types
    ================================================================ */
 
-type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern';
+type ThemeKey = 'simple' | 'dark' | 'pop' | 'modern' | 'anime';
 
 interface TimeSlot {
   id: string;
@@ -398,6 +398,16 @@ const THEMES: Record<ThemeKey, {
     cardPreviewFrom: '#374151', cardPreviewTo: '#111827',
     previewBg: '#ffffff', previewCard: '#f9fafb', previewBorder: '#e5e7eb',
   },
+  anime: {
+    label: 'アニメ', emoji: '🌸',
+    pageBg: 'bg-gradient-to-br from-pink-100 via-purple-50 to-sky-100',
+    card: 'bg-white border-2 border-pink-300 shadow-[4px_4px_0px_#f472b6]',
+    accentBtn: 'bg-gradient-to-r from-pink-500 to-purple-500 text-white hover:from-pink-600 hover:to-purple-600 active:scale-95 shadow-[2px_2px_0px_#be185d]',
+    accentText: 'text-pink-500', headingText: 'text-purple-900',
+    subText: 'text-pink-400', timeText: 'text-purple-800', labelText: 'text-purple-700',
+    cardPreviewFrom: '#f472b6', cardPreviewTo: '#a855f7',
+    previewBg: 'linear-gradient(135deg,#fce7f3,#ede9fe,#e0f2fe)', previewCard: '#ffffff', previewBorder: '#f9a8d4',
+  },
 };
 
 /* ================================================================
@@ -675,20 +685,63 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             {/* Design grid */}
             <div className="grid grid-cols-2 gap-3 mb-5">
               {(Object.entries(THEMES) as [ThemeKey, typeof THEMES[ThemeKey]][]).map(([key, t]) => (
-                <button key={key} onClick={() => setTheme(key)}
+                <button key={key} onClick={() => setTheme(key as ThemeKey)}
                   className={`relative rounded-2xl overflow-hidden transition-all ${theme === key ? 'ring-2 ring-teal-500 ring-offset-2 shadow-lg scale-[1.02]' : 'ring-1 ring-slate-200 hover:ring-slate-400'}`}>
-                  <div style={{ background: t.previewBg }} className="p-3 pb-0">
-                    <div style={{ background: t.previewCard, borderRadius: 8, padding: '8px', border: `1px solid ${t.previewBorder}` }}>
-                      <div style={{ height: 7, borderRadius: 4, background: `linear-gradient(to right, ${t.cardPreviewFrom}, ${t.cardPreviewTo})`, marginBottom: 5 }} />
-                      <div style={{ height: 3, borderRadius: 2, background: t.previewBorder, width: '55%' }} />
+                  {key === 'anime' ? (
+                    /* アニメテーマ専用プレビュー */
+                    <div style={{ background: 'linear-gradient(135deg,#fce7f3,#ede9fe,#e0f2fe)', position: 'relative', overflow: 'hidden', paddingBottom: 0 }}>
+                      <svg viewBox="0 0 160 90" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', display: 'block' }}>
+                        {/* 背景グラデ */}
+                        <defs>
+                          <linearGradient id="animeBg" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0%" stopColor="#fce7f3" />
+                            <stop offset="50%" stopColor="#ede9fe" />
+                            <stop offset="100%" stopColor="#e0f2fe" />
+                          </linearGradient>
+                          <linearGradient id="animePink" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="#f472b6" />
+                            <stop offset="100%" stopColor="#a855f7" />
+                          </linearGradient>
+                        </defs>
+                        <rect width="160" height="90" fill="url(#animeBg)" />
+                        {/* スピードライン */}
+                        {[0,15,30,45,60,75].map(y => (
+                          <line key={y} x1="0" y1={y} x2="160" y2={y+8} stroke="#f9a8d4" strokeWidth="0.5" opacity="0.4" />
+                        ))}
+                        {/* カード */}
+                        <rect x="10" y="10" width="140" height="40" rx="6" fill="white" stroke="#f472b6" strokeWidth="2" />
+                        <rect x="10" y="10" width="140" height="40" rx="6" fill="none" stroke="#f472b6" strokeWidth="2" />
+                        {/* タイトルバー */}
+                        <rect x="16" y="16" width="80" height="8" rx="3" fill="url(#animePink)" />
+                        {/* サブテキスト線 */}
+                        <rect x="16" y="30" width="50" height="4" rx="2" fill="#f9a8d4" />
+                        <rect x="16" y="38" width="35" height="4" rx="2" fill="#e9d5ff" />
+                        {/* ★ stars */}
+                        <text x="108" y="36" fontSize="14" fill="#f472b6">★</text>
+                        <text x="124" y="28" fontSize="10" fill="#a855f7">✦</text>
+                        {/* ボタン */}
+                        <rect x="10" y="58" width="140" height="18" rx="5" fill="url(#animePink)" />
+                        <text x="80" y="70" textAnchor="middle" fontSize="7" fill="white" fontWeight="bold">依頼する ♡</text>
+                        {/* 桜 */}
+                        <text x="6" y="20" fontSize="12" opacity="0.7">🌸</text>
+                        <text x="138" y="82" fontSize="10" opacity="0.6">✿</text>
+                        <text x="2" y="88" fontSize="9" opacity="0.5">🌸</text>
+                      </svg>
                     </div>
-                    <div style={{ height: 5 }} />
-                    <div style={{ background: `linear-gradient(to right, ${t.cardPreviewFrom}, ${t.cardPreviewTo})`, borderRadius: 6, height: 22, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div style={{ height: 3, width: 36, background: 'rgba(255,255,255,0.7)', borderRadius: 2 }} />
+                  ) : (
+                    <div style={{ background: t.previewBg }} className="p-3 pb-0">
+                      <div style={{ background: t.previewCard, borderRadius: 8, padding: '8px', border: `1px solid ${t.previewBorder}` }}>
+                        <div style={{ height: 7, borderRadius: 4, background: `linear-gradient(to right, ${t.cardPreviewFrom}, ${t.cardPreviewTo})`, marginBottom: 5 }} />
+                        <div style={{ height: 3, borderRadius: 2, background: t.previewBorder, width: '55%' }} />
+                      </div>
+                      <div style={{ height: 5 }} />
+                      <div style={{ background: `linear-gradient(to right, ${t.cardPreviewFrom}, ${t.cardPreviewTo})`, borderRadius: 6, height: 22, marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ height: 3, width: 36, background: 'rgba(255,255,255,0.7)', borderRadius: 2 }} />
+                      </div>
                     </div>
-                  </div>
-                  <div style={{ background: t.previewBg, paddingBlock: 8, paddingInline: 12, borderTop: `1px solid ${t.previewBorder}` }}>
-                    <span className="text-xs font-bold" style={{ color: key === 'dark' ? '#fff' : key === 'pop' ? '#701a75' : '#1e293b' }}>
+                  )}
+                  <div style={{ background: key === 'anime' ? 'linear-gradient(to right,#fce7f3,#ede9fe)' : t.previewBg, paddingBlock: 8, paddingInline: 12, borderTop: `1px solid ${t.previewBorder}` }}>
+                    <span className="text-xs font-bold" style={{ color: key === 'dark' ? '#fff' : key === 'pop' ? '#701a75' : key === 'anime' ? '#7e22ce' : '#1e293b' }}>
                       {t.emoji} {t.label}
                     </span>
                   </div>
@@ -1209,8 +1262,30 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const T = THEMES[themeKey] || THEMES.simple;
 
   return (
-    <div className={`min-h-screen ${T.pageBg} print:bg-white`}>
+    <div className={`min-h-screen ${T.pageBg} print:bg-white relative overflow-x-hidden`}>
       {toast.UI}
+      {/* ── アニメテーマ装飾 ── */}
+      {themeKey === 'anime' && (
+        <div className="pointer-events-none select-none print:hidden" aria-hidden="true">
+          {/* 左上の桜 */}
+          <span className="fixed top-4 left-2 text-4xl opacity-30 animate-[spin_12s_linear_infinite]">🌸</span>
+          <span className="fixed top-20 left-6 text-2xl opacity-20 animate-[spin_18s_linear_infinite_reverse]">✿</span>
+          {/* 右上 */}
+          <span className="fixed top-8 right-3 text-3xl opacity-25 animate-[spin_15s_linear_infinite]">⭐</span>
+          <span className="fixed top-28 right-8 text-xl opacity-20">✨</span>
+          {/* 左下 */}
+          <span className="fixed bottom-16 left-4 text-3xl opacity-20 animate-[spin_20s_linear_infinite_reverse]">🌸</span>
+          <span className="fixed bottom-32 left-10 text-lg opacity-15">★</span>
+          {/* 右下 */}
+          <span className="fixed bottom-10 right-4 text-2xl opacity-20 animate-[spin_10s_linear_infinite]">✿</span>
+          {/* スピードライン SVG */}
+          <svg className="fixed inset-0 w-full h-full opacity-[0.04]" viewBox="0 0 400 800" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+            {[0,40,80,120,160,200,240,280,320,360].map((y,i) => (
+              <line key={i} x1="0" y1={y} x2="400" y2={y+30} stroke="#f472b6" strokeWidth="1.5" />
+            ))}
+          </svg>
+        </div>
+      )}
       <div className="max-w-lg mx-auto px-4 py-8 sm:py-12">
 
         {/* Logo */}
