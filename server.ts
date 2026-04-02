@@ -320,6 +320,9 @@ app.post("/api/mini/notify-email", async (req, res) => {
       return res.status(503).json({ error: "SMTP not configured" });
     }
 
+    // SMTP_TO が設定されている場合はそちらを優先（Resend無料プランのドメイン制限対応）
+    const actualTo = process.env.SMTP_TO || notifyEmail;
+
     const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
     const shareUrl = `${appUrl}/mini/s/${shareId}`;
     const ownerName = (data.displayName || data.name || "管理者") as string;
@@ -344,7 +347,7 @@ app.post("/api/mini/notify-email", async (req, res) => {
 
     await transporter.sendMail({
       from: smtpFrom,
-      to: notifyEmail,
+      to: actualTo,
       subject: `【ChoiCrew Mini】${requesterName || "誰か"}さんから依頼が届きました`,
       text: bodyLines.join("\n"),
     });
@@ -382,7 +385,7 @@ app.post("/api/mini/email-confirm", async (req, res) => {
 
     await transporter.sendMail({
       from: smtpFrom,
-      to,
+      to: process.env.SMTP_TO || to,
       subject: "【ChoiCrew Mini】メール通知が有効になりました",
       text: [
         `${ownerName || ""}さん、メール通知の設定が完了しました。`,
