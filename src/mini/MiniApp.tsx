@@ -1479,9 +1479,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
   const handleCancel = async (requestId: string) => {
     try {
-      await updateDoc(doc(db, 'mini_requests', requestId), { status: 'cancelled' });
+      await deleteDoc(doc(db, 'mini_requests', requestId));
       setConfirmCancelId(null);
-      toast.show('承認を取り消しました', 'success');
+      toast.show('依頼を取り消しました', 'success');
     } catch (err) {
       console.error(err);
       toast.show('エラーが発生しました', 'error');

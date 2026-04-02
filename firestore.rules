@@ -149,7 +149,7 @@ service cloud.firestore {
       // status フィールドを approved/declined/cancelled に変更することを許可
       allow update: if request.resource.data.status in ['approved', 'declined', 'cancelled']
                     && request.resource.data.keys().hasAll(resource.data.keys());
-      allow delete: if false;
+      allow delete: if true;
     }
   }
 }
