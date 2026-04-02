@@ -1479,9 +1479,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
   const handleCancel = async (requestId: string) => {
     try {
-      await deleteDoc(doc(db, 'mini_requests', requestId));
+      await updateDoc(doc(db, 'mini_requests', requestId), { status: 'pending' });
       setConfirmCancelId(null);
-      toast.show('依頼を取り消しました', 'success');
+      toast.show('承認を取り消しました', 'success');
     } catch (err) {
       console.error(err);
       toast.show('エラーが発生しました', 'error');
@@ -2007,10 +2007,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                         </div>
 
                         {/* Owner: requester avatars */}
-                        {isOwner && reqs.length > 0 && (
+                        {isOwner && reqs.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length > 0 && (
                           <div className="mt-3 pt-3 border-t border-slate-100">
                             <div className="flex flex-wrap gap-2">
-                              {reqs.map(r => (
+                              {reqs.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').map(r => (
                                 <div key={r.id} className="flex items-center gap-1.5 bg-slate-50 rounded-full pl-1 pr-2.5 py-1" title={r.message || undefined}>
                                   <Avatar name={r.requester_name} />
                                   <span className="text-xs font-medium text-slate-600">{r.requester_name}</span>
