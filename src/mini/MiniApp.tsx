@@ -2399,7 +2399,6 @@ export default function MiniApp() {
       const approved = reqs.filter(r => r.status === 'approved').length;
       const pending = reqs.filter(r => !r.status || r.status === 'pending').length;
       setBadgeCounts({ approved, pending });
-      if (pending > 0) setShowBadgeModal(true);
     };
     window.addEventListener('mini_requests_update', update);
     return () => window.removeEventListener('mini_requests_update', update);
@@ -2501,7 +2500,7 @@ export default function MiniApp() {
             <span className="inline-flex items-center gap-2 text-blue-600 font-semibold"><TaskIcon className="w-5 h-5" />確定した予定: {badgeCounts.approved}件</span>
           </div>
           <div className="mb-4">
-            <span className="inline-flex items-center gap-2 text-red-600 font-semibold"><BellIcon className="w-5 h-5" />リクエストが届いています: {badgeCounts.pending}件</span>
+            <span className="inline-flex items-center gap-2 text-teal-600 font-semibold"><BellIcon className="w-5 h-5" />✨ リクエスト中です: {badgeCounts.pending}件</span>
           </div>
           <button className="absolute top-2 right-2 text-slate-400 hover:text-red-400" onClick={() => setShowBadgeModal(false)} aria-label="閉じる">✕</button>
         </div>
