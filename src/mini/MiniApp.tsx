@@ -1208,12 +1208,27 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [tokenVerified, setTokenVerified] = useState(false);
   const [showMgmtQr, setShowMgmtQr] = useState(false);
+  const [showEditTitle, setShowEditTitle] = useState(false);
+  const [editTitleVal, setEditTitleVal] = useState('');
+  const [editDisplayNameVal, setEditDisplayNameVal] = useState('');
   const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
   const toast = useToast();
 
   const url = makeShareUrl(shareId);
   const prevPendingIdsRef = useRef<Set<string> | null>(null);
   const fcmRegisteredRef = useRef(false);
+
+  const handleSaveTitle = async () => {
+    if (!share) return;
+    const t = editTitleVal.trim();
+    const d = editDisplayNameVal.trim();
+    if (!t && !d) { setShowEditTitle(false); return; }
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { title: t || share.title || '', displayName: d || share.displayName || share.name });
+      toast.show('タイトルを更新しました', 'success');
+    } catch { toast.show('更新に失敗しました', 'error'); }
+    setShowEditTitle(false);
+  };
 
   const handleChangeStatus = async (newStatus: 'active' | 'view_only' | 'draft') => {
     if (!share) return;
@@ -1687,9 +1702,20 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className={`text-2xl font-bold ${T.headingText} tracking-tight`}>
-            {share.title || share.name + 'さんの空き時間'}
-          </h1>
+          <div className="inline-flex items-center gap-2">
+            <h1 className={`text-2xl font-bold ${T.headingText} tracking-tight`}>
+              {share.title || share.name + 'さんの空き時間'}
+            </h1>
+            {isOwner && (
+              <button
+                onClick={() => { setEditTitleVal(share.title || ''); setEditDisplayNameVal(share.displayName || share.name); setShowEditTitle(true); }}
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition -mt-0.5"
+                aria-label="タイトルを編集"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+              </button>
+            )}
+          </div>
           <p className={`text-sm ${T.subText} mt-1`}>
             作成者：{share.displayName || share.name}
           </p>
@@ -1697,6 +1723,49 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             <p className="text-sm text-teal-600 font-medium mt-1">{requests.length}件の依頼</p>
           )}
         </div>
+
+        {/* Edit title modal */}
+        {showEditTitle && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setShowEditTitle(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-slate-800">タイトルと名前を編集</h2>
+                <button onClick={() => setShowEditTitle(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1 block">タイトル</label>
+                  <input
+                    type="text"
+                    value={editTitleVal}
+                    onChange={e => setEditTitleVal(e.target.value)}
+                    placeholder={share.name + 'さんの空き時間'}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                    maxLength={60}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1 block">表示名（作成者）</label>
+                  <input
+                    type="text"
+                    value={editDisplayNameVal}
+                    onChange={e => setEditDisplayNameVal(e.target.value)}
+                    placeholder={share.name}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                    maxLength={30}
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleSaveTitle}
+                className="mt-5 w-full bg-teal-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-teal-600 active:scale-95 transition-all"
+              >
+                保存する
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Owner: Request summary */}
         {isOwner && requests.length > 0 && (
@@ -2312,10 +2381,10 @@ export default function MiniApp() {
         <div className="bg-white rounded-2xl p-6 min-w-[320px] max-w-[90vw] shadow-xl relative" onClick={e => e.stopPropagation()}>
           <h2 className="text-lg font-bold mb-3">依頼・通知一覧</h2>
           <div className="mb-2">
-            <span className="inline-flex items-center gap-2 text-blue-600 font-semibold"><TaskIcon className="w-5 h-5" />承認済み: {badgeCounts.approved}件</span>
+            <span className="inline-flex items-center gap-2 text-blue-600 font-semibold"><TaskIcon className="w-5 h-5" />確定した予定: {badgeCounts.approved}件</span>
           </div>
           <div className="mb-4">
-            <span className="inline-flex items-center gap-2 text-red-600 font-semibold"><BellIcon className="w-5 h-5" />未承認: {badgeCounts.pending}件</span>
+            <span className="inline-flex items-center gap-2 text-red-600 font-semibold"><BellIcon className="w-5 h-5" />リクエストが届いています: {badgeCounts.pending}件</span>
           </div>
           <button className="absolute top-2 right-2 text-slate-400 hover:text-red-400" onClick={() => setShowBadgeModal(false)} aria-label="閉じる">✕</button>
         </div>

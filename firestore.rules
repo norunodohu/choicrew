@@ -128,6 +128,10 @@ service cloud.firestore {
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paused', 'draft'])
                       && request.resource.data.paused is bool
                       && request.resource.data.draft is bool
+                    ) || (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'displayName'])
+                      && request.resource.data.title is string
+                      && request.resource.data.displayName is string
                     );
       // オーナーが削除できる（認証なしのためクライアント信頼）
       allow delete: if true;
