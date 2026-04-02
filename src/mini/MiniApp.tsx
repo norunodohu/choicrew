@@ -1778,8 +1778,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           <p className={`text-sm ${T.subText} mt-1`}>
             作成者：{share.displayName || share.name}
           </p>
-          {isOwner && requests.length > 0 && (
-            <p className="text-sm text-teal-600 font-medium mt-1">{requests.length}件の依頼</p>
+          {isOwner && requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length > 0 && (
+            <p className="text-sm text-teal-600 font-medium mt-1">{requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length}件の依頼</p>
           )}
         </div>
 
@@ -2007,7 +2007,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                           <div className="mt-3 pt-3 border-t border-slate-100">
                             <div className="flex flex-wrap gap-2">
                               {reqs.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').map(r => (
-                                <div key={r.id} className="flex items-center gap-1.5 bg-slate-50 rounded-full pl-1 pr-2.5 py-1" title={r.message || undefined}>
+                                <div key={r.id} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-full pl-1 pr-2.5 py-1" title={r.message || undefined}>
                                   <Avatar name={r.requester_name} />
                                   <span className="text-xs font-medium text-slate-600">{r.requester_name}</span>
                                   {r.message && <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />}
