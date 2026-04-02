@@ -80,6 +80,7 @@ interface ShareData {
   bookingMode?: 'multiple' | 'exclusive';
   paused?: boolean;
   draft?: boolean;
+  owner_token?: string;
 }
 
 interface RequestEntry {
@@ -227,6 +228,14 @@ function saveSentRequestId(shareId: string, key: string, requestId: string) {
   const map = loadSentRequestIds(shareId);
   map.set(key, requestId);
   try { localStorage.setItem(`mini_sent_ids_${shareId}`, JSON.stringify([...map.entries()])); } catch { /* */ }
+}
+
+function saveOwnerToken(shareId: string, token: string) {
+  try { localStorage.setItem(`mini_owner_token_${shareId}`, token); } catch { /* */ }
+}
+
+function loadOwnerToken(shareId: string): string | null {
+  try { return localStorage.getItem(`mini_owner_token_${shareId}`); } catch { return null; }
 }
 
 function saveOwnedShare(shareId: string, name: string, dateRange?: string, lastDate?: string) {
@@ -573,6 +582,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
     setSaving(true);
     try {
       const id = genId(8);
+      const ownerToken = genId(16);
       const now = new Date();
       const expires = addDays(now, 365);
       const slotData = validSlots.map(({ date, start, end }) => ({ date, start, end }));
@@ -583,9 +593,11 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         slots: slotData,
         theme,
         bookingMode,
+        owner_token: ownerToken,
         created_at: Timestamp.fromDate(now),
         expires_at: Timestamp.fromDate(expires),
       });
+      saveOwnerToken(id, ownerToken);
       saveDraftData(title.trim(), displayName.trim());
       const dateRange = computeDateRange(slotData);
       const lastDate = [...slotData].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
@@ -1121,7 +1133,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
    ShareView
    ================================================================ */
 
-function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boolean }) {
+function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; justCreated: boolean; ownerToken?: string | null }) {
   const [share, setShare] = useState<ShareData | null>(null);
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1147,7 +1159,9 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [isPaused, setIsPaused] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
-  const isOwner = justCreated || isOwnedShare(shareId);
+  const [tokenVerified, setTokenVerified] = useState(false);
+  const [showMgmtQr, setShowMgmtQr] = useState(false);
+  const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
   const toast = useToast();
 
   const url = makeShareUrl(shareId);
@@ -1185,6 +1199,14 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         setIsPaused(!!data.paused);
         setIsDraft(!!data.draft);
         setShare(data);
+        // URL に ?owner=TOKEN が付いていれば照合してオーナー権限を引き継ぐ
+        if (ownerToken && data.owner_token && ownerToken === data.owner_token) {
+          saveOwnerToken(shareId, ownerToken);
+          const dateRange = computeDateRange(data.slots);
+          const lastDate = [...data.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
+          saveOwnedShare(shareId, data.title || data.name, dateRange, lastDate);
+          setTokenVerified(true);
+        }
       } catch (err) {
         console.error('Failed to load share:', err);
         setNotFound(true);
@@ -1572,6 +1594,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                   <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">時間を編集</button>
                   <button onClick={() => { window.print(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">印刷する</button>
                   <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">テーマを変更</button>
+                  <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱 スマホで管理する</button>
                   {'Notification' in window && Notification.permission !== 'denied' && (
                     <button
                       onClick={async () => {
@@ -1940,6 +1963,40 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         </div>
       )}
 
+      {/* 管理用QRモーダル */}
+      {showMgmtQr && (() => {
+        const token = share?.owner_token || loadOwnerToken(shareId);
+        const mgmtUrl = token ? `${url}?owner=${token}` : url;
+        return (
+          <div
+            className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
+            onClick={() => setShowMgmtQr(false)}
+          >
+            <div className="bg-white rounded-3xl p-6 w-full max-w-sm mx-4 shadow-2xl mb-4 sm:mb-0 text-center" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-slate-800">📱 スマホで管理する</h2>
+                <button onClick={() => setShowMgmtQr(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">このQRコードをスマホで読み取ると<br />管理者として操作できます</p>
+              <div className="flex justify-center mb-4">
+                <img src={makeQrUrl(mgmtUrl, 200)} alt="管理用QR" className="w-48 h-48 rounded-xl border border-slate-100" />
+              </div>
+              <p className="text-[10px] text-slate-400 break-all mb-4">{mgmtUrl}</p>
+              <button
+                onClick={async () => {
+                  try { await navigator.clipboard.writeText(mgmtUrl); toast.show('管理用URLをコピーしました', 'success'); }
+                  catch { toast.show('コピーに失敗しました'); }
+                }}
+                className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition"
+              >
+                URLをコピー
+              </button>
+              <p className="text-[10px] text-red-400 mt-3">※このURLを知っている人は管理できます。信頼できる人にのみ共有してください</p>
+            </div>
+          </div>
+        );
+      })()}
+
       {requestSlot && (
         <RequestModal
           shareId={shareId}
@@ -2097,6 +2154,7 @@ export default function MiniApp() {
   const [view, setView] = useState<'loading' | 'create' | 'share'>('loading');
   const [shareId, setShareId] = useState<string | null>(null);
   const [justCreated, setJustCreated] = useState(false);
+  const [ownerTokenFromUrl, setOwnerTokenFromUrl] = useState<string | null>(null);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
   const [badgeCounts, setBadgeCounts] = useState({ approved: 0, pending: 0 });
 
@@ -2115,7 +2173,12 @@ export default function MiniApp() {
   useEffect(() => {
     const path = window.location.pathname;
     const match = path.match(/^\/mini\/s\/([A-Za-z0-9]+)/);
-    if (match) { setShareId(match[1]); setView('share'); }
+    if (match) {
+      setShareId(match[1]);
+      setView('share');
+      const params = new URLSearchParams(window.location.search);
+      setOwnerTokenFromUrl(params.get('owner'));
+    }
     else { setView('create'); }
   }, []);
 
@@ -2123,8 +2186,14 @@ export default function MiniApp() {
     const handlePop = () => {
       const path = window.location.pathname;
       const match = path.match(/^\/mini\/s\/([A-Za-z0-9]+)/);
-      if (match) { setShareId(match[1]); setView('share'); setJustCreated(false); }
-      else { setView('create'); setJustCreated(false); }
+      if (match) {
+        setShareId(match[1]);
+        setView('share');
+        setJustCreated(false);
+        const params = new URLSearchParams(window.location.search);
+        setOwnerTokenFromUrl(params.get('owner'));
+      }
+      else { setView('create'); setJustCreated(false); setOwnerTokenFromUrl(null); }
     };
     window.addEventListener('popstate', handlePop);
     return () => window.removeEventListener('popstate', handlePop);
@@ -2214,7 +2283,7 @@ export default function MiniApp() {
       content = <CreateView onCreated={handleCreated} />;
       break;
     case 'share':
-      content = <ShareView shareId={shareId!} justCreated={justCreated} />;
+      content = <ShareView shareId={shareId!} justCreated={justCreated} ownerToken={ownerTokenFromUrl} />;
       break;
     default:
       content = null;
