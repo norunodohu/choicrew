@@ -1020,11 +1020,13 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
    RequestModal
    ================================================================ */
 
-function RequestModal({ shareId, slot, onClose, onSent }: {
+function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
   shareId: string;
   slot: { date: string; start: string; end: string };
   onClose: () => void;
   onSent: (requestId: string) => void;
+  ownerName?: string;
+  hasEmail?: boolean;
 }) {
   const [name, setName] = useState(loadRequesterName);
   const [message, setMessage] = useState('');
@@ -1163,6 +1165,12 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
             maxLength={200}
           />
         </div>
+
+        {hasEmail && ownerName && (
+          <p className="text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
+            📧 {ownerName}さんはメール通知を設定しています
+          </p>
+        )}
 
         {error && (
           <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
@@ -2234,6 +2242,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           slot={requestSlot}
           onClose={() => setRequestSlot(null)}
           onSent={(requestId) => handleSent(requestSlot, requestId)}
+          ownerName={share?.displayName || share?.name}
+          hasEmail={!!share?.notify_email}
         />
       )}
 
