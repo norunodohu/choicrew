@@ -81,6 +81,7 @@ interface ShareData {
   paused?: boolean;
   draft?: boolean;
   owner_token?: string;
+  notify_email?: string;
 }
 
 interface RequestEntry {
@@ -1084,6 +1085,19 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
             }),
           });
         }
+        // メール通知
+        fetch('/api/mini/notify-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            shareId,
+            requesterName: name.trim(),
+            slotDate: slot.date,
+            slotStart: slot.start,
+            slotEnd: slot.end,
+            message: message.trim(),
+          }),
+        }).catch(() => { /* 通知失敗は無視 */ });
       } catch { /* 通知失敗は無視 */ }
       saveRequesterName(name.trim());
       onSent(reqRef.id);
@@ -1209,6 +1223,11 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [tokenVerified, setTokenVerified] = useState(false);
   const [showMgmtQr, setShowMgmtQr] = useState(false);
   const [showEditTitle, setShowEditTitle] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [platinumCode, setPlatinumCode] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailCodeError, setEmailCodeError] = useState('');
   const [editTitleVal, setEditTitleVal] = useState('');
   const [editDisplayNameVal, setEditDisplayNameVal] = useState('');
   const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
@@ -1217,6 +1236,23 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const url = makeShareUrl(shareId);
   const prevPendingIdsRef = useRef<Set<string> | null>(null);
   const fcmRegisteredRef = useRef(false);
+
+  const handleSaveNotifyEmail = async () => {
+    if (!share) return;
+    if (platinumCode !== 'mario3015#') {
+      setEmailCodeError('プラチナコードが正しくありません');
+      return;
+    }
+    if (!emailInput.trim()) { setEmailCodeError('メールアドレスを入力してください'); return; }
+    setEmailSaving(true);
+    setEmailCodeError('');
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { notify_email: emailInput.trim() });
+      toast.show('メール通知先を登録しました', 'success');
+      setShowEmailModal(false);
+    } catch { toast.show('登録に失敗しました', 'error'); }
+    setEmailSaving(false);
+  };
 
   const handleSaveTitle = async () => {
     if (!share) return;
@@ -1656,6 +1692,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   <button onClick={() => { handleCopy(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🔗 URLをコピー</button>
                   <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">✏️ 時間を編集</button>
                   <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🎨 テーマを変更</button>
+                  <button onClick={() => { setEmailInput(share.notify_email || ''); setPlatinumCode(''); setEmailCodeError(''); setShowEmailModal(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
+                    📧 メール通知{share.notify_email ? <span className="ml-2 text-[10px] text-teal-600 bg-teal-50 rounded-full px-1.5 py-0.5 font-medium">登録済</span> : null}
+                  </button>
                   {!window.matchMedia('(pointer: coarse)').matches && (
                     <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱 スマホで管理する</button>
                   )}
@@ -2077,6 +2116,53 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 この共有を削除する
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* メール通知モーダル */}
+      {showEmailModal && (
+        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50" onClick={() => setShowEmailModal(false)}>
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm mx-4 shadow-2xl mb-4 sm:mb-0" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-slate-800">📧 メール通知</h2>
+              <button onClick={() => setShowEmailModal(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
+            </div>
+            {share?.notify_email && (
+              <p className="text-xs text-teal-600 bg-teal-50 rounded-xl px-3 py-2 mb-3">現在の通知先: {share.notify_email}</p>
+            )}
+            <p className="text-xs text-slate-400 mb-4">依頼が届いたときにメールでお知らせします。有効化には<span className="font-semibold text-slate-600">プレミアム機能</span>のため、プラチナコードが必要です。</p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1 block">通知先メールアドレス</label>
+                <input
+                  type="email"
+                  value={emailInput}
+                  onChange={e => setEmailInput(e.target.value)}
+                  placeholder="example@email.com"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1 block">プラチナコード</label>
+                <input
+                  type="password"
+                  value={platinumCode}
+                  onChange={e => { setPlatinumCode(e.target.value); setEmailCodeError(''); }}
+                  placeholder="コードを入力"
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                />
+              </div>
+              {emailCodeError && <p className="text-xs text-red-500">{emailCodeError}</p>}
+            </div>
+            <button
+              onClick={handleSaveNotifyEmail}
+              disabled={emailSaving}
+              className="mt-5 w-full bg-teal-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-teal-600 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {emailSaving ? '登録中...' : '登録する'}
+            </button>
           </div>
         </div>
       )}

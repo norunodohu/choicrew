@@ -3,6 +3,7 @@ import path from "path";
 import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
+import nodemailer from "nodemailer";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
@@ -288,6 +289,70 @@ app.post("/api/auth/google/firebase-token", async (req, res) => {
   } catch (error: unknown) {
     const err = error as { message?: string };
     res.status(500).json({ error: err.message || "Failed to create custom token" });
+  }
+});
+
+/* ================================================================
+   メール通知 for Mini share pages
+   ================================================================ */
+app.post("/api/mini/notify-email", async (req, res) => {
+  const { shareId, requesterName, slotDate, slotStart, slotEnd, message: reqMessage } = req.body as {
+    shareId?: string; requesterName?: string; slotDate?: string;
+    slotStart?: string; slotEnd?: string; message?: string;
+  };
+  if (!shareId) return res.status(400).json({ error: "shareId required" });
+  if (!getApps().length) return res.status(503).json({ error: "admin not configured" });
+
+  try {
+    const adminDb = getFirestore();
+    const snap = await adminDb.doc(`mini_shares/${shareId}`).get();
+    if (!snap.exists) return res.status(404).json({ error: "share not found" });
+
+    const data = snap.data()!;
+    const notifyEmail = data.notify_email as string | undefined;
+    if (!notifyEmail) return res.json({ ok: false, reason: "no_email" });
+
+    const smtpHost = process.env.SMTP_HOST;
+    const smtpUser = process.env.SMTP_USER;
+    const smtpPass = process.env.SMTP_PASS;
+    const smtpFrom = process.env.SMTP_FROM || smtpUser;
+    if (!smtpHost || !smtpUser || !smtpPass) {
+      return res.status(503).json({ error: "SMTP not configured" });
+    }
+
+    const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+    const shareUrl = `${appUrl}/mini/s/${shareId}`;
+    const ownerName = (data.displayName || data.name || "管理者") as string;
+
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: parseInt(process.env.SMTP_PORT || "587"),
+      secure: process.env.SMTP_PORT === "465",
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    const bodyLines = [
+      `${ownerName}さんに新しい依頼が届きました。`,
+      "",
+      `依頼者: ${requesterName || "不明"}`,
+      `日時: ${slotDate} ${slotStart}〜${slotEnd}`,
+      ...(reqMessage ? [`メッセージ: ${reqMessage}`] : []),
+      "",
+      "▼ 確認・承認はこちら",
+      shareUrl,
+    ];
+
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: notifyEmail,
+      subject: `【ChoiCrew Mini】${requesterName || "誰か"}さんから依頼が届きました`,
+      text: bodyLines.join("\n"),
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Email notify error:", err);
+    res.status(500).json({ error: String(err) });
   }
 });
 

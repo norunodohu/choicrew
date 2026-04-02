@@ -132,6 +132,9 @@ service cloud.firestore {
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'displayName'])
                       && request.resource.data.title is string
                       && request.resource.data.displayName is string
+                    ) || (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notify_email'])
+                      && request.resource.data.notify_email is string
                     );
       // オーナーが削除できる（認証なしのためクライアント信頼）
       allow delete: if true;
