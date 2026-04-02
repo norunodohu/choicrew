@@ -1175,7 +1175,10 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   useEffect(() => {
     const load = async () => {
       try {
-        const snap = await getDoc(doc(db, 'mini_shares', shareId));
+        const timeout = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 12000)
+        );
+        const snap = await Promise.race([getDoc(doc(db, 'mini_shares', shareId)), timeout]);
         if (!snap.exists()) { setNotFound(true); setLoading(false); return; }
         const data = snap.data() as ShareData;
         if (data.expires_at?.toDate() < new Date()) setExpired(true);
@@ -1875,17 +1878,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
             <span className={`w-3 h-3 rounded-full ${isDraft ? 'bg-slate-300' : isPaused ? 'bg-white' : 'bg-teal-500'}`} />
             {isDraft ? '下書き（非公開）' : isPaused ? '閲覧専用' : '依頼受付中'}
           </button>
-          {(isPaused || isDraft) && (
-            <p className="text-xs text-slate-500 bg-white/90 rounded-xl px-3 py-1.5 shadow text-right leading-relaxed">
-              削除する場合は
-              <button
-                onClick={() => setShowDeleteConfirm(true)}
-                className="text-red-500 underline font-medium ml-0.5"
-              >
-                コチラ
-              </button>
-            </p>
-          )}
+
         </div>
       )}
 
@@ -1933,6 +1926,14 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
                   <p className="text-xs text-slate-500 mt-0.5">非公開</p>
                 </div>
                 {isDraft && <span className="ml-auto text-slate-500 text-xs font-bold self-center">現在</span>}
+              </button>
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+              <button
+                onClick={() => { setShowStatusModal(false); setShowDeleteConfirm(true); }}
+                className="text-sm text-red-400 hover:text-red-600 transition"
+              >
+                この共有を削除する
               </button>
             </div>
           </div>

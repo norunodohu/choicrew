@@ -109,7 +109,7 @@ service cloud.firestore {
     match /mini_shares/{shareId} {
       allow read: if true;
       allow create: if true;
-      // fcm_token / slots / theme / paused フィールドの更新を許可
+      // fcm_token / slots / theme / paused / draft フィールドの更新を許可
       allow update: if (
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fcm_token'])
                     ) || (
@@ -121,6 +121,13 @@ service cloud.firestore {
                     ) || (
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paused'])
                       && request.resource.data.paused is bool
+                    ) || (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['draft'])
+                      && request.resource.data.draft is bool
+                    ) || (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['paused', 'draft'])
+                      && request.resource.data.paused is bool
+                      && request.resource.data.draft is bool
                     );
       // オーナーが削除できる（認証なしのためクライアント信頼）
       allow delete: if true;
