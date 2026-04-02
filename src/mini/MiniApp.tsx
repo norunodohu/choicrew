@@ -308,51 +308,91 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
   );
 }
 
-function TimeSpinner({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const intervalRef = useRef<number | null>(null);
-  const valueRef = useRef(value);
-  valueRef.current = value;
+/* ── WheelColumn: iOSスタイルのスクロールピッカー列 ── */
+function WheelColumn({ items, value, onChange }: { items: string[]; value: string; onChange: (v: string) => void }) {
+  const ITEM_H = 40;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<number>(0);
+  const scrollingRef = useRef(false);
 
-  const adjust = (field: 'h' | 'm', delta: number) => {
-    const [h, m] = valueRef.current.split(':').map(Number);
-    let newH = h, newM = m;
-    if (field === 'h') {
-      newH = (h + delta + 24) % 24;
-    } else {
-      newM = ((m + delta) % 60 + 60) % 60;
-    }
-    const newVal = `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
-    valueRef.current = newVal;
-    onChange(newVal);
+  useEffect(() => {
+    if (scrollingRef.current || !scrollRef.current) return;
+    const idx = items.indexOf(value);
+    if (idx >= 0) scrollRef.current.scrollTop = idx * ITEM_H;
+  }, [value, items]);
+
+  const handleScroll = () => {
+    scrollingRef.current = true;
+    clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      if (!scrollRef.current) return;
+      const idx = Math.round(scrollRef.current.scrollTop / ITEM_H);
+      const safe = Math.max(0, Math.min(items.length - 1, idx));
+      scrollRef.current.scrollTop = safe * ITEM_H;
+      onChange(items[safe]);
+      setTimeout(() => { scrollingRef.current = false; }, 60);
+    }, 100);
   };
-
-  const startRepeat = (field: 'h' | 'm', delta: number) => {
-    adjust(field, delta);
-    intervalRef.current = window.setInterval(() => adjust(field, delta), 130);
-  };
-
-  const stopRepeat = () => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-  };
-
-  useEffect(() => () => stopRepeat(), []);
-
-  const [hStr, mStr] = value.split(':');
-  const btnCls = "px-2 py-0.5 text-slate-300 hover:text-teal-500 active:text-teal-600 text-xs leading-none select-none transition-colors";
 
   return (
-    <div className="flex items-center gap-0.5 rounded-lg border border-slate-200 px-2 py-1 bg-white">
-      <div className="flex flex-col items-center">
-        <button onMouseDown={() => startRepeat('h', 1)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('h', 1); }} onTouchEnd={stopRepeat} className={btnCls}>▲</button>
-        <span className="w-7 text-center font-mono text-base font-semibold tabular-nums">{hStr}</span>
-        <button onMouseDown={() => startRepeat('h', -1)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('h', -1); }} onTouchEnd={stopRepeat} className={btnCls}>▼</button>
+    <div
+      ref={scrollRef}
+      onScroll={handleScroll}
+      className="overflow-y-scroll snap-y snap-mandatory [&::-webkit-scrollbar]:hidden"
+      style={{ height: ITEM_H * 3 }}
+    >
+      <div style={{ paddingTop: ITEM_H, paddingBottom: ITEM_H }}>
+        {items.map(item => (
+          <div
+            key={item}
+            className={`snap-center flex items-center justify-center w-10 font-mono text-lg font-semibold select-none transition-colors ${
+              item === value ? 'text-slate-800' : 'text-slate-300'
+            }`}
+            style={{ height: ITEM_H }}
+          >
+            {item}
+          </div>
+        ))}
       </div>
-      <span className="text-slate-400 font-bold text-lg leading-none px-0.5">:</span>
-      <div className="flex flex-col items-center">
-        <button onMouseDown={() => startRepeat('m', 15)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('m', 15); }} onTouchEnd={stopRepeat} className={btnCls}>▲</button>
-        <span className="w-7 text-center font-mono text-base font-semibold tabular-nums">{mStr}</span>
-        <button onMouseDown={() => startRepeat('m', -15)} onMouseUp={stopRepeat} onMouseLeave={stopRepeat} onTouchStart={e => { e.preventDefault(); startRepeat('m', -15); }} onTouchEnd={stopRepeat} className={btnCls}>▼</button>
+    </div>
+  );
+}
+
+function TimeSpinner({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+  const MINS = ['00', '15', '30', '45'];
+  const [hStr, mStr] = value.split(':');
+  const normM = MINS.reduce((a, b) => Math.abs(+b - +mStr) < Math.abs(+a - +mStr) ? b : a);
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
+
+  if (!isMobile) {
+    return (
+      <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+        <select
+          value={hStr}
+          onChange={e => onChange(`${e.target.value}:${normM}`)}
+          className="text-base font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+        >
+          {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+        </select>
+        <span className="text-slate-300 font-bold text-lg">:</span>
+        <select
+          value={normM}
+          onChange={e => onChange(`${hStr}:${e.target.value}`)}
+          className="text-base font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+        >
+          {MINS.map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
       </div>
+    );
+  }
+
+  return (
+    <div className="relative flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-10 bg-teal-50/80 border-y border-teal-100 z-10" />
+      <WheelColumn items={HOURS} value={hStr} onChange={h => onChange(`${h}:${normM}`)} />
+      <span className="relative z-20 px-0.5 text-slate-400 font-bold text-lg">:</span>
+      <WheelColumn items={MINS} value={normM} onChange={m => onChange(`${hStr}:${m}`)} />
     </div>
   );
 }
@@ -1598,14 +1638,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               </button>
               {showOwnerMenu && (
                 <div className="absolute right-0 top-11 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[170px] z-20 animate-[fadeIn_0.15s_ease-out]">
-                  {canShareNative && (
-                    <button onClick={() => { handleShare(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">共有する</button>
+                  <button onClick={() => { handleCopy(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🔗 URLをコピー</button>
+                  <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">✏️ 時間を編集</button>
+                  <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🎨 テーマを変更</button>
+                  {!window.matchMedia('(pointer: coarse)').matches && (
+                    <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱 スマホで管理する</button>
                   )}
-                  <a href={makeLineShareUrl(share.title || share.name, url)} target="_blank" rel="noopener noreferrer" onClick={() => setShowOwnerMenu(false)} className="block px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">LINEで送る</a>
-                  <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">時間を編集</button>
-                  <button onClick={() => { window.print(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">印刷する</button>
-                  <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">テーマを変更</button>
-                  <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱 スマホで管理する</button>
                   {'Notification' in window && Notification.permission !== 'denied' && (
                     <button
                       onClick={async () => {
