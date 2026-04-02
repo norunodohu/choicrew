@@ -1864,8 +1864,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                         <button
                           onClick={() => handleApprove(r.id)}
                           className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 active:scale-95 transition-all"
-                        >
-                          承認
+                         >
+                         承認
                         </button>
                         <button
                           onClick={() => handleDecline(r.id)}
