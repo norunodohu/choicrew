@@ -82,7 +82,46 @@ const maskEmailAfterFirstThree = (email?: string | null) => {
   const masked = "*".repeat(Math.max(email.length - 3, 0));
   return `${visible}${masked}`;
 };
+import { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
 
+/* ================================================================
+   Error Boundary — クラッシュ時に白画面にならないように
+   ================================================================ */
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error?: Error }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+          <div className="text-center">
+            <p className="text-slate-700 text-lg font-semibold mb-2">表示エラーが発生しました</p>
+            <p className="text-slate-400 text-sm mb-6">ページをリロードしてみてください</p>
+            <button onClick={() => window.location.reload()}
+              className="bg-teal-600 text-white rounded-xl px-6 py-3 font-medium hover:bg-teal-700 transition">
+              リロード
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// 追加
+window.addEventListener("error", (e) => {
+  if (e.message && e.message.includes("chunk")) {
+    window.location.reload();
+  }
+});
 // Error Handling
 enum OperationType {
   CREATE = 'create',
