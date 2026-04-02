@@ -79,6 +79,7 @@ interface ShareData {
   theme?: ThemeKey;
   bookingMode?: 'multiple' | 'exclusive';
   paused?: boolean;
+  draft?: boolean;
 }
 
 interface RequestEntry {
@@ -1144,6 +1145,8 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const [showOwnerMenu, setShowOwnerMenu] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isDraft, setIsDraft] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId);
   const toast = useToast();
 
@@ -1151,14 +1154,18 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   const prevPendingIdsRef = useRef<Set<string> | null>(null);
   const fcmRegisteredRef = useRef(false);
 
-  const handleTogglePause = async () => {
+  const handleChangeStatus = async (newStatus: 'active' | 'view_only' | 'draft') => {
     if (!share) return;
-    const next = !isPaused;
+    const paused = newStatus === 'view_only';
+    const draft = newStatus === 'draft';
     try {
-      await updateDoc(doc(db, 'mini_shares', shareId), { paused: next });
-      setIsPaused(next);
-      setShare(prev => prev ? { ...prev, paused: next } : prev);
-      toast.show(next ? '受付を停止しました' : '受付を再開しました');
+      await updateDoc(doc(db, 'mini_shares', shareId), { paused, draft });
+      setIsPaused(paused);
+      setIsDraft(draft);
+      setShare(prev => prev ? { ...prev, paused, draft } : prev);
+      const msgs = { active: '依頼受付を再開しました', view_only: '閲覧専用に変更しました', draft: '下書き（非公開）に変更しました' };
+      toast.show(msgs[newStatus], 'success');
+      setShowStatusModal(false);
     } catch {
       toast.show('更新に失敗しました');
     }
@@ -1173,6 +1180,7 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
         const data = snap.data() as ShareData;
         if (data.expires_at?.toDate() < new Date()) setExpired(true);
         setIsPaused(!!data.paused);
+        setIsDraft(!!data.draft);
         setShare(data);
       } catch (err) {
         console.error('Failed to load share:', err);
@@ -1417,6 +1425,29 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
   }
 
   if (!share) return null;
+
+  // 非公開（下書き）の場合、オーナー以外には表示しない
+  if (isDraft && !isOwner) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-7 h-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+          </div>
+          <p className="text-slate-700 text-lg font-semibold mb-1">このページは非公開です</p>
+          <p className="text-slate-400 text-sm mb-6">現在、作成者によって非公開に設定されています</p>
+          <a
+            href="/mini/"
+            className="inline-block bg-teal-600 text-white rounded-xl px-6 py-3 font-medium hover:bg-teal-700 transition"
+          >
+            空き時間を作成する
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const sortedSlots = [...share.slots]
@@ -1828,23 +1859,25 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
 
       </div>
 
-      {/* 受付停止トグル（オーナーのみ・右下固定） */}
+      {/* 状態ボタン（オーナーのみ・右下固定） */}
       {isOwner && (
         <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-1.5 print:hidden">
           <button
-            onClick={handleTogglePause}
+            onClick={() => setShowStatusModal(true)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-medium transition-all ${
-              isPaused
+              isDraft
+                ? 'bg-slate-500 text-white hover:bg-slate-600'
+                : isPaused
                 ? 'bg-amber-500 text-white hover:bg-amber-600'
                 : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
-            <span className={`w-3 h-3 rounded-full ${isPaused ? 'bg-white' : 'bg-teal-500'}`} />
-            {isPaused ? '依頼受付オフ（再開する）' : '依頼受付中'}
+            <span className={`w-3 h-3 rounded-full ${isDraft ? 'bg-slate-300' : isPaused ? 'bg-white' : 'bg-teal-500'}`} />
+            {isDraft ? '下書き（非公開）' : isPaused ? '閲覧専用' : '依頼受付中'}
           </button>
-          {isPaused && (
+          {(isPaused || isDraft) && (
             <p className="text-xs text-slate-500 bg-white/90 rounded-xl px-3 py-1.5 shadow text-right leading-relaxed">
-              ※予定は公開されたままです。削除する場合は
+              削除する場合は
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 className="text-red-500 underline font-medium ml-0.5"
@@ -1853,6 +1886,56 @@ function ShareView({ shareId, justCreated }: { shareId: string; justCreated: boo
               </button>
             </p>
           )}
+        </div>
+      )}
+
+      {/* 状態変更モーダル */}
+      {showStatusModal && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
+          onClick={() => setShowStatusModal(false)}
+        >
+          <div className="bg-white rounded-3xl p-6 w-full max-w-sm mx-4 shadow-2xl mb-4 sm:mb-0" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-base font-bold text-slate-800">公開状態を変更</h2>
+              <button onClick={() => setShowStatusModal(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => handleChangeStatus('active')}
+                className={`flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all ${!isPaused && !isDraft ? 'border-teal-500 bg-teal-50' : 'border-slate-200 hover:border-slate-300'}`}
+              >
+                <span className="mt-0.5 w-4 h-4 rounded-full bg-teal-500 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-slate-800">依頼受付中</p>
+                  <p className="text-xs text-slate-500 mt-0.5">リクエスト待ち状態</p>
+                </div>
+                {!isPaused && !isDraft && <span className="ml-auto text-teal-500 text-xs font-bold self-center">現在</span>}
+              </button>
+              <button
+                onClick={() => handleChangeStatus('view_only')}
+                className={`flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all ${isPaused && !isDraft ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}
+              >
+                <span className="mt-0.5 w-4 h-4 rounded-full bg-amber-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-slate-800">表示のみにする</p>
+                  <p className="text-xs text-slate-500 mt-0.5">閲覧専用</p>
+                </div>
+                {isPaused && !isDraft && <span className="ml-auto text-amber-500 text-xs font-bold self-center">現在</span>}
+              </button>
+              <button
+                onClick={() => handleChangeStatus('draft')}
+                className={`flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all ${isDraft ? 'border-slate-500 bg-slate-50' : 'border-slate-200 hover:border-slate-300'}`}
+              >
+                <span className="mt-0.5 w-4 h-4 rounded-full bg-slate-400 shrink-0" />
+                <div>
+                  <p className="text-sm font-bold text-slate-800">下書きにする</p>
+                  <p className="text-xs text-slate-500 mt-0.5">非公開</p>
+                </div>
+                {isDraft && <span className="ml-auto text-slate-500 text-xs font-bold self-center">現在</span>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
