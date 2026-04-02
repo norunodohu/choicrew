@@ -1827,18 +1827,16 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         )}
 
         {/* Owner: Request summary */}
-        {isOwner && requests.filter(r => r.status !== 'cancelled').length > 0 && (
+        {isOwner && requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6 print:hidden">
             <h2 className="text-sm font-semibold text-slate-700 mb-3">依頼一覧</h2>
             <div className="space-y-2">
               {requests
-                .filter(r => r.status !== 'cancelled')
+                .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
                 .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
                 .map(r => (
                 <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
                   r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
-                  r.status === 'declined' ? 'bg-slate-100 border border-slate-200 opacity-60' :
-                  r.status === 'cancelled' ? 'bg-red-50/50 border border-red-100 opacity-60' :
                   'bg-slate-50'
                 }`}>
                   <Avatar name={r.requester_name} />
@@ -1943,14 +1941,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   {dateSlots.map((slot, i) => {
                     const key = slotKey(slot);
                     const sent = sentSlots.has(key);
-                    const reqs = requestsForSlot(slot);
+                    const reqs = requestsForSlot(slot).filter(r => !r.status || r.status === 'pending' || r.status === 'approved');
                     const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
                     const borderClass = isOwner && reqs.length > 0
                       ? 'border-teal-200 border-l-[3px] border-l-teal-400'
                       : myReqStatus?.status === 'approved'
                       ? 'border-blue-200 border-l-[3px] border-l-blue-400'
-                      : myReqStatus?.status === 'declined' || myReqStatus?.status === 'cancelled'
-                      ? 'border-slate-200 opacity-70'
                       : 'border-slate-200';
                     return (
                       <div key={i} className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${borderClass}`}>

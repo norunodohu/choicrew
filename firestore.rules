@@ -146,8 +146,8 @@ service cloud.firestore {
                     && request.resource.data.requester_name is string
                     && request.resource.data.requester_name.size() > 0
                     && request.resource.data.requester_name.size() <= 30;
-      // status フィールドを approved/declined/cancelled に変更することを許可
-      allow update: if request.resource.data.status in ['approved', 'declined', 'cancelled']
+      // status フィールドを approved/declined/cancelled/pending に変更することを許可
+      allow update: if request.resource.data.status in ['approved', 'declined', 'cancelled', 'pending']
                     && request.resource.data.keys().hasAll(resource.data.keys());
       allow delete: if true;
     }
