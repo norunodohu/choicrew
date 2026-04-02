@@ -7,6 +7,7 @@ import './index.css';
 const isMini = window.location.pathname.startsWith('/mini');
 const isRoot = window.location.pathname === '/' || window.location.pathname === '';
 
+window.addEventListener("error", (e) => { if (e.message && e.message.includes("chunk")) { window.location.reload(); } });
 if (isRoot) {
   window.location.replace('/mini/');
 }
