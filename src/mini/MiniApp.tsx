@@ -1259,8 +1259,11 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     const t = editTitleVal.trim();
     const d = editDisplayNameVal.trim();
     if (!t && !d) { setShowEditTitle(false); return; }
+    const newTitle = t || share.title || '';
+    const newDisplayName = d || share.displayName || share.name;
     try {
-      await updateDoc(doc(db, 'mini_shares', shareId), { title: t || share.title || '', displayName: d || share.displayName || share.name });
+      await updateDoc(doc(db, 'mini_shares', shareId), { title: newTitle, displayName: newDisplayName });
+      setShare(prev => prev ? { ...prev, title: newTitle, displayName: newDisplayName } : prev);
       toast.show('タイトルを更新しました', 'success');
     } catch { toast.show('更新に失敗しました', 'error'); }
     setShowEditTitle(false);
