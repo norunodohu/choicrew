@@ -696,10 +696,55 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       <div className="max-w-lg mx-auto px-4 py-8 sm:py-12 pb-28 sm:pb-12">
 
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6">
           <Logo />
           <p className="text-slate-400 mt-2 text-xs tracking-wide">ログイン不要</p>
         </div>
+
+        {/* ── 作成済みの予定リスト（常時表示） ── */}
+        {(() => {
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          const activeShares = ownedShares.filter(e => e.name && (!e.lastDate || e.lastDate >= todayStr));
+          if (activeShares.length === 0) return null;
+          return (
+            <div className="mb-6">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 px-1">あなたの作成済み予定</p>
+              <div className="space-y-2">
+                {activeShares.slice(-5).reverse().map(entry => (
+                  <div key={entry.id} className="flex items-center gap-2 group">
+                    <a
+                      href={`/mini/s/${entry.id}`}
+                      className="flex-1 flex items-center gap-3 bg-white border border-slate-200 hover:border-teal-300 hover:shadow-sm rounded-2xl px-4 py-3 transition min-w-0"
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full bg-teal-400 shrink-0" />
+                      <span className="flex-1 text-sm font-semibold text-slate-700 group-hover:text-teal-700 transition truncate">{entry.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {entry.dateRange && (
+                          <span className="text-xs text-slate-400 bg-slate-50 border border-slate-100 rounded-lg px-2 py-0.5">{entry.dateRange}</span>
+                        )}
+                        <span className="text-slate-300 group-hover:text-teal-500 transition text-sm">→</span>
+                      </div>
+                    </a>
+                    {confirmDeleteShareId === entry.id ? (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => removeOwnedShare(entry.id)} className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition">削除</button>
+                        <button onClick={() => setConfirmDeleteShareId(null)} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">戻る</button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteShareId(entry.id)}
+                        className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-red-400 hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
+                        aria-label="削除"
+                      >✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 border-t border-slate-100" />
+              <p className="text-center text-xs text-slate-400 mt-3 mb-1">または新しく作成する</p>
+            </div>
+          );
+        })()}
 
         <StepIndicator />
 
@@ -741,50 +786,6 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             >
               次へ →
             </button>
-            {(() => {
-              const todayStr = format(new Date(), 'yyyy-MM-dd');
-              const activeShares = ownedShares.filter(e => e.name && (!e.lastDate || e.lastDate >= todayStr));
-              if (activeShares.length === 0) return null;
-              return (
-                <div className="mt-10 pt-6 border-t border-slate-100">
-                  <div className="flex items-center mb-3 px-1">
-                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">作成済みの予定</p>
-                  </div>
-                  <div className="space-y-1">
-                    {activeShares.slice(-5).reverse().map(entry => (
-                      <div key={entry.id} className="flex items-center gap-1 group">
-                        <a href={`/mini/s/${entry.id}`}
-                          className="flex-1 flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-white transition border border-transparent hover:border-slate-200 min-w-0">
-                          <span className="text-sm text-slate-600 group-hover:text-slate-800 transition truncate font-medium">{entry.name}</span>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            {entry.dateRange && <span className="text-xs text-slate-400">{entry.dateRange}</span>}
-                            <span className="text-slate-300 group-hover:text-teal-500 transition">→</span>
-                          </div>
-                        </a>
-                        {confirmDeleteShareId === entry.id ? (
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button
-                              onClick={() => removeOwnedShare(entry.id)}
-                              className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition"
-                            >削除</button>
-                            <button
-                              onClick={() => setConfirmDeleteShareId(null)}
-                              className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition"
-                            >戻る</button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmDeleteShareId(entry.id)}
-                            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
-                            aria-label="削除"
-                          >✕</button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })()}
           </div>
         )}
 
