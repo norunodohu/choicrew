@@ -295,7 +295,7 @@ app.post("/api/auth/google/firebase-token", async (req, res) => {
    OGP for Mini share pages
    ================================================================ */
 
-const OGP_BOT_UA = /bot|crawler|spider|preview|slack|discord|twitter|facebook|line|telegram|whatsapp|signal|embedly|quora|pinterest|facebookexternalhit|Twitterbot|LinkedInBot/i;
+const OGP_BOT_UA = /bot|crawler|spider|preview|slack|discord|twitter|facebook|linebot|telegram|whatsapp|signal|embedly|quora|pinterest|facebookexternalhit|Twitterbot|LinkedInBot/i;
 
 app.get("/mini/s/:shareId", async (req, res, next) => {
   const ua = req.get("user-agent") || "";
