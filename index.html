@@ -9,37 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Righteous&display=swap" rel="stylesheet" />
     <title>choicrew チョイクル</title>
   </head>
-  <script>
-function openExternal() {
-  const ua = navigator.userAgent.toLowerCase();
-
-  const isInApp =
-    ua.includes("line") ||
-    ua.includes("instagram") ||
-    ua.includes("fbav") ||
-    ua.includes("fb_iab");
-
-  if (isInApp) {
-    const url = window.location.href;
-
-    // Android
-    if (/android/.test(ua)) {
-      window.location.href =
-        "intent://" +
-        location.host +
-        location.pathname +
-        "#Intent;scheme=https;package=com.android.chrome;end";
-    }
-
-    // iOS
-    else {
-      window.location.href = url;
-    }
-  }
-}
-
-openExternal();
-</script>
+  
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
