@@ -22,7 +22,6 @@ import {
   Key
 } from "lucide-react";
 import { 
-  initializeApp,
   FirebaseError
 } from "firebase/app";
 import { 
@@ -40,7 +39,6 @@ import {
   updatePassword
 } from "firebase/auth";
 import { 
-  getFirestore, 
   collection, 
   addDoc, 
   query, 
@@ -65,10 +63,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 // Firebase Config
 import firebaseConfig from '../firebase-applet-config.json';
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-const auth = getAuth(app);
+import { db, auth } from './firebase';
 const CHOICREW_LOGO = "/choicrew-logo.svg";
 const AUTH_ID_DOMAIN = "choicrew.local";
 const DEFAULT_TIME_STORAGE_KEY = "choicrew_default_time";
