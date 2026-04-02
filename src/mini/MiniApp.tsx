@@ -250,11 +250,17 @@ function saveOwnedShare(shareId: string, name: string, dateRange?: string, lastD
         entries = parsed;
       }
     }
-    if (!entries.some(e => e.id === shareId)) {
+    const existing = entries.find(e => e.id === shareId);
+    if (existing) {
+      // 既存エントリのdateRange/lastDateを更新
+      if (dateRange !== undefined) existing.dateRange = dateRange;
+      if (lastDate !== undefined) existing.lastDate = lastDate;
+      if (name) existing.name = name;
+    } else {
       entries.push({ id: shareId, name, created_at: Date.now(), dateRange, lastDate });
       if (entries.length > 10) entries = entries.slice(-10);
-      localStorage.setItem('mini_owned_shares', JSON.stringify(entries));
     }
+    localStorage.setItem('mini_owned_shares', JSON.stringify(entries));
   } catch { /* ignore */ }
 }
 
@@ -1396,6 +1402,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       }
       await updateDoc(doc(db, 'mini_shares', shareId), { slots: validSlots });
       setShare(prev => prev ? { ...prev, slots: validSlots } : prev);
+      // dateRangeをlocalStorageに反映
+      const newDateRange = computeDateRange(validSlots);
+      const newLastDate = [...validSlots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
+      saveOwnedShare(shareId, share?.title || share?.name || '', newDateRange, newLastDate);
       setEditingSlots(false);
       toast.show('時間を更新しました', 'success');
     } catch (err) {
