@@ -1246,9 +1246,26 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     if (!emailInput.trim()) { setEmailCodeError('メールアドレスを入力してください'); return; }
     setEmailSaving(true);
     setEmailCodeError('');
+    const newEmail = emailInput.trim();
     try {
-      await updateDoc(doc(db, 'mini_shares', shareId), { notify_email: emailInput.trim() });
-      toast.show('メール通知先を登録しました', 'success');
+      await updateDoc(doc(db, 'mini_shares', shareId), { notify_email: newEmail });
+      setShare(prev => prev ? { ...prev, notify_email: newEmail } : prev);
+      // 確認メール送信
+      const confirmRes = await fetch('/api/mini/email-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: newEmail,
+          shareId,
+          ownerName: share.displayName || share.name,
+        }),
+      });
+      if (confirmRes.ok) {
+        toast.show('登録完了！確認メールを送信しました', 'success');
+      } else {
+        const errBody = await confirmRes.json().catch(() => ({}));
+        toast.show(`登録しましたがメール送信に失敗: ${errBody.error || confirmRes.status}`, 'error');
+      }
       setShowEmailModal(false);
     } catch { toast.show('登録に失敗しました', 'error'); }
     setEmailSaving(false);
@@ -1961,7 +1978,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               </span>
                             ) : sent ? (
                               <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
-                                依頼中
+                                リクエストしています
                               </span>
                             ) : isPaused ? (
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">

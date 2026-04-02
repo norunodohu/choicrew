@@ -356,6 +356,51 @@ app.post("/api/mini/notify-email", async (req, res) => {
   }
 });
 
+// メール通知先登録の確認メール
+app.post("/api/mini/email-confirm", async (req, res) => {
+  const { to, shareId, ownerName } = req.body as { to?: string; shareId?: string; ownerName?: string };
+  if (!to || !shareId) return res.status(400).json({ error: "to and shareId required" });
+
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const smtpFrom = process.env.SMTP_FROM || smtpUser;
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    return res.status(503).json({ error: "SMTP not configured" });
+  }
+
+  const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+  const shareUrl = `${appUrl}/mini/s/${shareId}`;
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: parseInt(process.env.SMTP_PORT || "587"),
+      secure: process.env.SMTP_PORT === "465",
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    await transporter.sendMail({
+      from: smtpFrom,
+      to,
+      subject: "【ChoiCrew Mini】メール通知が有効になりました",
+      text: [
+        `${ownerName || ""}さん、メール通知の設定が完了しました。`,
+        "",
+        "これ以降、依頼が届いたときにこのアドレスへ通知が届きます。",
+        "",
+        "▼ 共有ページはこちら",
+        shareUrl,
+      ].join("\n"),
+    });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Email confirm error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 /* ================================================================
    OGP for Mini share pages
    ================================================================ */
