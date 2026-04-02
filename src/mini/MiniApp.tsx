@@ -11,6 +11,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   static getDerivedStateFromError(error: Error) {
     return { hasError: true, error };
   }
+
+  
   render() {
     if (this.state.hasError) {
       return (
@@ -29,6 +31,14 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
     return this.props.children;
   }
 }
+
+// 追加
+window.addEventListener("error", (e) => {
+  if (e.message && e.message.includes("chunk")) {
+    window.location.reload();
+  }
+});
+
 import { db, messaging } from '../firebase';
 import {
   doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot,
