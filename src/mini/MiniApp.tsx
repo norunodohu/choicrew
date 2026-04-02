@@ -1827,11 +1827,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         )}
 
         {/* Owner: Request summary */}
-        {isOwner && requests.length > 0 && (
+        {isOwner && requests.filter(r => r.status !== 'cancelled').length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6 print:hidden">
             <h2 className="text-sm font-semibold text-slate-700 mb-3">依頼一覧</h2>
             <div className="space-y-2">
               {requests
+                .filter(r => r.status !== 'cancelled')
                 .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
                 .map(r => (
                 <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
@@ -1906,9 +1907,19 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           </div>
         )}
 
-        {/* Visitor: brief instruction */}
+        {/* Visitor: brief instruction + pending summary */}
         {!isOwner && !expired && sortedSlots.length > 0 && (
-          <p className="text-center text-sm text-slate-400 mb-4">希望の時間帯を選んで依頼できます</p>
+          <div className="text-center mb-4 space-y-1">
+            <p className="text-sm text-slate-400">希望の時間帯を選んで依頼できます</p>
+            {myRequestStatuses.size > 0 && (() => {
+              const pendingCount = [...myRequestStatuses.values()].filter(v => v.status === 'pending').length;
+              return pendingCount > 0 ? (
+                <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-600 bg-teal-50 border border-teal-100 rounded-full px-4 py-1">
+                  <span className="animate-pulse">✨</span> リクエスト中 {pendingCount}件
+                </p>
+              ) : null;
+            })()}
+          </div>
         )}
 
         {/* Date-grouped slot cards */}
@@ -1977,8 +1988,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 キャンセル済み
                               </span>
                             ) : sent ? (
-                              <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
-                                リクエストしています
+                              <span className="inline-flex items-center gap-1 text-sm text-teal-700 font-semibold bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 px-3 py-1.5 rounded-lg">
+                                <span className="animate-pulse">✨</span> リクエスト中
                               </span>
                             ) : isPaused ? (
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
