@@ -31,7 +31,13 @@
       "use": "@vercel/static-build",
       "config": { "distDir": "dist" }
     }
-  ],
+  ],"redirects": [
+  {
+    "source": "/",
+    "destination": "/mini/",
+    "permanent": false
+  }
+],
   "routes": [
     {
       "src": "/api/(.*)",
@@ -56,13 +62,7 @@
     {
       "src": "/(.*)",
       "dest": "/index.html"
-    },"redirects": [
-  {
-    "source": "/",
-    "destination": "/mini/",
-    "permanent": false
-  }
-]
+    }
 
 
 
