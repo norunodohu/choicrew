@@ -292,7 +292,7 @@ async function registerOwnerFingerprint(shareId: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ shareId, fingerprint: getDeviceFingerprint() }),
     });
-  } catch { /* 通知失敗は無視 */ }
+  } catch { /* 通知失敗は無視suru */ }
 }
 
 async function checkOwnerFingerprint(shareId: string): Promise<boolean> {
