@@ -2248,35 +2248,36 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           </div>
         )}
 
-        {/* FP+IP一致: オーナー確認プロンプト（第2層） */}
+        {/* FP+IP一致: オーナー確認モーダル（第2層） */}
         {fpOwnerPrompt && !isOwner && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-5 print:hidden animate-[fadeIn_0.2s_ease-out]">
-            <p className="font-semibold text-blue-900 text-sm mb-2">この予定の管理者ですか？</p>
-            <p className="text-xs text-blue-600 mb-3">別のブラウザで作成した予定と同じ端末からのアクセスを検知しました</p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  // オーナー復帰: localStorageに保存
-                  const dateRange = share ? computeDateRange(share.slots) : '';
-                  const lastDate = share ? [...share.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '';
-                  saveOwnedShare(shareId, share?.title || share?.name || '', dateRange, lastDate);
-                  setFpOwnerPrompt(false);
-                  setTokenVerified(true);
-                  toast.show('管理者として復帰しました', 'success');
-                }}
-                className="flex-1 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition"
-              >
-                はい、管理者です
-              </button>
-              <button
-                onClick={() => {
-                  setNotOwnerDismissed(shareId);
-                  setFpOwnerPrompt(false);
-                }}
-                className="flex-1 py-2 rounded-xl border border-blue-200 text-blue-600 text-sm font-medium hover:bg-blue-100 transition"
-              >
-                いいえ
-              </button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-[fadeIn_0.2s_ease-out] print:hidden">
+            <div className="bg-white rounded-2xl p-6 mx-6 max-w-sm w-full shadow-xl">
+              <p className="font-semibold text-slate-800 text-base mb-2">この予定の管理者ですか？</p>
+              <p className="text-sm text-slate-500 mb-5">別のブラウザで作成した予定と同じ端末からのアクセスを検知しました</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const dateRange = share ? computeDateRange(share.slots) : '';
+                    const lastDate = share ? [...share.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '';
+                    saveOwnedShare(shareId, share?.title || share?.name || '', dateRange, lastDate);
+                    setFpOwnerPrompt(false);
+                    setTokenVerified(true);
+                    toast.show('管理者として復帰しました', 'success');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 transition"
+                >
+                  はい、管理者です
+                </button>
+                <button
+                  onClick={() => {
+                    setNotOwnerDismissed(shareId);
+                    setFpOwnerPrompt(false);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition"
+                >
+                  いいえ
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2316,25 +2317,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 className="underline text-slate-400 hover:text-slate-500 transition"
               >ブラウザで開いてください</button>
             </p>
-            {/* DEBUG: フィンガープリント確認用（本番で削除） */}
-            <details className="mt-4 text-left">
-              <summary className="text-[10px] text-slate-200 cursor-pointer">FP debug</summary>
-              <pre className="text-[9px] text-slate-300 mt-1 bg-slate-50 rounded p-2 overflow-x-auto">{JSON.stringify({
-                sw: screen.width,
-                sh: screen.height,
-                dpr: window.devicePixelRatio,
-                touch: navigator.maxTouchPoints,
-                lang: navigator.language,
-                tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                plat: navigator.platform,
-                cd: screen.colorDepth,
-                aw: screen.availWidth,
-                ah: screen.availHeight,
-                cores: navigator.hardwareConcurrency,
-                raw: getDeviceFingerprintRaw(),
-                fp: getDeviceFingerprint(),
-              }, null, 1)}</pre>
-            </details>
           </div>
         )}
 
@@ -2343,25 +2325,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             <a href="/mini/" className="text-sm text-slate-400 hover:text-slate-600 transition">
               ← 新しく作成する
             </a>
-            {/* DEBUG: フィンガープリント確認用（本番で削除） */}
-            <details className="mt-4 text-left">
-              <summary className="text-[10px] text-slate-200 cursor-pointer">FP debug</summary>
-              <pre className="text-[9px] text-slate-300 mt-1 bg-slate-50 rounded p-2 overflow-x-auto">{JSON.stringify({
-                sw: screen.width,
-                sh: screen.height,
-                dpr: window.devicePixelRatio,
-                touch: navigator.maxTouchPoints,
-                lang: navigator.language,
-                tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                plat: navigator.platform,
-                cd: screen.colorDepth,
-                aw: screen.availWidth,
-                ah: screen.availHeight,
-                cores: navigator.hardwareConcurrency,
-                raw: getDeviceFingerprintRaw(),
-                fp: getDeviceFingerprint(),
-              }, null, 1)}</pre>
-            </details>
           </div>
         )}
 
