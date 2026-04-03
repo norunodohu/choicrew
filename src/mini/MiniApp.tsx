@@ -1703,36 +1703,49 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   return (
     <div className={`min-h-screen ${T.pageBg} print:bg-white relative overflow-x-hidden`}>
       {toast.UI}
-      {/* ── コンビニテーマ背景画像 ── */}
+      {/* ── テーマ背景画像（absolute + 大きめサイズでモバイルのカクつき防止） ── */}
       {themeKey === 'darkbg' && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
-          backgroundImage: "url('/dark-bg.jpg')",
-          backgroundSize: 'cover', backgroundPosition: 'center',
-          opacity: 0.55,
-        }} />
+        <div
+          className="pointer-events-none print:hidden"
+          aria-hidden="true"
+          style={{
+            position: 'absolute', top: 0, left: 0, right: 0,
+            height: '200vh', minHeight: '100%',
+            zIndex: 0,
+            backgroundImage: "url('/dark-bg.jpg')",
+            backgroundSize: 'cover', backgroundPosition: 'center top',
+            opacity: 0.55,
+            willChange: 'transform',
+          }}
+        />
       )}
       {themeKey === 'konbini' && (
         <div
-          className="pointer-events-none fixed inset-0 print:hidden"
+          className="pointer-events-none print:hidden"
           aria-hidden="true"
           style={{
+            position: 'absolute', top: 0, left: 0, right: 0,
+            height: '200vh', minHeight: '100%',
+            zIndex: 0,
             backgroundImage: "url('/konbini-bg.jpg')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundSize: 'cover', backgroundPosition: 'center top',
             opacity: 0.18,
+            willChange: 'transform',
           }}
         />
       )}
       {themeKey === 'himawari' && (
         <div
-          className="pointer-events-none fixed inset-0 print:hidden"
+          className="pointer-events-none print:hidden"
           aria-hidden="true"
           style={{
+            position: 'absolute', top: 0, left: 0, right: 0,
+            height: '200vh', minHeight: '100%',
+            zIndex: 0,
             backgroundImage: "url('/himawari-bg.jpg')",
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundSize: 'cover', backgroundPosition: 'center top',
             opacity: 0.22,
+            willChange: 'transform',
           }}
         />
       )}
