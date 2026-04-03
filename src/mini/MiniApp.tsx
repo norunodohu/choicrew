@@ -1479,7 +1479,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       const req = requests.find(r => r.id === requestId);
       if (!req) return;
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'approved' });
-      if (share?.bookingMode === 'exclusive') {
+      if (share?.bookingMode !== 'multiple') {
         // 同じ枠の他pendingをdeclinedに
         const sameSlotPending = requests.filter(r =>
           r.id !== requestId &&
@@ -1517,7 +1517,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       const req = requests.find(r => r.id === requestId);
       if (!req) return;
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'pending' });
-      if (share?.bookingMode === 'exclusive') {
+      if (share?.bookingMode !== 'multiple') {
         // 同じ枠のdeclinedをpendingに戻す
         const sameSlotDeclined = requests.filter(r =>
           r.id !== requestId &&
@@ -1993,7 +1993,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     const sent = sentSlots.has(key);
                     const reqs = requestsForSlot(slot).filter(r => !r.status || r.status === 'pending' || r.status === 'approved');
                     // exclusiveモード: 1人でもapprovedがいれば他は依頼不可
-                    const isExclusive = share?.bookingMode === 'exclusive';
+                    const isExclusive = share?.bookingMode !== 'multiple';
                     const hasApproved = reqs.some(r => r.status === 'approved');
                     const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
                     const borderClass = isOwner && reqs.length > 0
