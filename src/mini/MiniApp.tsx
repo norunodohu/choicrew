@@ -262,7 +262,7 @@ function loadOwnerToken(shareId: string): string | null {
 }
 
 /* ── デバイスフィンガープリント ── */
-function getDeviceFingerprint(): string {
+function getDeviceFingerprintRaw(): string {
   const parts = [
     screen.width,
     screen.height,
@@ -276,7 +276,11 @@ function getDeviceFingerprint(): string {
     screen.availWidth || 0,
     screen.availHeight || 0,
   ];
-  const raw = parts.join('|');
+  return parts.join('|');
+}
+
+function getDeviceFingerprint(): string {
+  const raw = getDeviceFingerprintRaw();
   // シンプルなハッシュ（djb2）
   let hash = 5381;
   for (let i = 0; i < raw.length; i++) {
@@ -2327,6 +2331,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 aw: screen.availWidth,
                 ah: screen.availHeight,
                 cores: navigator.hardwareConcurrency,
+                raw: getDeviceFingerprintRaw(),
                 fp: getDeviceFingerprint(),
               }, null, 1)}</pre>
             </details>
@@ -2353,6 +2358,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 aw: screen.availWidth,
                 ah: screen.availHeight,
                 cores: navigator.hardwareConcurrency,
+                raw: getDeviceFingerprintRaw(),
                 fp: getDeviceFingerprint(),
               }, null, 1)}</pre>
             </details>
