@@ -2182,50 +2182,47 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
           onClick={() => setShowStatusModal(false)}
         >
-          <div className="bg-white rounded-3xl p-6 w-full max-w-sm mx-4 shadow-2xl mb-4 sm:mb-0" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-5">
+          <div className="bg-white rounded-2xl p-4 w-full max-w-sm mx-4 shadow-2xl mb-4 sm:mb-0 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-bold text-slate-800">公開状態を変更</h2>
               <button onClick={() => setShowStatusModal(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
             </div>
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
               <button
                 onClick={() => handleChangeStatus('active')}
-                className={`flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all ${!isPaused && !isDraft ? 'border-teal-500 bg-teal-50' : 'border-slate-200 hover:border-slate-300'}`}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${!isPaused && !isDraft ? 'border-teal-500 bg-teal-50' : 'border-slate-200 hover:border-slate-300'}`}
               >
-                <span className="mt-0.5 w-4 h-4 rounded-full bg-teal-500 shrink-0" />
-                <div>
+                <span className="w-3.5 h-3.5 rounded-full bg-teal-500 shrink-0" />
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800">依頼受付中</p>
-                  <p className="text-xs text-slate-500 mt-0.5">リクエスト待ち状態</p>
                 </div>
-                {!isPaused && !isDraft && <span className="ml-auto text-teal-500 text-xs font-bold self-center">現在</span>}
+                {!isPaused && !isDraft && <span className="text-teal-500 text-xs font-bold shrink-0">現在</span>}
               </button>
               <button
                 onClick={() => handleChangeStatus('view_only')}
-                className={`flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all ${isPaused && !isDraft ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${isPaused && !isDraft ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:border-slate-300'}`}
               >
-                <span className="mt-0.5 w-4 h-4 rounded-full bg-amber-400 shrink-0" />
-                <div>
+                <span className="w-3.5 h-3.5 rounded-full bg-amber-400 shrink-0" />
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800">表示のみにする</p>
-                  <p className="text-xs text-slate-500 mt-0.5">閲覧専用</p>
                 </div>
-                {isPaused && !isDraft && <span className="ml-auto text-amber-500 text-xs font-bold self-center">現在</span>}
+                {isPaused && !isDraft && <span className="text-amber-500 text-xs font-bold shrink-0">現在</span>}
               </button>
               <button
                 onClick={() => handleChangeStatus('draft')}
-                className={`flex items-start gap-3 p-4 rounded-2xl border-2 text-left transition-all ${isDraft ? 'border-slate-500 bg-slate-50' : 'border-slate-200 hover:border-slate-300'}`}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${isDraft ? 'border-slate-500 bg-slate-50' : 'border-slate-200 hover:border-slate-300'}`}
               >
-                <span className="mt-0.5 w-4 h-4 rounded-full bg-slate-400 shrink-0" />
-                <div>
+                <span className="w-3.5 h-3.5 rounded-full bg-slate-400 shrink-0" />
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-slate-800">下書きにする</p>
-                  <p className="text-xs text-slate-500 mt-0.5">非公開</p>
                 </div>
-                {isDraft && <span className="ml-auto text-slate-500 text-xs font-bold self-center">現在</span>}
+                {isDraft && <span className="text-slate-500 text-xs font-bold shrink-0">現在</span>}
               </button>
             </div>
             {/* 承認モード切り替え */}
-            <div className="mt-5 pt-4 border-t border-slate-100">
-              <p className="text-xs font-semibold text-slate-500 mb-3">承認モード</p>
-              <div className="flex flex-col gap-2">
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 mb-2">承認モード</p>
+              <div className="flex flex-col gap-1.5">
                 {(['exclusive', 'multiple'] as const).map(mode => {
                   const current = share?.bookingMode || 'exclusive';
                   const isActive = current === mode;
@@ -2233,27 +2230,26 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     <button
                       key={mode}
                       onClick={() => handleChangeBookingMode(mode)}
-                      className={`flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                      className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
                         isActive ? 'border-teal-500 bg-teal-50' : 'border-slate-200 hover:border-slate-300'
                       }`}
                     >
-                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                      <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
                         isActive ? 'border-teal-500 bg-teal-500' : 'border-slate-300'
                       }`}>
                         {isActive && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                       </div>
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-slate-800">{mode === 'exclusive' ? '1つだけ承認' : '選んで承認'}</p>
-                        <p className="text-[11px] text-slate-500 mt-0.5">{mode === 'exclusive' ? '1人承認で枠が埋まる' : '複数人を承認できる'}</p>
                       </div>
-                      {isActive && <span className="ml-auto text-teal-500 text-xs font-bold self-center">現在</span>}
+                      {isActive && <span className="text-teal-500 text-xs font-bold shrink-0">現在</span>}
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+            <div className="mt-3 pt-3 border-t border-slate-100 text-center">
               <button
                 onClick={() => { setShowStatusModal(false); setShowDeleteConfirm(true); }}
                 className="text-sm text-red-400 hover:text-red-600 transition"
