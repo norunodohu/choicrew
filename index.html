@@ -15,6 +15,37 @@
   
   <body>
     <div id="root"></div>
+    <!-- 白画面フォールバック: アプリが5秒以内にマウントしなければ自動リカバリ -->
+    <div id="__fallback" style="display:none;position:fixed;inset:0;z-index:9999;background:#f8fafc;justify-content:center;align-items:center;font-family:system-ui,sans-serif">
+      <div style="text-align:center;padding:24px">
+        <p style="font-size:16px;font-weight:600;color:#334155;margin-bottom:8px">読み込み中…</p>
+        <p style="font-size:13px;color:#94a3b8;margin-bottom:20px">自動的に復旧します</p>
+        <button onclick="hardReload()" style="background:#0d9488;color:#fff;border:none;border-radius:12px;padding:12px 32px;font-size:14px;font-weight:600;cursor:pointer">今すぐリロード</button>
+      </div>
+    </div>
+    <script>
+      // ハードリロード: キャッシュ全削除して強制リロード
+      function hardReload() {
+        sessionStorage.removeItem('__choicrew_reload');
+        if ('caches' in window) {
+          caches.keys().then(function(n){return Promise.all(n.map(function(k){return caches.delete(k)}))}).then(function(){
+            location.href = location.pathname + '?_t=' + Date.now();
+          });
+        } else {
+          location.href = location.pathname + '?_t=' + Date.now();
+        }
+      }
+      // 5秒後にアプリがマウントされていなければフォールバック表示→自動リカバリ
+      setTimeout(function(){
+        var root = document.getElementById('root');
+        if (!root || root.childNodes.length === 0) {
+          var fb = document.getElementById('__fallback');
+          if (fb) fb.style.display = 'flex';
+          // さらに2秒待って自動リカバリ
+          setTimeout(function(){ hardReload(); }, 2000);
+        }
+      }, 5000);
+    </script>
     <script>
       // デプロイ後の古いチャンク404→白画面を防ぐ: 1回だけ自動リロード
       (function(){
