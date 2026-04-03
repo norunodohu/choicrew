@@ -2522,13 +2522,19 @@ export default function MiniApp() {
   useEffect(() => {
     const update = () => {
       const reqs: RequestEntry[] = (window as any).__mini_requests || [];
-      const approved = reqs.filter(r => r.status === 'approved').length;
-      const pending = reqs.filter(r => !r.status || r.status === 'pending').length;
+      // 自分が送ったリクエストIDだけをカウント
+      const currentShareId = shareId || window.location.pathname.match(/^\/mini\/s\/([A-Za-z0-9]+)/)?.[1];
+      if (!currentShareId) { setBadgeCounts({ approved: 0, pending: 0 }); return; }
+      const sentIds = loadSentRequestIds(currentShareId);
+      const myRequestIds = new Set(sentIds.values());
+      const myReqs = reqs.filter(r => myRequestIds.has(r.id));
+      const approved = myReqs.filter(r => r.status === 'approved').length;
+      const pending = myReqs.filter(r => !r.status || r.status === 'pending').length;
       setBadgeCounts({ approved, pending });
     };
     window.addEventListener('mini_requests_update', update);
     return () => window.removeEventListener('mini_requests_update', update);
-  }, []);
+  }, [shareId]);
 
   useEffect(() => {
     const path = window.location.pathname;
