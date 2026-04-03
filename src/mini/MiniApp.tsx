@@ -174,6 +174,11 @@ function slotKey(s: { date: string; start: string; end: string }): string {
   return `${s.date}_${s.start}_${s.end}`;
 }
 
+function isValidSlotRange(start: string, end: string): boolean {
+  if (end === '24:00') return start < '24:00';
+  return start < end;
+}
+
 function timeToPercent(time: string): number {
   const [h, m] = time.split(':').map(Number);
   return Math.max(0, Math.min(100, ((h * 60 + m - 360) / 1080) * 100));
@@ -376,11 +381,13 @@ function WheelColumn({ items, value, onChange }: { items: string[]; value: strin
   );
 }
 
-function TimeSpinner({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
-  const MINS = ['00', '15', '30', '45'];
+function TimeSpinner({ value, onChange, isEnd }: { value: string; onChange: (v: string) => void; isEnd?: boolean }) {
   const [hStr, mStr] = value.split(':');
-  const normM = MINS.reduce((a, b) => Math.abs(+b - +mStr) < Math.abs(+a - +mStr) ? b : a);
+  const HOURS = isEnd
+    ? [...Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0')), '24']
+    : Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+  const MINS = hStr === '24' ? ['00'] : ['00', '15', '30', '45'];
+  const normM = hStr === '24' ? '00' : MINS.reduce((a, b) => Math.abs(+b - +mStr) < Math.abs(+a - +mStr) ? b : a);
   const isMobile = typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
   if (!isMobile) {
@@ -388,7 +395,7 @@ function TimeSpinner({ value, onChange }: { value: string; onChange: (v: string)
       <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
         <select
           value={hStr}
-          onChange={e => onChange(`${e.target.value}:${normM}`)}
+          onChange={e => { const h = e.target.value; onChange(h === '24' ? '24:00' : `${h}:${normM}`); }}
           className="text-base font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
         >
           {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
@@ -398,6 +405,7 @@ function TimeSpinner({ value, onChange }: { value: string; onChange: (v: string)
           value={normM}
           onChange={e => onChange(`${hStr}:${e.target.value}`)}
           className="text-base font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+          disabled={hStr === '24'}
         >
           {MINS.map(m => <option key={m} value={m}>{m}</option>)}
         </select>
@@ -408,7 +416,7 @@ function TimeSpinner({ value, onChange }: { value: string; onChange: (v: string)
   return (
     <div className="relative flex items-center rounded-xl border border-slate-200 bg-white overflow-hidden">
       <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 h-10 bg-teal-50/80 border-y border-teal-100 z-10" />
-      <WheelColumn items={HOURS} value={hStr} onChange={h => onChange(`${h}:${normM}`)} />
+      <WheelColumn items={HOURS} value={hStr} onChange={h => onChange(h === '24' ? '24:00' : `${h}:${normM}`)} />
       <span className="relative z-20 px-0.5 text-slate-400 font-bold text-lg">:</span>
       <WheelColumn items={MINS} value={normM} onChange={m => onChange(`${hStr}:${m}`)} />
     </div>
@@ -639,7 +647,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
     setSlots(prev => prev.filter(s => s.id !== id));
   };
 
-  const validSlots = slots.filter(s => s.start < s.end);
+  const validSlots = slots.filter(s => isValidSlotRange(s.start, s.end));
 
   const handleCreate = async () => {
     if (!title.trim() || validSlots.length === 0) return;
@@ -709,11 +717,11 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                 <div className="flex items-center gap-2">
                   <TimeSpinner value={slot.start} onChange={v => updateSlot(slot.id, 'start', v)} />
                   <span className="text-slate-300 text-sm">–</span>
-                  <TimeSpinner value={slot.end} onChange={v => updateSlot(slot.id, 'end', v)} />
+                  <TimeSpinner value={slot.end} onChange={v => updateSlot(slot.id, 'end', v)} isEnd />
                   <button onClick={() => removeSlot(slot.id)} className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg" aria-label="削除">✕</button>
                 </div>
-                {slot.start < slot.end && <TimeBar start={slot.start} end={slot.end} />}
-                {slot.start >= slot.end && <p className="text-xs text-red-500 mt-1">開始は終了より前にしてください</p>}
+                {isValidSlotRange(slot.start, slot.end) && <TimeBar start={slot.start} end={slot.end} />}
+                {!isValidSlotRange(slot.start, slot.end) && <p className="text-xs text-red-500 mt-1">開始は終了より前にしてください</p>}
               </div>
             ))}
             <div className="flex flex-wrap gap-1.5 mt-1">
@@ -871,7 +879,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                       <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-xl shrink-0 group-hover:bg-slate-200 transition">🎛</div>
                       <div>
                         <p className="font-bold text-slate-800 text-base">カスタム作成</p>
-                        <p className="text-sm text-slate-500 mt-0.5">デザイン・リクエスト方法など細かく設定する<br>※後からでも変更可能</></p>
+                        <p className="text-sm text-slate-500 mt-0.5">デザイン・リクエスト方法など細かく設定する<br />※後からでも変更可能</p>
                       </div>
                     </div>
                   </button>
@@ -1590,7 +1598,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     setSavingSlots(true);
     try {
       const validSlots = draftSlots
-        .filter(s => s.start < s.end)
+        .filter(s => isValidSlotRange(s.start, s.end))
         .map(({ date, start, end }) => ({ date, start, end }));
       if (validSlots.length === 0) {
         toast.show('有効な時間帯がありません', 'error');
