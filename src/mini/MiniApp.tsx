@@ -2170,11 +2170,11 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         {/* Footer CTA (visitor) */}
         {!isOwner && (
           <div className="text-center border-t border-slate-100 pt-8 mt-4 print:hidden">
-            <p className="text-sm text-slate-500 mb-3">自分も空き時間を共有しませんか？</p>
+            <p className="text-sm text-slate-500 mb-3">あなたも空き時間を共有しませんか？</p>
             <a
               href="/mini/"
-              className="inline-block bg-teal-600 text-white rounded-xl px-8 py-3
-                         font-medium hover:bg-teal-700 transition shadow-sm"
+              className="inline-block bg-amber-200 text-white rounded-xl px-4 py-1
+                         font-medium hover:bg-amber-300 transition shadow-sm"
             >
               空き時間を作成する
             </a>
