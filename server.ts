@@ -473,8 +473,21 @@ if (process.env.NODE_ENV !== "production") {
   }
 } else {
   const distPath = path.join(process.cwd(), "dist");
-  app.use(express.static(distPath));
-  app.get("*all", (req, res) => {
+  // assetsはハッシュ付きなので長期キャッシュOK、それ以外はno-cache
+  app.use("/assets", express.static(path.join(distPath, "assets"), {
+    maxAge: "1y",
+    immutable: true,
+  }));
+  app.use(express.static(distPath, {
+    maxAge: 0,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".html")) {
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      }
+    },
+  }));
+  app.get("*all", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.sendFile(path.join(distPath, "index.html"));
   });
 }

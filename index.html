@@ -16,24 +16,47 @@
   <body>
     <div id="root"></div>
     <script>
-      // 古いキャッシュによるJS読み込みエラー時、1回だけ自動リロード
+      // デプロイ後の古いチャンク404→白画面を防ぐ: 1回だけ自動リロード
       (function(){
         var key = '__choicrew_reload';
-        window.addEventListener('error', function(e) {
-          if (e.filename || (e.message && (
-            e.message.indexOf('Failed to fetch dynamically imported module') !== -1 ||
-            e.message.indexOf('Loading module') !== -1 ||
-            e.message.indexOf('Loading chunk') !== -1 ||
-            e.message.indexOf('chunk') !== -1 ||
-            e.message.indexOf('Importing a module script failed') !== -1
-          ))) {
-            if (!sessionStorage.getItem(key)) {
-              sessionStorage.setItem(key, '1');
-              window.location.reload();
+        function shouldReload(msg) {
+          if (!msg) return false;
+          var keywords = ['chunk', 'Failed to fetch dynamically imported module',
+            'Loading module', 'Loading chunk', 'Importing a module script failed',
+            'error loading dynamically imported module', 'NetworkError', 'fetch'];
+          for (var i = 0; i < keywords.length; i++) {
+            if (msg.toLowerCase().indexOf(keywords[i].toLowerCase()) !== -1) return true;
+          }
+          return false;
+        }
+        function doReload() {
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, '1');
+            // キャッシュを飛ばしてリロード
+            if ('caches' in window) {
+              caches.keys().then(function(names) {
+                return Promise.all(names.map(function(n) { return caches.delete(n); }));
+              }).then(function() { location.reload(); });
+            } else {
+              location.reload();
             }
           }
+        }
+        // グローバルエラー（同期的な読み込み失敗）
+        window.addEventListener('error', function(e) {
+          if (shouldReload(e.message) || (e.filename && e.filename.indexOf('/assets/') !== -1)) {
+            doReload();
+          }
         }, true);
-        // モジュール読み込み成功したらフラグクリア
+        // 動的import()の失敗はunhandledrejectionで飛ぶ
+        window.addEventListener('unhandledrejection', function(e) {
+          var msg = e.reason ? (e.reason.message || String(e.reason)) : '';
+          if (shouldReload(msg)) {
+            e.preventDefault();
+            doReload();
+          }
+        });
+        // 成功したらフラグクリア
         window.addEventListener('load', function() {
           sessionStorage.removeItem(key);
         });
@@ -42,7 +65,7 @@
     <script type="module" src="/src/main.tsx" onerror="
       if(!sessionStorage.getItem('__choicrew_reload')){
         sessionStorage.setItem('__choicrew_reload','1');
-        location.reload();
+        if('caches' in window){caches.keys().then(function(n){return Promise.all(n.map(function(k){return caches.delete(k)}))}).then(function(){location.reload()})}else{location.reload()}
       }
     "></script>
   </body>

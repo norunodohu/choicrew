@@ -32,10 +32,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-// 追加
+// チャンクエラー時の自動リカバリ
 window.addEventListener("error", (e) => {
-  if (e.message && e.message.includes("chunk")) {
-    window.location.reload();
+  if (e.message && (e.message.includes("chunk") || e.message.includes("dynamically imported module"))) {
+    if (!sessionStorage.getItem('__choicrew_reload')) {
+      sessionStorage.setItem('__choicrew_reload', '1');
+      if ('caches' in window) {
+        caches.keys().then(names => Promise.all(names.map(n => caches.delete(n)))).then(() => location.reload());
+      } else {
+        location.reload();
+      }
+    }
   }
 });
 
