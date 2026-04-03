@@ -15,7 +15,36 @@
   
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // 古いキャッシュによるJS読み込みエラー時、1回だけ自動リロード
+      (function(){
+        var key = '__choicrew_reload';
+        window.addEventListener('error', function(e) {
+          if (e.filename || (e.message && (
+            e.message.indexOf('Failed to fetch dynamically imported module') !== -1 ||
+            e.message.indexOf('Loading module') !== -1 ||
+            e.message.indexOf('Loading chunk') !== -1 ||
+            e.message.indexOf('chunk') !== -1 ||
+            e.message.indexOf('Importing a module script failed') !== -1
+          ))) {
+            if (!sessionStorage.getItem(key)) {
+              sessionStorage.setItem(key, '1');
+              window.location.reload();
+            }
+          }
+        }, true);
+        // モジュール読み込み成功したらフラグクリア
+        window.addEventListener('load', function() {
+          sessionStorage.removeItem(key);
+        });
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx" onerror="
+      if(!sessionStorage.getItem('__choicrew_reload')){
+        sessionStorage.setItem('__choicrew_reload','1');
+        location.reload();
+      }
+    "></script>
   </body>
 </html>
 
