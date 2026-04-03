@@ -809,7 +809,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         {/* ── Step 1: Title + DisplayName ── */}
         {step === 1 && (
           <div className="animate-[fadeIn_0.2s_ease-out]">
-            <h2 className="text-xl font-bold text-slate-800 mb-1">予定のタイトルを入力</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-1">新規追加：タイトルを入力</h2>
             <p className="text-sm text-slate-400 mb-5">相手に表示されるタイトルです</p>
             <div className="space-y-4 mb-6">
               <div>
