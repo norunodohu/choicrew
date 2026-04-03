@@ -268,10 +268,10 @@ function getDeviceFingerprintRaw(): string {
     screen.height,
     window.devicePixelRatio,
     // hardwareConcurrency は Brave 等で偽装されるため除外
+    // navigator.platform はブラウザ間で微妙に異なるため除外
     navigator.maxTouchPoints || 0,
     navigator.language || '',
     Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-    navigator.platform || '',
     screen.colorDepth || 0,
     screen.availWidth || 0,
     screen.availHeight || 0,
