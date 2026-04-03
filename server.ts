@@ -449,11 +449,7 @@ app.post("/api/mini/check-fp", async (req, res) => {
     const storedIp = data.owner_ip;
     const registeredAt = data.fp_registered_at?.toDate?.() || data.fp_registered_at;
     if (!storedFp || !storedIp) return res.json({ match: false });
-    // 7日間の有効期限
-    if (registeredAt) {
-      const elapsed = Date.now() - new Date(registeredAt).getTime();
-      if (elapsed > 7 * 24 * 60 * 60 * 1000) return res.json({ match: false });
-    }
+    // 常にFP+IP両方一致を要求（誤認防止）
     const clientIp = getClientIp(req);
     const match = storedFp === fingerprint && storedIp === clientIp;
     res.json({ match });
