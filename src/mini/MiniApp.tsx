@@ -1473,9 +1473,25 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const requestsForSlot = (s: { date: string; start: string; end: string }) =>
     requests.filter(r => r.slot_date === s.date && r.slot_start === s.start && r.slot_end === s.end);
 
+  // exclusiveモード時、同じ枠の他pendingをdeclinedに
   const handleApprove = async (requestId: string) => {
     try {
+      const req = requests.find(r => r.id === requestId);
+      if (!req) return;
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'approved' });
+      if (share?.bookingMode === 'exclusive') {
+        // 同じ枠の他pendingをdeclinedに
+        const sameSlotPending = requests.filter(r =>
+          r.id !== requestId &&
+          r.slot_date === req.slot_date &&
+          r.slot_start === req.slot_start &&
+          r.slot_end === req.slot_end &&
+          (!r.status || r.status === 'pending')
+        );
+        for (const r of sameSlotPending) {
+          await updateDoc(doc(db, 'mini_requests', r.id), { status: 'declined' });
+        }
+      }
       toast.show('承認しました', 'success');
     } catch (err) {
       console.error(err);
@@ -1495,9 +1511,25 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
+  // exclusiveモード時、同じ枠のdeclinedをpendingに戻す
   const handleCancel = async (requestId: string) => {
     try {
+      const req = requests.find(r => r.id === requestId);
+      if (!req) return;
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'pending' });
+      if (share?.bookingMode === 'exclusive') {
+        // 同じ枠のdeclinedをpendingに戻す
+        const sameSlotDeclined = requests.filter(r =>
+          r.id !== requestId &&
+          r.slot_date === req.slot_date &&
+          r.slot_start === req.slot_start &&
+          r.slot_end === req.slot_end &&
+          r.status === 'declined'
+        );
+        for (const r of sameSlotDeclined) {
+          await updateDoc(doc(db, 'mini_requests', r.id), { status: 'pending' });
+        }
+      }
       setConfirmCancelId(null);
       toast.show('承認を取り消しました', 'success');
     } catch (err) {
@@ -1960,6 +1992,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     const key = slotKey(slot);
                     const sent = sentSlots.has(key);
                     const reqs = requestsForSlot(slot).filter(r => !r.status || r.status === 'pending' || r.status === 'approved');
+                    // exclusiveモード: 1人でもapprovedがいれば他は依頼不可
+                    const isExclusive = share?.bookingMode === 'exclusive';
+                    const hasApproved = reqs.some(r => r.status === 'approved');
                     const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
                     const borderClass = isOwner && reqs.length > 0
                       ? 'border-teal-200 border-l-[3px] border-l-teal-400'
@@ -1975,7 +2010,11 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                             </p>
                             <TimeBar start={slot.start} end={slot.end} />
                             {!expired && reqs.length > 0 && !isOwner && (
-                              <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}人が希望</p>
+                              isExclusive && hasApproved ? (
+                                <p className="text-xs text-blue-600 font-medium mt-2">枠が埋まりました</p>
+                              ) : (
+                                <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}人が希望</p>
+                              )
                             )}
                           </div>
                           <div className="ml-3 shrink-0 print:hidden">
@@ -2013,8 +2052,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               <button
                                 onClick={() => setRequestSlot(slot)}
                                 className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
+                                disabled={isExclusive && (hasApproved || reqs.some(r => r.status === 'pending'))}
+                                title={isExclusive && hasApproved ? 'この枠は埋まりました' : isExclusive && reqs.some(r => r.status === 'pending') ? '希望者がいます' : ''}
                               >
-                                依頼する
+                                {isExclusive && hasApproved ? '枠が埋まりました' : isExclusive && reqs.some(r => r.status === 'pending') ? '希望者あり' : '依頼する'}
                               </button>
                             )}
                           </div>
