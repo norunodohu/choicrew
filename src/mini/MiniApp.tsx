@@ -2293,12 +2293,17 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               管理者の方は<button
                 onClick={() => {
                   const ua = navigator.userAgent || '';
+                  const isLine = /Line/i.test(ua);
                   const isInApp = /Line|FBAN|FBAV|Instagram|Twitter/i.test(ua);
-                  if (isInApp) {
-                    // アプリ内ブラウザ → 外部ブラウザで開く
+                  if (isLine) {
+                    // LINE内ブラウザ → openExternalBrowser=1 で外部ブラウザへ
+                    const url = new URL(window.location.href);
+                    url.searchParams.set('openExternalBrowser', '1');
+                    window.location.href = url.toString();
+                  } else if (isInApp) {
+                    // その他アプリ内ブラウザ
                     const url = window.location.href;
-                    // iOSの場合、Safari で開くリンクを試行
-                    window.open(url, '_system') || window.open(url, '_blank');
+                    window.open(url, '_blank');
                     toast.show('ブラウザで開いて管理してください', 'success');
                   } else {
                     toast.show('このブラウザで作成した予定は自動的に管理者になります', 'success');
