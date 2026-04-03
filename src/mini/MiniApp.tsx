@@ -267,10 +267,14 @@ function getDeviceFingerprint(): string {
     screen.width,
     screen.height,
     window.devicePixelRatio,
-    navigator.hardwareConcurrency || 0,
+    // hardwareConcurrency は Brave 等で偽装されるため除外
     navigator.maxTouchPoints || 0,
     navigator.language || '',
     Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+    navigator.platform || '',
+    screen.colorDepth || 0,
+    screen.availWidth || 0,
+    screen.availHeight || 0,
   ];
   const raw = parts.join('|');
   // シンプルなハッシュ（djb2）
@@ -2310,10 +2314,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 sw: screen.width,
                 sh: screen.height,
                 dpr: window.devicePixelRatio,
-                cores: navigator.hardwareConcurrency,
                 touch: navigator.maxTouchPoints,
                 lang: navigator.language,
                 tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                plat: navigator.platform,
+                cd: screen.colorDepth,
+                aw: screen.availWidth,
+                ah: screen.availHeight,
+                cores: navigator.hardwareConcurrency,
                 fp: getDeviceFingerprint(),
               }, null, 1)}</pre>
             </details>
@@ -2332,10 +2340,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 sw: screen.width,
                 sh: screen.height,
                 dpr: window.devicePixelRatio,
-                cores: navigator.hardwareConcurrency,
                 touch: navigator.maxTouchPoints,
                 lang: navigator.language,
                 tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                plat: navigator.platform,
+                cd: screen.colorDepth,
+                aw: screen.availWidth,
+                ah: screen.availHeight,
+                cores: navigator.hardwareConcurrency,
                 fp: getDeviceFingerprint(),
               }, null, 1)}</pre>
             </details>
