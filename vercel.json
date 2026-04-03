@@ -46,6 +46,11 @@
 ],
   "routes": [
     {
+      "src": "^/$",
+      "status": 302,
+      "headers": { "Location": "/mini/" }
+    },
+    {
       "src": "/api/(.*)",
       "dest": "server.ts"
     },
