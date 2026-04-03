@@ -826,7 +826,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="空いてます、打ち合わせスペース予約"
+                  placeholder="空いてます"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent placeholder:text-slate-300 bg-white"
                   maxLength={40}
                   autoFocus
