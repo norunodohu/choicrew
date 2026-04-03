@@ -2303,6 +2303,20 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 className="underline text-slate-400 hover:text-slate-500 transition"
               >ブラウザで開いてください</button>
             </p>
+            {/* DEBUG: フィンガープリント確認用（本番で削除） */}
+            <details className="mt-4 text-left">
+              <summary className="text-[10px] text-slate-200 cursor-pointer">FP debug</summary>
+              <pre className="text-[9px] text-slate-300 mt-1 bg-slate-50 rounded p-2 overflow-x-auto">{JSON.stringify({
+                sw: screen.width,
+                sh: screen.height,
+                dpr: window.devicePixelRatio,
+                cores: navigator.hardwareConcurrency,
+                touch: navigator.maxTouchPoints,
+                lang: navigator.language,
+                tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                fp: getDeviceFingerprint(),
+              }, null, 1)}</pre>
+            </details>
           </div>
         )}
 
