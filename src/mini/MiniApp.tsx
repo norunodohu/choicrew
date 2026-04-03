@@ -1320,6 +1320,34 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       toast.show('更新に失敗しました');
     }
   };
+
+  const handleChangeBookingMode = async (mode: 'multiple' | 'exclusive') => {
+    if (!share) return;
+    const currentMode = share.bookingMode || 'exclusive';
+    if (currentMode === mode) return;
+    // exclusive に切り替え時: 同じ枠に2件以上approvedがあればブロック
+    if (mode === 'exclusive') {
+      const slotApprovedCount = new Map<string, number>();
+      for (const r of requests) {
+        if (r.status === 'approved') {
+          const key = `${r.slot_date}_${r.slot_start}_${r.slot_end}`;
+          slotApprovedCount.set(key, (slotApprovedCount.get(key) || 0) + 1);
+        }
+      }
+      const conflict = [...slotApprovedCount.values()].some(c => c > 1);
+      if (conflict) {
+        toast.show('同じ枠に複数の承認があります。先に承認を整理してください', 'error');
+        return;
+      }
+    }
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { bookingMode: mode });
+      setShare(prev => prev ? { ...prev, bookingMode: mode } : prev);
+      toast.show(mode === 'exclusive' ? '「1つだけ承認」に変更しました' : '「選んで承認」に変更しました', 'success');
+    } catch {
+      toast.show('変更に失敗しました', 'error');
+    }
+  };
   const myStatusRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
@@ -2194,6 +2222,37 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 {isDraft && <span className="ml-auto text-slate-500 text-xs font-bold self-center">現在</span>}
               </button>
             </div>
+            {/* 承認モード切り替え */}
+            <div className="mt-5 pt-4 border-t border-slate-100">
+              <p className="text-xs font-semibold text-slate-500 mb-3">承認モード</p>
+              <div className="flex flex-col gap-2">
+                {(['exclusive', 'multiple'] as const).map(mode => {
+                  const current = share?.bookingMode || 'exclusive';
+                  const isActive = current === mode;
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => handleChangeBookingMode(mode)}
+                      className={`flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                        isActive ? 'border-teal-500 bg-teal-50' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-all ${
+                        isActive ? 'border-teal-500 bg-teal-500' : 'border-slate-300'
+                      }`}>
+                        {isActive && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-800">{mode === 'exclusive' ? '1つだけ承認' : '選んで承認'}</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">{mode === 'exclusive' ? '1人承認で枠が埋まる' : '複数人を承認できる'}</p>
+                      </div>
+                      {isActive && <span className="ml-auto text-teal-500 text-xs font-bold self-center">現在</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="mt-4 pt-4 border-t border-slate-100 text-center">
               <button
                 onClick={() => { setShowStatusModal(false); setShowDeleteConfirm(true); }}
