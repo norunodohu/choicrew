@@ -809,8 +809,8 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         {/* ── Step 1: Title + DisplayName ── */}
         {step === 1 && (
           <div className="animate-[fadeIn_0.2s_ease-out]">
-            <h2 className="text-xl font-bold text-slate-800 mb-1">新規追加：タイトルを入力</h2>
-            <p className="text-sm text-slate-400 mb-5">相手に表示されるタイトルです</p>
+            <h2 className="text-xl font-bold text-slate-800 mb-1">予定表を作成（１週間分）</h2>
+            <p className="text-sm text-slate-400 mb-5">公開される予定表タイトルと名前を入力してください</p>
             <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">タイトル</label>
@@ -818,20 +818,20 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder="4月のランチ打ち合わせ"
+                  placeholder="空いてます、打ち合わせスペース予約"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent placeholder:text-slate-300 bg-white"
                   maxLength={40}
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">表示名（あなたの名前）</label>
+                <label className="block text-sm font-medium text-slate-600 mb-1.5">表示名(公開相手に分かればOK)</label>
                 <input
                   type="text"
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && title.trim() && displayName.trim()) setStep(2); }}
-                  placeholder="田中"
+                  placeholder="やまだ"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent placeholder:text-slate-300 bg-white"
                   maxLength={30}
                 />
@@ -871,7 +871,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                       <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-xl shrink-0 group-hover:bg-slate-200 transition">🎛</div>
                       <div>
                         <p className="font-bold text-slate-800 text-base">カスタム作成</p>
-                        <p className="text-sm text-slate-500 mt-0.5">デザイン・受け方を選んで細かく設定する</p>
+                        <p className="text-sm text-slate-500 mt-0.5">デザイン・リクエスト方法など細かく設定する<br>※後からでも変更可能</></p>
                       </div>
                     </div>
                   </button>
