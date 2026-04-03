@@ -405,6 +405,65 @@ app.post("/api/mini/email-confirm", async (req, res) => {
 });
 
 /* ================================================================
+   Owner Fingerprint + IP (Layer 2 authentication)
+   ================================================================ */
+
+function getClientIp(req: express.Request): string {
+  const xff = req.headers["x-forwarded-for"];
+  if (typeof xff === "string") return xff.split(",")[0].trim();
+  if (Array.isArray(xff) && xff.length > 0) return xff[0].split(",")[0].trim();
+  return req.socket.remoteAddress || "";
+}
+
+// オーナーのFP+IPを登録（作成時 or オーナーがブラウザで訪問時）
+app.post("/api/mini/register-fp", async (req, res) => {
+  const { shareId, fingerprint } = req.body as { shareId?: string; fingerprint?: string };
+  if (!shareId || !fingerprint) return res.status(400).json({ error: "missing params" });
+  if (!getApps().length) return res.status(503).json({ error: "admin not configured" });
+  try {
+    const adminDb = getFirestore();
+    const ip = getClientIp(req);
+    await adminDb.doc(`mini_shares/${shareId}`).update({
+      owner_fingerprint: fingerprint,
+      owner_ip: ip,
+      fp_registered_at: new Date(),
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("register-fp error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// FP+IPの照合（別ブラウザからの訪問時）
+app.post("/api/mini/check-fp", async (req, res) => {
+  const { shareId, fingerprint } = req.body as { shareId?: string; fingerprint?: string };
+  if (!shareId || !fingerprint) return res.status(400).json({ error: "missing params" });
+  if (!getApps().length) return res.status(503).json({ error: "admin not configured" });
+  try {
+    const adminDb = getFirestore();
+    const snap = await adminDb.doc(`mini_shares/${shareId}`).get();
+    if (!snap.exists) return res.json({ match: false });
+    const data = snap.data()!;
+    const storedFp = data.owner_fingerprint;
+    const storedIp = data.owner_ip;
+    const registeredAt = data.fp_registered_at?.toDate?.() || data.fp_registered_at;
+    if (!storedFp || !storedIp) return res.json({ match: false });
+    // 7日間の有効期限
+    if (registeredAt) {
+      const elapsed = Date.now() - new Date(registeredAt).getTime();
+      if (elapsed > 7 * 24 * 60 * 60 * 1000) return res.json({ match: false });
+    }
+    const clientIp = getClientIp(req);
+    const match = storedFp === fingerprint && storedIp === clientIp;
+    res.json({ match });
+  } catch (err) {
+    console.error("check-fp error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/* ================================================================
    OGP for Mini share pages
    ================================================================ */
 

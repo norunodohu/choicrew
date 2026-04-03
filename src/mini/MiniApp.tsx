@@ -261,6 +261,57 @@ function loadOwnerToken(shareId: string): string | null {
   try { return localStorage.getItem(`mini_owner_token_${shareId}`); } catch { return null; }
 }
 
+/* ── デバイスフィンガープリント ── */
+function getDeviceFingerprint(): string {
+  const parts = [
+    screen.width,
+    screen.height,
+    window.devicePixelRatio,
+    navigator.hardwareConcurrency || 0,
+    navigator.maxTouchPoints || 0,
+    navigator.language || '',
+    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
+  ];
+  const raw = parts.join('|');
+  // シンプルなハッシュ（djb2）
+  let hash = 5381;
+  for (let i = 0; i < raw.length; i++) {
+    hash = ((hash << 5) + hash + raw.charCodeAt(i)) >>> 0;
+  }
+  return hash.toString(36);
+}
+
+async function registerOwnerFingerprint(shareId: string) {
+  try {
+    await fetch('/api/mini/register-fp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shareId, fingerprint: getDeviceFingerprint() }),
+    });
+  } catch { /* 通知失敗は無視 */ }
+}
+
+async function checkOwnerFingerprint(shareId: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/mini/check-fp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ shareId, fingerprint: getDeviceFingerprint() }),
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !!data.match;
+  } catch { return false; }
+}
+
+function isNotOwnerDismissed(shareId: string): boolean {
+  try { return localStorage.getItem(`mini_not_owner_${shareId}`) === '1'; } catch { return false; }
+}
+
+function setNotOwnerDismissed(shareId: string) {
+  try { localStorage.setItem(`mini_not_owner_${shareId}`, '1'); } catch { /* */ }
+}
+
 function saveOwnedShare(shareId: string, name: string, dateRange?: string, lastDate?: string) {
   try {
     const raw = localStorage.getItem('mini_owned_shares');
@@ -674,6 +725,8 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       const dateRange = computeDateRange(slotData);
       const lastDate = [...slotData].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
       saveOwnedShare(id, title.trim(), dateRange, lastDate);
+      // FP+IP登録（第2層オーナー認証用）
+      registerOwnerFingerprint(id);
       onCreated(id, title.trim());
     } catch (err) {
       console.error('Failed to create share:', err);
@@ -764,7 +817,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         {/* Header */}
         <div className="text-center mb-6">
           <Logo />
-          <p className="text-slate-400 mt-2 text-xs tracking-wide">ログイン不要</p>
+          <p className="text-slate-400 mt-2 text-xs tracking-wide">ログイン不要で依頼受付まで</p>
         </div>
 
         {/* ── 作成済みの予定リスト（常時表示） ── */}
@@ -852,6 +905,9 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             >
               次へ →
             </button>
+
+
+            <p>※過ぎた予定は自動で削除されます。※作成したデバイスでのみ編集が続けられます</p>
           </div>
         )}
 
@@ -1263,6 +1319,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [emailCodeError, setEmailCodeError] = useState('');
   const [editTitleVal, setEditTitleVal] = useState('');
   const [editDisplayNameVal, setEditDisplayNameVal] = useState('');
+  const [fpOwnerPrompt, setFpOwnerPrompt] = useState(false);
+  const [fpChecked, setFpChecked] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
   const toast = useToast();
 
@@ -1449,6 +1507,21 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     });
     return () => unsub();
   }, [shareId]);
+
+  // FP+IP: オーナーなら登録（既存シェアの移行含む）、非オーナーなら照合
+  useEffect(() => {
+    if (loading) return;
+    if (isOwner) {
+      // オーナーがブラウザで開いた → FP+IPを登録/更新
+      registerOwnerFingerprint(shareId);
+    } else if (!fpChecked && !isNotOwnerDismissed(shareId)) {
+      // 非オーナー → FP+IP照合
+      setFpChecked(true);
+      checkOwnerFingerprint(shareId).then(match => {
+        if (match) setFpOwnerPrompt(true);
+      });
+    }
+  }, [loading, isOwner, shareId, fpChecked]);
 
   // FCM Web Push: オーナーのみ、許可済みならトークンを取得
   useEffect(() => {
@@ -2167,6 +2240,40 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           </div>
         )}
 
+        {/* FP+IP一致: オーナー確認プロンプト（第2層） */}
+        {fpOwnerPrompt && !isOwner && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-5 print:hidden animate-[fadeIn_0.2s_ease-out]">
+            <p className="font-semibold text-blue-900 text-sm mb-2">この予定の管理者ですか？</p>
+            <p className="text-xs text-blue-600 mb-3">別のブラウザで作成した予定と同じ端末からのアクセスを検知しました</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  // オーナー復帰: localStorageに保存
+                  const dateRange = share ? computeDateRange(share.slots) : '';
+                  const lastDate = share ? [...share.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '';
+                  saveOwnedShare(shareId, share?.title || share?.name || '', dateRange, lastDate);
+                  if (share?.owner_token) saveOwnerToken(shareId, share.owner_token);
+                  setFpOwnerPrompt(false);
+                  setTokenVerified(true);
+                  toast.show('管理者として復帰しました', 'success');
+                }}
+                className="flex-1 py-2 rounded-xl bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition"
+              >
+                はい、管理者です
+              </button>
+              <button
+                onClick={() => {
+                  setNotOwnerDismissed(shareId);
+                  setFpOwnerPrompt(false);
+                }}
+                className="flex-1 py-2 rounded-xl border border-blue-200 text-blue-600 text-sm font-medium hover:bg-blue-100 transition"
+              >
+                いいえ
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer CTA (visitor) */}
         {!isOwner && (
           <div className="text-center border-t border-slate-100 pt-8 mt-4 print:hidden">
@@ -2178,6 +2285,25 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             >
               空き時間を作成する
             </a>
+            {/* 第3層フォールバック: ブラウザで開いてください */}
+            <p className="mt-6 text-xs text-slate-300 hover:text-slate-400 transition cursor-default">
+              管理者の方は<button
+                onClick={() => {
+                  const ua = navigator.userAgent || '';
+                  const isInApp = /Line|FBAN|FBAV|Instagram|Twitter/i.test(ua);
+                  if (isInApp) {
+                    // アプリ内ブラウザ → 外部ブラウザで開く
+                    const url = window.location.href;
+                    // iOSの場合、Safari で開くリンクを試行
+                    window.open(url, '_system') || window.open(url, '_blank');
+                    toast.show('ブラウザで開いて管理してください', 'success');
+                  } else {
+                    toast.show('このブラウザで作成した予定は自動的に管理者になります', 'success');
+                  }
+                }}
+                className="underline text-slate-400 hover:text-slate-500 transition"
+              >ブラウザで開いてください</button>
+            </p>
           </div>
         )}
 
