@@ -2252,7 +2252,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   const dateRange = share ? computeDateRange(share.slots) : '';
                   const lastDate = share ? [...share.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '';
                   saveOwnedShare(shareId, share?.title || share?.name || '', dateRange, lastDate);
-                  if (share?.owner_token) saveOwnerToken(shareId, share.owner_token);
                   setFpOwnerPrompt(false);
                   setTokenVerified(true);
                   toast.show('管理者として復帰しました', 'success');
