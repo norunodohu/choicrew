@@ -2024,13 +2024,16 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     const isExclusive = share?.bookingMode !== 'multiple';
                     const hasApproved = reqs.some(r => r.status === 'approved');
                     const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
+                    const isFilledByOther = !isOwner && isExclusive && hasApproved && myReqStatus?.status !== 'approved';
                     const borderClass = isOwner && reqs.length > 0
                       ? 'border-teal-200 border-l-[3px] border-l-teal-400'
                       : myReqStatus?.status === 'approved'
                       ? 'border-blue-200 border-l-[3px] border-l-blue-400'
+                      : isFilledByOther
+                      ? 'border-slate-100'
                       : 'border-slate-200';
                     return (
-                      <div key={i} className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${borderClass}`}>
+                      <div key={i} className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${borderClass}${isFilledByOther ? ' opacity-50' : ''}`}>
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <p className={`text-2xl font-semibold tracking-tight ${T.timeText}`}>
@@ -2039,7 +2042,11 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                             <TimeBar start={slot.start} end={slot.end} />
                             {!expired && reqs.length > 0 && !isOwner && (
                               isExclusive && hasApproved ? (
-                                <p className="text-xs text-blue-600 font-medium mt-2">枠が埋まりました</p>
+                                myReqStatus?.status === 'approved' ? (
+                                  <p className="text-xs text-blue-600 font-medium mt-2">あなたのリクエストが承認されました</p>
+                                ) : (
+                                  <p className="text-xs text-blue-600 font-medium mt-2">他の人の依頼で枠が埋まりました</p>
+                                )
                               ) : (
                                 <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}人が希望</p>
                               )
@@ -2076,14 +2083,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
                                 閲覧のみ
                               </span>
-                            ) : (
+                            ) : isExclusive && hasApproved ? null : (
                               <button
                                 onClick={() => setRequestSlot(slot)}
                                 className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
-                                disabled={isExclusive && (hasApproved || reqs.some(r => r.status === 'pending'))}
-                                title={isExclusive && hasApproved ? 'この枠は埋まりました' : isExclusive && reqs.some(r => r.status === 'pending') ? '希望者がいます' : ''}
+                                disabled={isExclusive && reqs.some(r => r.status === 'pending')}
+                                title={isExclusive && reqs.some(r => r.status === 'pending') ? '希望者がいます' : ''}
                               >
-                                {isExclusive && hasApproved ? '枠が埋まりました' : isExclusive && reqs.some(r => r.status === 'pending') ? '希望者あり' : '依頼する'}
+                                {isExclusive && reqs.some(r => r.status === 'pending') ? '希望者あり' : '依頼する'}
                               </button>
                             )}
                           </div>
