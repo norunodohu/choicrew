@@ -1977,9 +1977,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   <button onClick={() => { setEmailInput(share.notify_email || ''); setPlatinumCode(''); setEmailCodeError(''); setShowEmailModal(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
                     📧 メール通知{share.notify_email ? <span className="ml-2 text-[10px] text-teal-600 bg-teal-50 rounded-full px-1.5 py-0.5 font-medium">登録済</span> : null}
                   </button>
-                  {!window.matchMedia('(pointer: coarse)').matches && (
+                  
                     <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱 スマホで管理する</button>
-                  )}
+                  
                   {'Notification' in window && Notification.permission !== 'denied' && (
                     <button
                       onClick={async () => {
