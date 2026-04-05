@@ -665,6 +665,7 @@ const THEMES: Record<ThemeKey, {
    CreateView
    ================================================================ */
 
+
 function CreateView({ onCreated }: { onCreated: (id: string, name: string) => void }) {
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState(() => loadDraftData().title);
@@ -678,7 +679,39 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   const [confirmDeleteShareId, setConfirmDeleteShareId] = useState<string | null>(null);
   const toast = useToast();
   const days = getDays(7);
-  const ownedShares = loadOwnedShares();
+  // Firebaseから予定名を取得するためのstate
+  const [ownedShares, setOwnedShares] = useState<OwnedShareEntry[]>([]);
+  const [loadingOwned, setLoadingOwned] = useState(true);
+
+  // Firebaseから予定名を取得
+  useEffect(() => {
+    const fetchOwnedShares = async () => {
+      setLoadingOwned(true);
+      const local = loadOwnedShares();
+      if (local.length === 0) { setOwnedShares([]); setLoadingOwned(false); return; }
+      const results: OwnedShareEntry[] = [];
+      for (const entry of local) {
+        try {
+          const snap = await getDoc(doc(db, 'mini_shares', entry.id));
+          if (snap.exists()) {
+            const data = snap.data();
+            results.push({
+              id: entry.id,
+              name: data.title || data.name || '',
+              created_at: entry.created_at,
+              dateRange: computeDateRange(data.slots || []),
+              lastDate: (data.slots && data.slots.length > 0)
+                ? [...data.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || ''
+                : '',
+            });
+          }
+        } catch { /* ignore individual errors */ }
+      }
+      setOwnedShares(results);
+      setLoadingOwned(false);
+    };
+    fetchOwnedShares();
+  }, []);
 
   const removeOwnedShare = (id: string) => {
     try {
@@ -688,7 +721,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         localStorage.setItem('mini_owned_shares', JSON.stringify(entries.filter(e => e.id !== id)));
       }
     } catch { /* */ }
-    location.reload();
+    setOwnedShares(prev => prev.filter(e => e.id !== id));
   };
 
   const slotsFor = (date: string) => slots.filter(s => s.date === date);
@@ -832,6 +865,17 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         {(() => {
           const todayStr = format(new Date(), 'yyyy-MM-dd');
           const activeShares = ownedShares.filter(e => e.name && (!e.lastDate || e.lastDate >= todayStr));
+          if (loadingOwned) {
+            return (
+              <div className="mb-6">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5 px-1">あなたの作成済み予定</p>
+                <div className="space-y-2">
+                  <SkeletonBlock className="h-10 w-full mb-2" />
+                  <SkeletonBlock className="h-10 w-full mb-2" />
+                </div>
+              </div>
+            );
+          }
           if (activeShares.length === 0) return null;
           return (
             <div className="mb-6">
@@ -1294,6 +1338,32 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
 function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; justCreated: boolean; ownerToken?: string | null }) {
   const [share, setShare] = useState<ShareData | null>(null);
   const [requests, setRequests] = useState<RequestEntry[]>([]);
+  // 依頼一覧の表示/非表示
+  const [showRequestList, setShowRequestList] = useState(false);
+    // 期限切れ依頼をDBから削除
+    useEffect(() => {
+      const deleteExpiredRequests = async () => {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        try {
+          const reqQ = query(collection(db, 'mini_requests'), where('share_id', '==', shareId));
+          const snap = await getDoc(doc(db, 'mini_shares', shareId)); // シェアが存在するか確認
+          if (!snap.exists()) return;
+          const reqSnap = await onSnapshot(reqQ, async (snapshot) => {
+            const batch = [];
+            snapshot.docs.forEach(docSnap => {
+              const data = docSnap.data();
+              if (data.slot_date < todayStr) {
+                batch.push(deleteDoc(doc(db, 'mini_requests', docSnap.id)));
+              }
+            });
+            if (batch.length > 0) await Promise.all(batch);
+          });
+          // 1回だけ実行してunsubscribe
+          setTimeout(() => reqSnap(), 2000);
+        } catch (e) { /* ignore */ }
+      };
+      deleteExpiredRequests();
+    }, [shareId]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [expired, setExpired] = useState(false);
@@ -2016,79 +2086,83 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         {/* Owner: Request summary */}
         {isOwner && requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6 print:hidden">
-            <h2 className="text-sm font-semibold text-slate-700 mb-3">依頼一覧</h2>
-            <div className="space-y-2">
-              {requests
-                .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
-                .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
-                .map(r => (
-                <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
-                  r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
-                  'bg-slate-50'
-                }`}>
-                  <Avatar name={r.requester_name} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-slate-700">{r.requester_name}</span>
-                      <span className="text-[11px] text-slate-400">
-                        {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
-                      </span>
-                      {r.status === 'approved' && (
-                        <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
-                      )}
-                      {r.status === 'declined' && (
-                        <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
-                      )}
-                      {r.status === 'cancelled' && (
-                        <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
-                      )}
-                    </div>
-                    {r.message && (
-                      <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
-                    )}
-                    {(!r.status || r.status === 'pending') ? (
-                      <div className="flex gap-2 mt-2">
-                        <button
-                          onClick={() => handleApprove(r.id)}
-                          className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 active:scale-95 transition-all"
-                         >
-                         承認
-                        </button>
-                        <button
-                          onClick={() => handleDecline(r.id)}
-                          className="px-3 py-1 rounded-lg bg-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-300 active:scale-95 transition-all"
-                        >
-                          辞退
-                        </button>
-                      </div>
-                    ) : r.status === 'approved' ? (
-                      <div className="flex gap-2 mt-2">
-                        {confirmCancelId === r.id ? (
-                          <>
-                            <span className="text-xs text-slate-500 self-center">本当に取り消しますか？</span>
-                            <button
-                              onClick={() => handleCancel(r.id)}
-                              className="px-3 py-1 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 active:scale-95 transition-all"
-                            >取り消す</button>
-                            <button
-                              onClick={() => setConfirmCancelId(null)}
-                              className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium hover:bg-slate-200 active:scale-95 transition-all"
-                            >戻る</button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => setConfirmCancelId(r.id)}
-                            className="px-3 py-1 rounded-lg bg-red-50 text-red-500 text-xs font-medium hover:bg-red-100 active:scale-95 transition-all border border-red-100"
-                          >
-                            承認を取り消す
-                          </button>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold text-slate-700">依頼一覧</h2>
+              <button
+                className="text-xs text-teal-600 border border-teal-200 rounded-lg px-2 py-1 hover:bg-teal-50 transition"
+                onClick={() => setShowRequestList(v => !v)}
+              >
+                {showRequestList ? '非表示' : '表示'}
+              </button>
+            </div>
+            {showRequestList && (
+              <div className="space-y-2">
+                {requests
+                  .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
+                  .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
+                  .map(r => (
+                  <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
+                    r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
+                    'bg-slate-50'
+                  }`}>
+                    <Avatar name={r.requester_name} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-700">{r.requester_name}</span>
+                        <span className="text-[11px] text-slate-400">
+                          {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
+                        </span>
+                        {r.status === 'approved' && (
+                          <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
+                        )}
+                        {r.status === 'declined' && (
+                          <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
+                        )}
+                        {r.status === 'cancelled' && (
+                          <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
                         )}
                       </div>
-                    ) : null}
+                      {r.message && (
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
+                      )}
+                      {(!r.status || r.status === 'pending') ? (
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => handleApprove(r.id)}
+                            className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 active:scale-95 transition-all"
+                          >承認</button>
+                          <button
+                            onClick={() => handleDecline(r.id)}
+                            className="px-3 py-1 rounded-lg bg-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-300 active:scale-95 transition-all"
+                          >辞退</button>
+                        </div>
+                      ) : r.status === 'approved' ? (
+                        <div className="flex gap-2 mt-2">
+                          {confirmCancelId === r.id ? (
+                            <>
+                              <span className="text-xs text-slate-500 self-center">本当に取り消しますか？</span>
+                              <button
+                                onClick={() => handleCancel(r.id)}
+                                className="px-3 py-1 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 active:scale-95 transition-all"
+                              >取り消す</button>
+                              <button
+                                onClick={() => setConfirmCancelId(null)}
+                                className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium hover:bg-slate-200 active:scale-95 transition-all"
+                              >戻る</button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmCancelId(r.id)}
+                              className="px-3 py-1 rounded-lg bg-red-50 text-red-500 text-xs font-medium hover:bg-red-100 active:scale-95 transition-all border border-red-100"
+                            >承認を取り消す</button>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -2493,7 +2567,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           >
             <div className="bg-white rounded-3xl p-6 w-full max-w-sm mx-4 shadow-2xl mb-4 sm:mb-0 text-center" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-base font-bold text-slate-800">📱 スマホで管理する</h2>
+                <h2 className="text-base font-bold text-slate-800">📱 引き継ぎ</h2>
                 <button onClick={() => setShowMgmtQr(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
               </div>
               <p className="text-xs text-slate-500 mb-4">このQRコードをスマホで読み取ると<br />管理者として操作できます</p>
