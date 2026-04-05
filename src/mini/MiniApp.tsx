@@ -175,7 +175,9 @@ function slotKey(s: { date: string; start: string; end: string }): string {
 }
 
 function isValidSlotRange(start: string, end: string): boolean {
-  if (end === '24:00') return start < '24:00';
+  if (start === end) return false;
+  // 日をまたぐ（例: 8:00～0:00）も許容
+  if (end === '24:00' || end === '00:00') return true;
   return start < end;
 }
 
@@ -1970,7 +1972,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               </button>
               {showOwnerMenu && (
                 <div className="absolute right-0 top-11 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[170px] z-20 animate-[fadeIn_0.15s_ease-out]">
-                  <button onClick={() => { handleCopy(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🔗 URLをコピー</button>
                   <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">✏️ 時間を編集</button>
                   <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🎨 テーマを変更</button>
                   <button onClick={() => { setEmailInput(share.notify_email || ''); setPlatinumCode(''); setEmailCodeError(''); setShowEmailModal(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
