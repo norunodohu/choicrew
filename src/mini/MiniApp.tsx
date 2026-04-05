@@ -959,7 +959,11 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             </button>
 
 
-            <p><br>※過ぎた予定は自動で削除されます。<br><br>※作成したデバイスでのみ編集が続けられます</p>
+            <p>
+              ※過ぎた予定は自動で削除されます。<br />
+              <br />
+              ※作成したデバイスでのみ編集が続けられます
+            </p>
           </div>
         )}
 
