@@ -1438,6 +1438,15 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                           )}
                           {(!r.status || r.status === 'pending') ? (
                             <div className="flex gap-2 mt-2">
+          shareId,
+          ownerName: share.displayName || share.name,
+        }),
+      });
+      if (confirmRes.ok) {
+        toast.show('登録完了！確認メールを送信しました', 'success');
+      } else {
+        const errBody = await confirmRes.json().catch(() => ({}));
+        toast.show(`登録しましたがメール送信に失敗: ${errBody.error || confirmRes.status}`, 'error');
       }
       setShowEmailModal(false);
     } catch { toast.show('登録に失敗しました', 'error'); }
