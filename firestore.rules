@@ -133,6 +133,9 @@ service cloud.firestore {
                       && request.resource.data.title is string
                       && request.resource.data.displayName is string
                     ) || (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requester_aliases'])
+                      && request.resource.data.requester_aliases is map
+                    ) || (
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['notify_email'])
                       && request.resource.data.notify_email is string
                     ) || (
