@@ -1,15 +1,4 @@
 import { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
-// 依頼者名のローカル編集保存
-function loadEditedRequesterName(requestId: string): string | null {
-  try {
-    return localStorage.getItem(`mini_requester_edit_${requestId}`);
-  } catch { return null; }
-}
-function saveEditedRequesterName(requestId: string, name: string) {
-  try {
-    localStorage.setItem(`mini_requester_edit_${requestId}`, name);
-  } catch { /* ignore */ }
-}
 
 /* ================================================================
    Error Boundary — クラッシュ時に白画面にならないように
@@ -2119,47 +2108,18 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 {requests
                   .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
                   .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
-                  .map(r => {
-                    const [editing, setEditing] = useState(false);
-                    const [editVal, setEditVal] = useState(() => loadEditedRequesterName(r.id) || '');
-                    const editedName = loadEditedRequesterName(r.id);
-                    const displayName = editedName || r.requester_name;
-                    return (
-                      <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
-                        r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
-                        'bg-slate-50'
-                      }`}>
-                        <Avatar name={displayName} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            {editing ? (
-                              <span className="text-sm font-semibold text-slate-700">
-                                <input
-                                  type="text"
-                                  value={editVal}
-                                  onChange={e => setEditVal(e.target.value)}
-                                  onBlur={() => { setEditing(false); if (editVal.trim()) saveEditedRequesterName(r.id, editVal.trim()); }}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') { setEditing(false); if (editVal.trim()) saveEditedRequesterName(r.id, editVal.trim()); }
-                                    if (e.key === 'Escape') { setEditing(false); setEditVal(displayName); }
-                                  }}
-                                  className="border-b border-teal-400 outline-none px-1 py-0.5 text-sm"
-                                  autoFocus
-                                  maxLength={30}
-                                />
-                              </span>
-                            ) : (
-                              <span
-                                className="text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
-                                title="クリックで名前を編集"
-                                onClick={() => { setEditVal(displayName); setEditing(true); }}
-                              >
-                                {displayName}
-                              </span>
-                            )}
-                            <span className="text-[11px] text-slate-400">
-                              {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
-                            </span>
+                  .map(r => (
+                  <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
+                    r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
+                    'bg-slate-50'
+                  }`}>
+                    <Avatar name={r.requester_name} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-700">{r.requester_name}</span>
+                        <span className="text-[11px] text-slate-400">
+                          {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
+                        </span>
                         {r.status === 'approved' && (
                           <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
                         )}
@@ -2170,12 +2130,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                           <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
                         )}
                       </div>
-                          {editing && (
-                            <div className="text-xs text-slate-400 mt-1">元の名前: <span className="font-mono">{r.requester_name}</span></div>
-                          )}
-                          {r.message && (
-                            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
-                          )}
+                      {r.message && (
+                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
+                      )}
                       {(!r.status || r.status === 'pending') ? (
                         <div className="flex gap-2 mt-2">
                           <button
@@ -2211,8 +2168,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                       ) : null}
                     </div>
                   </div>
-                    );
-                  })
+                ))}
               </div>
             )}
           </div>
