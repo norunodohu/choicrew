@@ -1216,11 +1216,6 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
     return () => el.removeEventListener('keydown', trap);
   }, []);
 
-  useEffect(() => {
-    setRequestStart(normalizeTime(slot.start));
-    setRequestEnd(normalizeTime(slot.end));
-  }, [slot.date, slot.start, slot.end]);
-
   const handleSend = async () => {
     if (!name.trim()) return;
     const normalizedStart = normalizeTime(requestStart);
