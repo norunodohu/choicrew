@@ -2444,6 +2444,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               {slot.start}<span className="text-slate-300 mx-1.5">–</span>{slot.end}
                             </p>
                             <TimeBar start={slot.start} end={slot.end} />
+                            {myReqStatus?.status === 'approved' && (
+                              <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full">
+                                <span className="w-2 h-2 rounded-full bg-blue-500" />
+                                承認済み
+                              </div>
+                            )}
                             {!expired && reqs.length > 0 && !isOwner && (
                               isExclusive && hasApproved ? (
                                 myReqStatus?.status === 'approved' ? (
