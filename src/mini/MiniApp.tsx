@@ -1,6 +1,4 @@
 import { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
-import { auth } from '../firebase';
-import { onAuthStateChanged, signInAnonymously, type User } from 'firebase/auth';
 
 /* ================================================================
    Error Boundary — クラッシュ時に白画面にならないように
@@ -244,8 +242,21 @@ function saveRequesterName(name: string) {
   try { localStorage.setItem('choicrew_mini_requester', name); } catch { /* */ }
 }
 
-function getAliasDocId(userId: string, shareId: string) {
-  return `${userId}_${shareId}`;
+function loadMiniSyncId(): string {
+  try {
+    const key = 'choicrew_mini_sync_id';
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const next = `sync_${genId(24)}`;
+    localStorage.setItem(key, next);
+    return next;
+  } catch {
+    return `sync_${genId(24)}`;
+  }
+}
+
+function loadMiniAliasDocId(shareId: string, syncId: string) {
+  return `${shareId}_${syncId}`;
 }
 
 function loadSentRequestIds(shareId: string): Map<string, string> {
@@ -1409,10 +1420,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [emailCodeError, setEmailCodeError] = useState('');
   const [editTitleVal, setEditTitleVal] = useState('');
   const [editDisplayNameVal, setEditDisplayNameVal] = useState('');
-  const [currentAuthUser, setCurrentAuthUser] = useState<User | null>(null);
   const [requesterAliases, setRequesterAliases] = useState<Record<string, string>>({});
   const [editingRequesterName, setEditingRequesterName] = useState<{ id: string; name: string } | null>(null);
   const [editingRequesterAliasValue, setEditingRequesterAliasValue] = useState('');
+  const [miniSyncId, setMiniSyncId] = useState('');
   const [fpOwnerPrompt, setFpOwnerPrompt] = useState(false);
   const [fpChecked, setFpChecked] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
@@ -1423,25 +1434,17 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const fcmRegisteredRef = useRef(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setCurrentAuthUser(user);
-    });
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch(() => {
-        // editing aliases falls back to local view-only state if auth is unavailable
-      });
-    }
-    return () => unsub();
+    setMiniSyncId(loadMiniSyncId());
   }, []);
 
   useEffect(() => {
-    if (!currentAuthUser?.uid) {
+    if (!miniSyncId) {
       setRequesterAliases({});
       return;
     }
     const loadAliases = async () => {
       try {
-        const snap = await getDoc(doc(db, 'mini_requester_aliases', getAliasDocId(currentAuthUser.uid, shareId)));
+        const snap = await getDoc(doc(db, 'mini_requester_aliases', loadMiniAliasDocId(shareId, miniSyncId)));
         if (snap.exists()) {
           const data = snap.data() as { aliases?: Record<string, string> };
           setRequesterAliases(data.aliases || {});
@@ -1453,7 +1456,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       }
     };
     loadAliases();
-  }, [currentAuthUser?.uid, shareId]);
+  }, [miniSyncId, shareId]);
 
   useEffect(() => {
     if (!editingRequesterName) {
@@ -1517,16 +1520,16 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   }, [requesterAliases]);
 
   const handleSaveRequesterAlias = async (requesterName: string, alias: string) => {
-    if (!currentAuthUser?.uid) return false;
+    if (!miniSyncId) return false;
     const trimmed = alias.trim();
     const nextAliases = { ...requesterAliases };
     if (trimmed) nextAliases[requesterName] = trimmed;
     else delete nextAliases[requesterName];
     try {
       await setDoc(
-        doc(db, 'mini_requester_aliases', getAliasDocId(currentAuthUser.uid, shareId)),
+        doc(db, 'mini_requester_aliases', loadMiniAliasDocId(shareId, miniSyncId)),
         {
-          user_id: currentAuthUser.uid,
+          sync_id: miniSyncId,
           share_id: shareId,
           aliases: nextAliases,
           updated_at: Timestamp.fromDate(new Date()),
@@ -2192,8 +2195,24 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   </p>
                 </div>
                 <p className="text-xs text-slate-400">
-                  これは自分の端末ではなく、ログイン中のアカウントに保存されます。
+                  これはこの同期IDに保存されます。別端末でも同じ同期IDを使えば反映されます。
                 </p>
+                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-500">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">同期ID</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!miniSyncId) return;
+                        await navigator.clipboard.writeText(miniSyncId);
+                      }}
+                      className="text-teal-600 font-semibold"
+                    >
+                      コピー
+                    </button>
+                  </div>
+                  <p className="mt-1 break-all font-mono">{miniSyncId || 'loading...'}</p>
+                </div>
               </div>
               <div className="flex gap-3 mt-5">
                 <button
