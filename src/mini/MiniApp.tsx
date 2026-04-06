@@ -2415,6 +2415,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     {formatSlotDate(date)}
                     {today && <span className="ml-2 text-xs font-semibold bg-teal-100 text-teal-600 rounded-full px-2 py-0.5">今日</span>}
                   </h2>
+                  {dateSlots.some(slot => requestsForSlot(slot).some(r => r.status === 'approved')) && (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                      承認あり
+                    </span>
+                  )}
                   <div className="flex-1 h-px bg-slate-200" />
                 </div>
 
@@ -2511,7 +2517,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                           <div className="mt-3 pt-3 border-t border-slate-100">
                             <div className="flex flex-wrap gap-2">
                               {reqs.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').map(r => (
-                                <div key={r.id} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-full pl-1 pr-2.5 py-1" title={r.message || undefined}>
+                                <div key={r.id} className={`flex items-center gap-1.5 bg-white border rounded-full pl-1 pr-2.5 py-1 ${r.status === 'approved' ? 'border-blue-200 bg-blue-50/70' : 'border-slate-200'}`} title={r.message || undefined}>
                                   <Avatar name={getRequesterAlias(r.requester_name)} />
                                   <button
                                     type="button"
@@ -2520,6 +2526,16 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                   >
                                     {getRequesterAlias(r.requester_name)}
                                   </button>
+                                  {r.status === 'approved' && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-100 rounded-full px-2 py-0.5">
+                                      承認済み
+                                    </span>
+                                  )}
+                                  {(!r.status || r.status === 'pending') && (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-700 bg-teal-100 rounded-full px-2 py-0.5">
+                                      依頼中
+                                    </span>
+                                  )}
                                   <span className="text-[10px] text-slate-400">
                                     {r.requested_start && r.requested_end ? `${r.requested_start}-${r.requested_end}` : `${r.slot_start}-${r.slot_end}`}
                                   </span>
