@@ -1794,6 +1794,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           { start: nextStart, end: nextEnd }
         ),
       });
+      setShare(prev => prev ? {
+        ...prev,
+        slots: replaceShareSlot(
+          prev.slots || [],
+          { date: req.slot_date, start: req.slot_start, end: req.slot_end },
+          { start: nextStart, end: nextEnd }
+        ),
+      } : prev);
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'approved' });
       if (share?.bookingMode !== 'multiple') {
         // 同じ枠の他pendingをdeclinedに
@@ -1843,6 +1851,18 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           { start: normalizeTime(req.slot_start), end: normalizeTime(req.slot_end) }
         ),
       });
+      setShare(prev => prev ? {
+        ...prev,
+        slots: replaceShareSlot(
+          prev.slots || [],
+          {
+            date: req.slot_date,
+            start: normalizeTime(req.requested_start || req.slot_start),
+            end: normalizeTime(req.requested_end || req.slot_end),
+          },
+          { start: normalizeTime(req.slot_start), end: normalizeTime(req.slot_end) }
+        ),
+      } : prev);
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'cancelled' });
       if (share?.bookingMode !== 'multiple') {
         // 同じ枠のdeclinedをpendingに戻す
