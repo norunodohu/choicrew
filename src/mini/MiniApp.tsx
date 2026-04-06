@@ -1353,91 +1353,95 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
    ================================================================ */
 
 function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; justCreated: boolean; ownerToken?: string | null }) {
-    // 依頼者名編集状態（全体管理）
-    const [editingMap, setEditingMap] = useState<{ [id: string]: boolean }>({});
-    const [editVals, setEditVals] = useState<{ [id: string]: string }>({});
-    // 初期化
-    useEffect(() => {
-      const obj: { [id: string]: string } = {};
-      requests.forEach(r => {
-        const saved = loadEditedRequesterName(r.id);
-        if (saved) obj[r.id] = saved;
-      });
-      setEditVals(obj);
-    }, [requests]);
-    const handleEdit = (id: string, val: string) => setEditVals(v => ({ ...v, [id]: val }));
-    const handleStartEdit = (id: string, val: string) => setEditingMap(m => ({ ...m, [id]: true }));
-    const handleEndEdit = (id: string, val: string) => {
-      setEditingMap(m => ({ ...m, [id]: false }));
-      if (val.trim()) saveEditedRequesterName(id, val.trim());
-    };
   const [share, setShare] = useState<ShareData | null>(null);
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   // 依頼一覧の表示/非表示
   const [showRequestList, setShowRequestList] = useState(false);
-            {showRequestList && (
-              <div className="space-y-2">
-                {requests
-                  .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
-                  .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
-                  .map(r => {
-                    const editing = !!editingMap[r.id];
-                    const editedName = editVals[r.id] || loadEditedRequesterName(r.id) || '';
-                    const displayName = editedName || r.requester_name;
-                    return (
-                      <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
-                        r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
-                        'bg-slate-50'
-                      }`}>
-                        <Avatar name={displayName} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            {editing ? (
-                              <span className="text-sm font-semibold text-slate-700">
-                                <input
-                                  type="text"
-                                  value={editedName}
-                                  onChange={e => handleEdit(r.id, e.target.value)}
-                                  onBlur={() => handleEndEdit(r.id, editedName)}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') handleEndEdit(r.id, editedName);
-                                    if (e.key === 'Escape') setEditingMap(m => ({ ...m, [r.id]: false }));
-                                  }}
-                                  className="border-b border-teal-400 outline-none px-1 py-0.5 text-sm"
-                                  autoFocus
-                                  maxLength={30}
-                                />
-                              </span>
-                            ) : (
-                              <span
-                                className="text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
-                                title="クリックで名前を編集"
-                                onClick={() => handleStartEdit(r.id, displayName)}
-                              >
-                                {displayName}
-                              </span>
-                            )}
-                            <span className="text-[11px] text-slate-400">
-                              {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
-                            </span>
-                            {r.status === 'approved' && (
-                              <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
-                            )}
-                            {r.status === 'declined' && (
-                              <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
-                            )}
-                            {r.status === 'cancelled' && (
-                              <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
-                            )}
-                          </div>
-                          {editing && (
-                            <div className="text-xs text-slate-400 mt-1">元の名前: <span className="font-mono">{r.requester_name}</span></div>
-                          )}
-                          {r.message && (
-                            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
-                          )}
-                          {(!r.status || r.status === 'pending') ? (
-                            <div className="flex gap-2 mt-2">
+    // 期限切れ依頼をDBから削除
+    useEffect(() => {
+      const deleteExpiredRequests = async () => {
+        const todayStr = format(new Date(), 'yyyy-MM-dd');
+        try {
+          const reqQ = query(collection(db, 'mini_requests'), where('share_id', '==', shareId));
+          const snap = await getDoc(doc(db, 'mini_shares', shareId)); // シェアが存在するか確認
+          if (!snap.exists()) return;
+          const reqSnap = await onSnapshot(reqQ, async (snapshot) => {
+            const batch = [];
+            snapshot.docs.forEach(docSnap => {
+              const data = docSnap.data();
+              if (data.slot_date < todayStr) {
+                batch.push(deleteDoc(doc(db, 'mini_requests', docSnap.id)));
+              }
+            });
+            if (batch.length > 0) await Promise.all(batch);
+          });
+          // 1回だけ実行してunsubscribe
+          setTimeout(() => reqSnap(), 2000);
+        } catch (e) { /* ignore */ }
+      };
+      deleteExpiredRequests();
+    }, [shareId]);
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
+  const [expired, setExpired] = useState(false);
+  const [requestSlot, setRequestSlot] = useState<{ date: string; start: string; end: string } | null>(null);
+  const [sentSlots, setSentSlots] = useState<Set<string>>(() => loadSentSlots(shareId));
+  const [copied, setCopied] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(() => {
+    if (typeof Notification === 'undefined') return false;
+    if (Notification.permission !== 'granted') return false;
+    try { return localStorage.getItem(`mini_notif_${shareId}`) !== 'off'; } catch { return true; }
+  });
+  const [showNotifExpand, setShowNotifExpand] = useState(false);
+  const [editingSlots, setEditingSlots] = useState(false);
+  const [draftSlots, setDraftSlots] = useState<TimeSlot[]>([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [savingSlots, setSavingSlots] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [myRequestStatuses, setMyRequestStatuses] = useState<Map<string, { status: string; id: string }>>(new Map());
+  const [showOwnerMenu, setShowOwnerMenu] = useState(false);
+  const [showThemePicker, setShowThemePicker] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isDraft, setIsDraft] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [tokenVerified, setTokenVerified] = useState(false);
+  const [showMgmtQr, setShowMgmtQr] = useState(false);
+  const [showEditTitle, setShowEditTitle] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
+  const [platinumCode, setPlatinumCode] = useState('');
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailCodeError, setEmailCodeError] = useState('');
+  const [editTitleVal, setEditTitleVal] = useState('');
+  const [editDisplayNameVal, setEditDisplayNameVal] = useState('');
+  const [fpOwnerPrompt, setFpOwnerPrompt] = useState(false);
+  const [fpChecked, setFpChecked] = useState(false);
+  const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
+  const toast = useToast();
+
+  const url = makeShareUrl(shareId);
+  const prevPendingIdsRef = useRef<Set<string> | null>(null);
+  const fcmRegisteredRef = useRef(false);
+
+  const handleSaveNotifyEmail = async () => {
+    if (!share) return;
+    if (platinumCode !== 'mario3015#') {
+      setEmailCodeError('プラチナコードが正しくありません');
+      return;
+    }
+    if (!emailInput.trim()) { setEmailCodeError('メールアドレスを入力してください'); return; }
+    setEmailSaving(true);
+    setEmailCodeError('');
+    const newEmail = emailInput.trim();
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { notify_email: newEmail });
+      setShare(prev => prev ? { ...prev, notify_email: newEmail } : prev);
+      // 確認メール送信
+      const confirmRes = await fetch('/api/mini/email-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: newEmail,
           shareId,
           ownerName: share.displayName || share.name,
         }),
