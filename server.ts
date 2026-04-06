@@ -19,6 +19,12 @@ const app = express();
 export default app;
 const PORT = 3000;
 
+function formatMiniShareEndDate(dateStr: string): string {
+  const date = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("ja-JP", { month: "numeric", day: "numeric" }).format(date);
+}
+
 const adminProjectId = process.env.FIREBASE_PROJECT_ID;
 const adminClientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 const adminPrivateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n");
@@ -482,9 +488,14 @@ app.get("/mini/s/:shareId", async (req, res, next) => {
 
     const data = snap.data()!;
     const name = data.name || "";
-    const slotCount = Array.isArray(data.slots) ? data.slots.length : 0;
-    const title = `${name}さんの空き時間 | ChoiCrew Mini`;
-    const desc = `${slotCount}件の空き時間が共有されています。タップして依頼を送りましょう。`;
+    const slots = Array.isArray(data.slots) ? data.slots : [];
+    const sortedDates = slots
+      .map((slot: { date?: string }) => slot?.date)
+      .filter((date): date is string => typeof date === "string" && date.length > 0)
+      .sort();
+    const endDate = sortedDates.length > 0 ? formatMiniShareEndDate(sortedDates[sortedDates.length - 1]) : "";
+    const title = endDate ? `${name}さん予定（～${endDate}）` : `${name}さん予定`;
+    const desc = title;
     const pageUrl = `${appUrl}/mini/s/${shareId}`;
 
     const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
