@@ -140,7 +140,7 @@ function getDays(count = 14) {
     const d = addDays(today, i);
     const formatted = format(d, 'M/d(E)', { locale: ja });
     let prefix = '';
-    if (i === 0) prefix = '今日 ';
+    if (i === 0) prefix = '莉頑律 ';
     else if (i === 1) prefix = '譏取律 ';
     return {
       date: format(d, 'yyyy-MM-dd'),
@@ -1286,39 +1286,37 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
-      aria-label="依頼を送る"
+      aria-label="萓晞ｼ繧帝√ｋ"
     >
       <div ref={modalRef} className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4 animate-[slideUp_0.2s_ease-out]">
         {/* Drag handle 窶・mobile */}
         <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
 
-        <h3 className="text-lg font-bold text-slate-800">依頼を送る</h3>
+        <h3 className="text-lg font-bold text-slate-800">萓晞ｼ繧帝√ｋ</h3>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">元の空き</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">蜈・・遨ｺ縺・/p>
               <p className="text-base font-semibold tracking-tight text-slate-800">
                 {formatSlotDate(slot.date)} {slot.start} - {slot.end}
               </p>
             </div>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
-                ここから依頼できます
-              </span>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+              縺薙％縺九ｉ萓晞ｼ縺ｧ縺阪∪縺・            </span>
           </div>
           <TimeBar start={slot.start} end={slot.end} />
         </div>
 
         <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 space-y-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-500">依頼する時間</p>
-            <p className="text-sm text-slate-600">必要なら開始と終了を変えて送れます。</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-500">萓晞ｼ縺吶ｋ譎る俣</p>
+            <p className="text-sm text-slate-600">蠢・ｦ√↑繧蛾幕蟋九→邨ゆｺ・ｒ螟峨∴縺ｦ騾√ｌ縺ｾ縺吶・/p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="req-start" className="block text-sm font-medium text-slate-700 mb-1">
-                開始
-              </label>
+                髢句ｧ・              </label>
               <input
                 id="req-start"
                 type="time"
@@ -1329,8 +1327,7 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
             </div>
             <div>
               <label htmlFor="req-end" className="block text-sm font-medium text-slate-700 mb-1">
-                終了
-              </label>
+                邨ゆｺ・              </label>
               <input
                 id="req-end"
                 type="time"
@@ -1344,7 +1341,7 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
 
         <div>
           <label htmlFor="req-name" className="block text-sm font-medium text-slate-600 mb-1">
-            あなたの名前 <span className="text-red-400">*</span>
+            縺ゅ↑縺溘・蜷榊燕 <span className="text-red-400">*</span>
           </label>
           <input
             id="req-name"
@@ -1353,7 +1350,7 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
             onChange={e => setName(e.target.value)}
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base
                        focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
-            placeholder="名前を入力"
+            placeholder="螻ｱ逕ｰ螟ｪ驛・
             maxLength={30}
             autoFocus
           />
@@ -1361,7 +1358,7 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
 
         <div>
           <label htmlFor="req-msg" className="block text-sm font-medium text-slate-600 mb-1">
-            メッセージ（任意）
+            繝｡繝・そ繝ｼ繧ｸ・井ｻｻ諢擾ｼ・
           </label>
           <input
             id="req-msg"
@@ -1370,14 +1367,14 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
             onChange={e => setMessage(e.target.value)}
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base
                        focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
-            placeholder="ひとこと添える"
+            placeholder="繧医ｍ縺励￥縺企｡倥＞縺励∪縺・
             maxLength={200}
           />
         </div>
 
         {hasEmail && ownerName && (
           <p className="text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
-            {ownerName}さんはメール通知を設定しています
+            透 {ownerName}縺輔ｓ縺ｯ繝｡繝ｼ繝ｫ騾夂衍繧定ｨｭ螳壹＠縺ｦ縺・∪縺・
           </p>
         )}
 
@@ -1391,7 +1388,7 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
             className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
                        hover:bg-slate-50 font-medium transition"
           >
-            キャンセル
+            繧ｭ繝｣繝ｳ繧ｻ繝ｫ
           </button>
           <button
             onClick={handleSend}
@@ -1399,7 +1396,7 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
             className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium
                        hover:bg-teal-700 disabled:opacity-40 transition"
           >
-            {sending ? '送信中...' : '送信する'}
+            {sending ? '騾∽ｿ｡荳ｭ...' : '騾∽ｿ｡縺吶ｋ'}
           </button>
         </div>
       </div>
@@ -2412,46 +2409,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   {today && <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />}
                   <h2 className={`text-base font-bold tracking-wide ${today ? 'text-teal-600' : 'text-slate-600'}`}>
                     {formatSlotDate(date)}
-                    {today && <span className="ml-2 text-xs font-semibold bg-teal-100 text-teal-600 rounded-full px-2 py-0.5">今日</span>}
+                    {today && <span className="ml-2 text-xs font-semibold bg-teal-100 text-teal-600 rounded-full px-2 py-0.5">莉頑律</span>}
                   </h2>
-                  <div className="flex-1 h-px bg-slate-200" />
-                </div>
-
-                {/* Slots for this date */}
-                <div className="space-y-2.5">
-                  {dateSlots.map((slot, i) => {
-                    const key = slotKey(slot);
-                    const sent = sentSlots.has(key);
-                    const reqs = requestsForSlot(slot).filter(r => !r.status || r.status === 'pending' || r.status === 'approved');
-                    const isExclusive = share?.bookingMode !== 'multiple';
-                    const hasApproved = reqs.some(r => r.status === 'approved');
-                    const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
-                    const isFilledByOther = !isOwner && isExclusive && hasApproved && myReqStatus?.status !== 'approved';
-                    const borderClass = isOwner && reqs.length > 0
-                      ? 'border-teal-200 border-l-[3px] border-l-teal-400'
-                      : myReqStatus?.status === 'approved'
-                      ? 'border-blue-200 border-l-[3px] border-l-blue-400'
-                      : isFilledByOther
-                      ? 'border-slate-100'
-                      : 'border-slate-200';
-
-                    return (
-                      <div key={i} className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${borderClass}${isFilledByOther ? ' opacity-50' : ''}`}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-2xl font-semibold tracking-tight ${T.timeText}`}>
-                              {slot.start}<span className="text-slate-300 mx-1.5">-</span>{slot.end}
-                            </p>
-                            <TimeBar start={slot.start} end={slot.end} />
-                            {!expired && reqs.length > 0 && !isOwner && (
-                              isExclusive && hasApproved ? (
-                                myReqStatus?.status === 'approved' ? (
-                                  <p className="text-xs text-blue-600 font-medium mt-2">あなたのリクエストが承認されました</p>
-                                ) : (
-                                  <p className="text-xs text-blue-600 font-medium mt-2">他の人の承認で枠が埋まりました</p>
-                                )
                               ) : (
-                                <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}件の依頼</p>
+                                <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}莠ｺ縺悟ｸ梧悍</p>
                               )
                             )}
                           </div>
@@ -2460,40 +2421,40 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               reqs.length > 0 ? (
                                 <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
                                   {share.bookingMode === 'multiple'
-                                    ? `${reqs.filter(r => r.status === 'approved').length}/${reqs.length}人`
-                                    : `${reqs.length}件`}
+                                    ? `${reqs.filter(r => r.status === 'approved').length}/${reqs.length}莠ｺ`
+                                    : `${reqs.length}莉ｶ`}
                                 </span>
                               ) : null
                             ) : expired ? (
-                              <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">期限切れ</span>
+                              <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">譛滄剞蛻・ｌ</span>
                             ) : myReqStatus?.status === 'approved' ? (
                               <span className="text-sm text-blue-600 font-bold bg-blue-50 border border-blue-200 px-3 py-1.5 rounded-lg">
-                                承認済み
+                                謇ｿ隱肴ｸ医∩ 笨・
                               </span>
                             ) : myReqStatus?.status === 'declined' ? (
                               <span className="text-sm text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
-                                辞退されました
+                                霎樣縺輔ｌ縺ｾ縺励◆
                               </span>
                             ) : myReqStatus?.status === 'cancelled' ? (
                               <span className="text-sm text-red-400 font-medium bg-red-50 px-3 py-1.5 rounded-lg">
-                                キャンセル済み
+                                繧ｭ繝｣繝ｳ繧ｻ繝ｫ貂医∩
                               </span>
                             ) : sent ? (
                               <span className="inline-flex items-center gap-1 text-sm text-teal-700 font-semibold bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 px-3 py-1.5 rounded-lg">
-                                <span className="animate-pulse">●</span> リクエスト中
+                                <span className="animate-pulse">笨ｨ</span> 繝ｪ繧ｯ繧ｨ繧ｹ繝井ｸｭ
                               </span>
                             ) : isPaused ? (
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
-                                閲覧のみ
+                                髢ｲ隕ｧ縺ｮ縺ｿ
                               </span>
                             ) : isExclusive && hasApproved ? null : (
                               <button
                                 onClick={() => setRequestSlot(slot)}
                                 className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
                                 disabled={isExclusive && reqs.some(r => r.status === 'pending')}
-                                title={isExclusive && reqs.some(r => r.status === 'pending') ? '他の人が依頼中です' : ''}
+                                title={isExclusive && reqs.some(r => r.status === 'pending') ? '蟶梧悍閠・′縺・∪縺・ : ''}
                               >
-                                {isExclusive && reqs.some(r => r.status === 'pending') ? '希望者あり' : '依頼する'}
+                                {isExclusive && reqs.some(r => r.status === 'pending') ? '蟶梧悍閠・≠繧・ : '萓晞ｼ縺吶ｋ'}
                               </button>
                             )}
                           </div>
@@ -3165,6 +3126,5 @@ export default function MiniApp() {
     </ErrorBoundary>
   );
 }
-
 
 
