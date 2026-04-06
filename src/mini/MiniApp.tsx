@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback, Component, ReactNode } from 'react';
+import { auth } from '../firebase';
+import { onAuthStateChanged, signInAnonymously, type User } from 'firebase/auth';
 
 /* ================================================================
    Error Boundary — クラッシュ時に白画面にならないように
@@ -240,6 +242,10 @@ function loadRequesterName(): string {
 
 function saveRequesterName(name: string) {
   try { localStorage.setItem('choicrew_mini_requester', name); } catch { /* */ }
+}
+
+function getAliasDocId(userId: string, shareId: string) {
+  return `${userId}_${shareId}`;
 }
 
 function loadSentRequestIds(shareId: string): Map<string, string> {
@@ -1355,7 +1361,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           const snap = await getDoc(doc(db, 'mini_shares', shareId)); // シェアが存在するか確認
           if (!snap.exists()) return;
           const reqSnap = await onSnapshot(reqQ, async (snapshot) => {
-            const batch = [];
+            const batch: Promise<unknown>[] = [];
             snapshot.docs.forEach(docSnap => {
               const data = docSnap.data();
               if (data.slot_date < todayStr) {
@@ -1403,6 +1409,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [emailCodeError, setEmailCodeError] = useState('');
   const [editTitleVal, setEditTitleVal] = useState('');
   const [editDisplayNameVal, setEditDisplayNameVal] = useState('');
+  const [currentAuthUser, setCurrentAuthUser] = useState<User | null>(null);
+  const [requesterAliases, setRequesterAliases] = useState<Record<string, string>>({});
+  const [editingRequesterName, setEditingRequesterName] = useState<{ id: string; name: string } | null>(null);
+  const [editingRequesterAliasValue, setEditingRequesterAliasValue] = useState('');
   const [fpOwnerPrompt, setFpOwnerPrompt] = useState(false);
   const [fpChecked, setFpChecked] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
@@ -1411,6 +1421,47 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const url = makeShareUrl(shareId);
   const prevPendingIdsRef = useRef<Set<string> | null>(null);
   const fcmRegisteredRef = useRef(false);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setCurrentAuthUser(user);
+    });
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch(() => {
+        // editing aliases falls back to local view-only state if auth is unavailable
+      });
+    }
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!currentAuthUser?.uid) {
+      setRequesterAliases({});
+      return;
+    }
+    const loadAliases = async () => {
+      try {
+        const snap = await getDoc(doc(db, 'mini_requester_aliases', getAliasDocId(currentAuthUser.uid, shareId)));
+        if (snap.exists()) {
+          const data = snap.data() as { aliases?: Record<string, string> };
+          setRequesterAliases(data.aliases || {});
+        } else {
+          setRequesterAliases({});
+        }
+      } catch {
+        setRequesterAliases({});
+      }
+    };
+    loadAliases();
+  }, [currentAuthUser?.uid, shareId]);
+
+  useEffect(() => {
+    if (!editingRequesterName) {
+      setEditingRequesterAliasValue('');
+      return;
+    }
+    setEditingRequesterAliasValue(requesterAliases[editingRequesterName.name] || editingRequesterName.name);
+  }, [editingRequesterName, requesterAliases]);
 
   const handleSaveNotifyEmail = async () => {
     if (!share) return;
@@ -1459,6 +1510,34 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       toast.show('タイトルを更新しました', 'success');
     } catch { toast.show('更新に失敗しました', 'error'); }
     setShowEditTitle(false);
+  };
+
+  const getRequesterAlias = useCallback((requesterName: string) => {
+    return requesterAliases[requesterName]?.trim() || requesterName;
+  }, [requesterAliases]);
+
+  const handleSaveRequesterAlias = async (requesterName: string, alias: string) => {
+    if (!currentAuthUser?.uid) return false;
+    const trimmed = alias.trim();
+    const nextAliases = { ...requesterAliases };
+    if (trimmed) nextAliases[requesterName] = trimmed;
+    else delete nextAliases[requesterName];
+    try {
+      await setDoc(
+        doc(db, 'mini_requester_aliases', getAliasDocId(currentAuthUser.uid, shareId)),
+        {
+          user_id: currentAuthUser.uid,
+          share_id: shareId,
+          aliases: nextAliases,
+          updated_at: Timestamp.fromDate(new Date()),
+        },
+        { merge: true }
+      );
+      setRequesterAliases(nextAliases);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const handleChangeStatus = async (newStatus: 'active' | 'view_only' | 'draft') => {
@@ -2091,6 +2170,55 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           </div>
         )}
 
+        {editingRequesterName && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setEditingRequesterName(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-base font-bold text-slate-800">プロフィール</h2>
+                <button onClick={() => setEditingRequesterName(null)} className="text-slate-400 hover:text-slate-600 text-xl px-2">×</button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1 block">相手の表示名</label>
+                  <input
+                    type="text"
+                    value={editingRequesterAliasValue}
+                    onChange={e => setEditingRequesterAliasValue(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
+                    maxLength={40}
+                  />
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    元の名前: <span className="font-medium text-slate-500">{editingRequesterName.name}</span>
+                  </p>
+                </div>
+                <p className="text-xs text-slate-400">
+                  これは自分の端末ではなく、ログイン中のアカウントに保存されます。
+                </p>
+              </div>
+              <div className="flex gap-3 mt-5">
+                <button
+                  onClick={async () => {
+                    const ok = await handleSaveRequesterAlias(
+                      editingRequesterName.name,
+                      editingRequesterAliasValue
+                    );
+                    if (ok) setEditingRequesterName(null);
+                  }}
+                  className="flex-1 bg-teal-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-teal-600 active:scale-95 transition-all"
+                >
+                  保存
+                </button>
+                <button
+                  onClick={() => setEditingRequesterName(null)}
+                  className="flex-1 rounded-xl border border-slate-200 text-slate-600 py-2.5 text-sm font-semibold hover:bg-slate-50 transition"
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Owner: Request summary */}
         {isOwner && requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length > 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6 print:hidden">
@@ -2113,10 +2241,19 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
                     'bg-slate-50'
                   }`}>
-                    <Avatar name={r.requester_name} />
+                    <Avatar name={getRequesterAlias(r.requester_name)} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-slate-700">{r.requester_name}</span>
+                        <button
+                          type="button"
+                          onClick={() => setEditingRequesterName({ id: r.id, name: r.requester_name })}
+                          className="text-sm font-semibold text-slate-700 hover:text-teal-600 transition text-left"
+                        >
+                          {getRequesterAlias(r.requester_name)}
+                        </button>
+                        {requesterAliases[r.requester_name]?.trim() ? (
+                          <span className="text-[11px] text-slate-400">元: {r.requester_name}</span>
+                        ) : null}
                         <span className="text-[11px] text-slate-400">
                           {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
                         </span>
@@ -2293,8 +2430,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                             <div className="flex flex-wrap gap-2">
                               {reqs.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').map(r => (
                                 <div key={r.id} className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-full pl-1 pr-2.5 py-1" title={r.message || undefined}>
-                                  <Avatar name={r.requester_name} />
-                                  <span className="text-xs font-medium text-slate-600">{r.requester_name}</span>
+                                  <Avatar name={getRequesterAlias(r.requester_name)} />
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingRequesterName({ id: r.id, name: r.requester_name })}
+                                    className="text-xs font-medium text-slate-600 hover:text-teal-600 transition text-left"
+                                  >
+                                    {getRequesterAlias(r.requester_name)}
+                                  </button>
                                   {r.message && <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />}
                                 </div>
                               ))}
