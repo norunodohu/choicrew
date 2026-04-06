@@ -2076,6 +2076,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
                     maxLength={30}
                   />
+                  <div className="mt-1 text-xs text-slate-400">
+                    元の名前: <span className="font-mono">{share.displayName || share.name}</span>
+                  </div>
                 </div>
               </div>
               <button
