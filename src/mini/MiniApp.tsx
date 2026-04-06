@@ -2415,12 +2415,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     {formatSlotDate(date)}
                     {today && <span className="ml-2 text-xs font-semibold bg-teal-100 text-teal-600 rounded-full px-2 py-0.5">今日</span>}
                   </h2>
-                  {dateSlots.some(slot => requestsForSlot(slot).some(r => r.status === 'approved')) && (
-                    <span className="inline-flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                      承認あり
-                    </span>
-                  )}
                   <div className="flex-1 h-px bg-slate-200" />
                 </div>
 
