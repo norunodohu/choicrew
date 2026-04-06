@@ -46,12 +46,13 @@ window.addEventListener("error", (e) => {
   }
 });
 
-import { db, messaging } from '../firebase';
+import { db, messaging, storage } from '../firebase';
 import {
   doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot,
   query, where, Timestamp,
 } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
+import { ref, getDownloadURL, uploadString } from 'firebase/storage';
 import { format, addDays } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -1421,7 +1422,18 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       setRequesterAliases({});
       return;
     }
-    setRequesterAliases(share.requester_aliases || {});
+    const loadAliases = async () => {
+      try {
+        const url = await getDownloadURL(ref(storage, `mini_shares/${shareId}/requester_aliases.json`));
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('failed to fetch aliases');
+        const data = await res.json() as { aliases?: Record<string, string> };
+        setRequesterAliases(data.aliases || share.requester_aliases || {});
+      } catch {
+        setRequesterAliases(share.requester_aliases || {});
+      }
+    };
+    loadAliases();
   }, [share]);
 
   useEffect(() => {
@@ -1491,14 +1503,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     if (trimmed) nextAliases[requesterName] = trimmed;
     else delete nextAliases[requesterName];
     try {
-      await setDoc(
-        doc(db, 'mini_shares', shareId),
-        {
-          requester_aliases: nextAliases,
-          updated_at: Timestamp.fromDate(new Date()),
-        },
-        { merge: true }
-      );
+      const payload = JSON.stringify({ aliases: nextAliases, updated_at: new Date().toISOString() });
+      await uploadString(ref(storage, `mini_shares/${shareId}/requester_aliases.json`), payload, 'raw', {
+        contentType: 'application/json',
+      });
       setRequesterAliases(nextAliases);
       return true;
     } catch {

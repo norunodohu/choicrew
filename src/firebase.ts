@@ -3,6 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { initializeFirestore } from 'firebase/firestore';
 import { getMessaging } from 'firebase/messaging';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -22,3 +23,4 @@ try {
   // Push messaging not supported in this environment
 }
 export const messaging = _messaging;
+export const storage = getStorage(app);
