@@ -108,6 +108,8 @@ interface RequestEntry {
   slot_date: string;
   slot_start: string;
   slot_end: string;
+  requested_start?: string;
+  requested_end?: string;
   requester_name: string;
   message: string;
   status?: 'pending' | 'approved' | 'declined' | 'cancelled';
@@ -180,6 +182,23 @@ function isValidSlotRange(start: string, end: string): boolean {
   // 日をまたぐ（例: 8:00～0:00）も許容
   if (end === '24:00' || end === '00:00') return true;
   return start < end;
+}
+
+function normalizeTime(value: string): string {
+  const [h = '00', m = '00'] = value.split(':');
+  return `${h.padStart(2, '0')}:${m.padStart(2, '0')}`;
+}
+
+function replaceShareSlot(
+  slots: { date: string; start: string; end: string }[],
+  target: { date: string; start: string; end: string },
+  next: { start: string; end: string }
+) {
+  return slots.map(s =>
+    s.date === target.date && s.start === target.start && s.end === target.end
+      ? { ...s, start: next.start, end: next.end }
+      : s
+  );
 }
 
 function timeToPercent(time: string): number {
@@ -1169,6 +1188,8 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
   hasEmail?: boolean;
 }) {
   const [name, setName] = useState(loadRequesterName);
+  const [requestStart, setRequestStart] = useState(normalizeTime(slot.start));
+  const [requestEnd, setRequestEnd] = useState(normalizeTime(slot.end));
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -1195,8 +1216,19 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
     return () => el.removeEventListener('keydown', trap);
   }, []);
 
+  useEffect(() => {
+    setRequestStart(normalizeTime(slot.start));
+    setRequestEnd(normalizeTime(slot.end));
+  }, [slot.date, slot.start, slot.end]);
+
   const handleSend = async () => {
     if (!name.trim()) return;
+    const normalizedStart = normalizeTime(requestStart);
+    const normalizedEnd = normalizeTime(requestEnd);
+    if (!isValidSlotRange(normalizedStart, normalizedEnd)) {
+      setError('依頼時間の範囲が正しくありません。');
+      return;
+    }
     setSending(true);
     setError('');
     try {
@@ -1205,6 +1237,8 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
         slot_date: slot.date,
         slot_start: slot.start,
         slot_end: slot.end,
+        requested_start: normalizedStart,
+        requested_end: normalizedEnd,
         requester_name: name.trim(),
         message: message.trim(),
         status: 'pending',
@@ -1271,6 +1305,33 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
             {formatSlotDate(slot.date)} {slot.start}–{slot.end}
           </p>
           <TimeBar start={slot.start} end={slot.end} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="req-start" className="block text-sm font-medium text-slate-600 mb-1">
+              依頼開始
+            </label>
+            <input
+              id="req-start"
+              type="time"
+              value={requestStart}
+              onChange={e => setRequestStart(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="req-end" className="block text-sm font-medium text-slate-600 mb-1">
+              依頼終了
+            </label>
+            <input
+              id="req-end"
+              type="time"
+              value={requestEnd}
+              onChange={e => setRequestEnd(e.target.value)}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+            />
+          </div>
         </div>
 
         <div>
@@ -1711,13 +1772,28 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   };
 
   const requestsForSlot = (s: { date: string; start: string; end: string }) =>
-    requests.filter(r => r.slot_date === s.date && r.slot_start === s.start && r.slot_end === s.end);
+    requests.filter(r =>
+      r.slot_date === s.date && (
+        (r.status === 'approved'
+          ? (normalizeTime(r.requested_start || r.slot_start) === normalizeTime(s.start) && normalizeTime(r.requested_end || r.slot_end) === normalizeTime(s.end))
+          : (r.slot_start === s.start && r.slot_end === s.end))
+      )
+    );
 
   // exclusiveモード時、同じ枠の他pendingをdeclinedに
   const handleApprove = async (requestId: string) => {
     try {
       const req = requests.find(r => r.id === requestId);
       if (!req) return;
+      const nextStart = normalizeTime(req.requested_start || req.slot_start);
+      const nextEnd = normalizeTime(req.requested_end || req.slot_end);
+      await updateDoc(doc(db, 'mini_shares', shareId), {
+        slots: replaceShareSlot(
+          share?.slots || [],
+          { date: req.slot_date, start: req.slot_start, end: req.slot_end },
+          { start: nextStart, end: nextEnd }
+        ),
+      });
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'approved' });
       if (share?.bookingMode !== 'multiple') {
         // 同じ枠の他pendingをdeclinedに
@@ -1756,18 +1832,29 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     try {
       const req = requests.find(r => r.id === requestId);
       if (!req) return;
-      await updateDoc(doc(db, 'mini_requests', requestId), { status: 'pending' });
+      await updateDoc(doc(db, 'mini_shares', shareId), {
+        slots: replaceShareSlot(
+          share?.slots || [],
+          {
+            date: req.slot_date,
+            start: normalizeTime(req.requested_start || req.slot_start),
+            end: normalizeTime(req.requested_end || req.slot_end),
+          },
+          { start: normalizeTime(req.slot_start), end: normalizeTime(req.slot_end) }
+        ),
+      });
+      await updateDoc(doc(db, 'mini_requests', requestId), { status: 'cancelled' });
       if (share?.bookingMode !== 'multiple') {
         // 同じ枠のdeclinedをpendingに戻す
-        const sameSlotDeclined = requests.filter(r =>
+        const sameSlotApproved = requests.filter(r =>
           r.id !== requestId &&
           r.slot_date === req.slot_date &&
           r.slot_start === req.slot_start &&
           r.slot_end === req.slot_end &&
-          r.status === 'declined'
+          r.status === 'approved'
         );
-        for (const r of sameSlotDeclined) {
-          await updateDoc(doc(db, 'mini_requests', r.id), { status: 'pending' });
+        for (const r of sameSlotApproved) {
+          await updateDoc(doc(db, 'mini_requests', r.id), { status: 'cancelled' });
         }
       }
       setConfirmCancelId(null);
@@ -2399,6 +2486,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                   >
                                     {getRequesterAlias(r.requester_name)}
                                   </button>
+                                  <span className="text-[10px] text-slate-400">
+                                    {r.requested_start && r.requested_end ? `${r.requested_start}-${r.requested_end}` : `${r.slot_start}-${r.slot_end}`}
+                                  </span>
                                   {r.message && <span className="w-1.5 h-1.5 rounded-full bg-teal-400 shrink-0" />}
                                 </div>
                               ))}
