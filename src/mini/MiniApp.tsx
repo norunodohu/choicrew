@@ -2114,70 +2114,88 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 {showRequestList ? '非表示' : '表示'}
               </button>
             </div>
-            {showRequestList && (
-              <div className="space-y-2">
-                {requests
-                  .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
-                  .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
-                  .map(r => {
-                    const [editing, setEditing] = useState(false);
-                    const [editVal, setEditVal] = useState(() => loadEditedRequesterName(r.id) || '');
-                    const editedName = loadEditedRequesterName(r.id);
-                    const displayName = editedName || r.requester_name;
-                    return (
-                      <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
-                        r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
-                        'bg-slate-50'
-                      }`}>
-                        <Avatar name={displayName} />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-baseline gap-2 flex-wrap">
-                            {editing ? (
-                              <span className="text-sm font-semibold text-slate-700">
-                                <input
-                                  type="text"
-                                  value={editVal}
-                                  onChange={e => setEditVal(e.target.value)}
-                                  onBlur={() => { setEditing(false); if (editVal.trim()) saveEditedRequesterName(r.id, editVal.trim()); }}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') { setEditing(false); if (editVal.trim()) saveEditedRequesterName(r.id, editVal.trim()); }
-                                    if (e.key === 'Escape') { setEditing(false); setEditVal(displayName); }
-                                  }}
-                                  className="border-b border-teal-400 outline-none px-1 py-0.5 text-sm"
-                                  autoFocus
-                                  maxLength={30}
-                                />
+            {showRequestList && (() => {
+              // 編集状態を一括管理
+              const [editingMap, setEditingMap] = useState<{ [id: string]: boolean }>({});
+              const [editVals, setEditVals] = useState<{ [id: string]: string }>({});
+              // 初期化
+              useEffect(() => {
+                const obj: { [id: string]: string } = {};
+                requests.forEach(r => {
+                  const saved = loadEditedRequesterName(r.id);
+                  if (saved) obj[r.id] = saved;
+                });
+                setEditVals(obj);
+              }, [requests]);
+              const handleEdit = (id: string, val: string) => setEditVals(v => ({ ...v, [id]: val }));
+              const handleStartEdit = (id: string, val: string) => setEditingMap(m => ({ ...m, [id]: true }));
+              const handleEndEdit = (id: string, val: string) => {
+                setEditingMap(m => ({ ...m, [id]: false }));
+                if (val.trim()) saveEditedRequesterName(id, val.trim());
+              };
+              return (
+                <div className="space-y-2">
+                  {requests
+                    .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
+                    .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
+                    .map(r => {
+                      const editing = !!editingMap[r.id];
+                      const editedName = editVals[r.id] || loadEditedRequesterName(r.id) || '';
+                      const displayName = editedName || r.requester_name;
+                      return (
+                        <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
+                          r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
+                          'bg-slate-50'
+                        }`}>
+                          <Avatar name={displayName} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2 flex-wrap">
+                              {editing ? (
+                                <span className="text-sm font-semibold text-slate-700">
+                                  <input
+                                    type="text"
+                                    value={editedName}
+                                    onChange={e => handleEdit(r.id, e.target.value)}
+                                    onBlur={() => handleEndEdit(r.id, editedName)}
+                                    onKeyDown={e => {
+                                      if (e.key === 'Enter') handleEndEdit(r.id, editedName);
+                                      if (e.key === 'Escape') setEditingMap(m => ({ ...m, [r.id]: false }));
+                                    }}
+                                    className="border-b border-teal-400 outline-none px-1 py-0.5 text-sm"
+                                    autoFocus
+                                    maxLength={30}
+                                  />
+                                </span>
+                              ) : (
+                                <span
+                                  className="text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
+                                  title="クリックで名前を編集"
+                                  onClick={() => handleStartEdit(r.id, displayName)}
+                                >
+                                  {displayName}
+                                </span>
+                              )}
+                              <span className="text-[11px] text-slate-400">
+                                {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
                               </span>
-                            ) : (
-                              <span
-                                className="text-sm font-semibold text-slate-700 cursor-pointer hover:underline"
-                                title="クリックで名前を編集"
-                                onClick={() => { setEditVal(displayName); setEditing(true); }}
-                              >
-                                {displayName}
-                              </span>
+                              {r.status === 'approved' && (
+                                <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
+                              )}
+                              {r.status === 'declined' && (
+                                <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
+                              )}
+                              {r.status === 'cancelled' && (
+                                <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
+                              )}
+                            </div>
+                            {editing && (
+                              <div className="text-xs text-slate-400 mt-1">元の名前: <span className="font-mono">{r.requester_name}</span></div>
                             )}
-                            <span className="text-[11px] text-slate-400">
-                              {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
-                            </span>
-                        {r.status === 'approved' && (
-                          <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
-                        )}
-                        {r.status === 'declined' && (
-                          <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
-                        )}
-                        {r.status === 'cancelled' && (
-                          <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
-                        )}
-                      </div>
-                          {editing && (
-                            <div className="text-xs text-slate-400 mt-1">元の名前: <span className="font-mono">{r.requester_name}</span></div>
-                          )}
-                          {r.message && (
-                            <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
-                          )}
-                      {(!r.status || r.status === 'pending') ? (
-                        <div className="flex gap-2 mt-2">
+                            {r.message && (
+                              <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
+                            )}
+                            {(!r.status || r.status === 'pending') ? (
+                              <div className="flex gap-2 mt-2">
                           <button
                             onClick={() => handleApprove(r.id)}
                             className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 active:scale-95 transition-all"
