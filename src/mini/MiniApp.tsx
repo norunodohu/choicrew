@@ -1493,7 +1493,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     try {
       await updateDoc(doc(db, 'mini_shares', shareId), {
         requester_aliases: nextAliases,
-        updated_at: Timestamp.fromDate(new Date()),
       });
       setRequesterAliases(nextAliases);
       return true;
