@@ -1294,38 +1294,51 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
 
         <h3 className="text-lg font-bold text-slate-800">依頼を送る</h3>
 
-        {/* Selected slot with time bar */}
-        <div className="bg-slate-50 rounded-xl p-3">
-          <p className="text-base font-semibold tracking-tight text-slate-700">
-            {formatSlotDate(slot.date)} {slot.start}–{slot.end}
-          </p>
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">元の空き</p>
+              <p className="text-base font-semibold tracking-tight text-slate-800">
+                {formatSlotDate(slot.date)} {slot.start} - {slot.end}
+              </p>
+            </div>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
+              ここから依頼できます
+            </span>
+          </div>
           <TimeBar start={slot.start} end={slot.end} />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 space-y-3">
           <div>
-            <label htmlFor="req-start" className="block text-sm font-medium text-slate-600 mb-1">
-              依頼開始
-            </label>
-            <input
-              id="req-start"
-              type="time"
-              value={requestStart}
-              onChange={e => setRequestStart(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
-            />
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-500">依頼する時間</p>
+            <p className="text-sm text-slate-600">必要なら開始と終了を変えて送れます。</p>
           </div>
-          <div>
-            <label htmlFor="req-end" className="block text-sm font-medium text-slate-600 mb-1">
-              依頼終了
-            </label>
-            <input
-              id="req-end"
-              type="time"
-              value={requestEnd}
-              onChange={e => setRequestEnd(e.target.value)}
-              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="req-start" className="block text-sm font-medium text-slate-700 mb-1">
+                開始
+              </label>
+              <input
+                id="req-start"
+                type="time"
+                value={requestStart}
+                onChange={e => setRequestStart(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+              />
+            </div>
+            <div>
+              <label htmlFor="req-end" className="block text-sm font-medium text-slate-700 mb-1">
+                終了
+              </label>
+              <input
+                id="req-end"
+                type="time"
+                value={requestEnd}
+                onChange={e => setRequestEnd(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+              />
+            </div>
           </div>
         </div>
 
