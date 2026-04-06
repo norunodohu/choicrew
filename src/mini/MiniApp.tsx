@@ -1981,7 +1981,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱管理を引きつぐ</button>
                   
                   {'Notification' in window && Notification.permission !== 'denied' && (
-                    <button
+                    <button style={{ display: 'none' }} 
                       onClick={async () => {
                         setShowOwnerMenu(false);
                         if (notifEnabled) {
