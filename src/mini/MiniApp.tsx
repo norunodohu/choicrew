@@ -1438,11 +1438,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                           )}
                           {(!r.status || r.status === 'pending') ? (
                             <div className="flex gap-2 mt-2">
-      }
-      setShowEmailModal(false);
-    } catch { toast.show('登録に失敗しました', 'error'); }
-    setEmailSaving(false);
-  };
 
   const handleSaveTitle = async () => {
     if (!share) return;
