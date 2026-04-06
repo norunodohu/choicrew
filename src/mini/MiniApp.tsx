@@ -90,6 +90,7 @@ interface ShareData {
   name: string;
   title?: string;
   displayName?: string;
+  requester_aliases?: Record<string, string>;
   slots: { date: string; start: string; end: string }[];
   created_at: Timestamp;
   expires_at: Timestamp;
@@ -240,23 +241,6 @@ function loadRequesterName(): string {
 
 function saveRequesterName(name: string) {
   try { localStorage.setItem('choicrew_mini_requester', name); } catch { /* */ }
-}
-
-function loadMiniSyncId(): string {
-  try {
-    const key = 'choicrew_mini_sync_id';
-    const existing = localStorage.getItem(key);
-    if (existing) return existing;
-    const next = `sync_${genId(24)}`;
-    localStorage.setItem(key, next);
-    return next;
-  } catch {
-    return `sync_${genId(24)}`;
-  }
-}
-
-function loadMiniAliasDocId(shareId: string, syncId: string) {
-  return `${shareId}_${syncId}`;
 }
 
 function loadSentRequestIds(shareId: string): Map<string, string> {
@@ -1423,7 +1407,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [requesterAliases, setRequesterAliases] = useState<Record<string, string>>({});
   const [editingRequesterName, setEditingRequesterName] = useState<{ id: string; name: string } | null>(null);
   const [editingRequesterAliasValue, setEditingRequesterAliasValue] = useState('');
-  const [miniSyncId, setMiniSyncId] = useState('');
   const [fpOwnerPrompt, setFpOwnerPrompt] = useState(false);
   const [fpChecked, setFpChecked] = useState(false);
   const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
@@ -1434,29 +1417,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const fcmRegisteredRef = useRef(false);
 
   useEffect(() => {
-    setMiniSyncId(loadMiniSyncId());
-  }, []);
-
-  useEffect(() => {
-    if (!miniSyncId) {
+    if (!share) {
       setRequesterAliases({});
       return;
     }
-    const loadAliases = async () => {
-      try {
-        const snap = await getDoc(doc(db, 'mini_requester_aliases', loadMiniAliasDocId(shareId, miniSyncId)));
-        if (snap.exists()) {
-          const data = snap.data() as { aliases?: Record<string, string> };
-          setRequesterAliases(data.aliases || {});
-        } else {
-          setRequesterAliases({});
-        }
-      } catch {
-        setRequesterAliases({});
-      }
-    };
-    loadAliases();
-  }, [miniSyncId, shareId]);
+    setRequesterAliases(share.requester_aliases || {});
+  }, [share]);
 
   useEffect(() => {
     if (!editingRequesterName) {
@@ -1520,18 +1486,15 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   }, [requesterAliases]);
 
   const handleSaveRequesterAlias = async (requesterName: string, alias: string) => {
-    if (!miniSyncId) return false;
     const trimmed = alias.trim();
     const nextAliases = { ...requesterAliases };
     if (trimmed) nextAliases[requesterName] = trimmed;
     else delete nextAliases[requesterName];
     try {
       await setDoc(
-        doc(db, 'mini_requester_aliases', loadMiniAliasDocId(shareId, miniSyncId)),
+        doc(db, 'mini_shares', shareId),
         {
-          sync_id: miniSyncId,
-          share_id: shareId,
-          aliases: nextAliases,
+          requester_aliases: nextAliases,
           updated_at: Timestamp.fromDate(new Date()),
         },
         { merge: true }
@@ -2195,24 +2158,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   </p>
                 </div>
                 <p className="text-xs text-slate-400">
-                  これはこの同期IDに保存されます。別端末でも同じ同期IDを使えば反映されます。
+                  これはこの予定表に保存されます。別端末でも同じ予定表を開けば反映されます。
                 </p>
-                <div className="rounded-xl bg-slate-50 border border-slate-200 p-3 text-xs text-slate-500">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">同期ID</span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!miniSyncId) return;
-                        await navigator.clipboard.writeText(miniSyncId);
-                      }}
-                      className="text-teal-600 font-semibold"
-                    >
-                      コピー
-                    </button>
-                  </div>
-                  <p className="mt-1 break-all font-mono">{miniSyncId || 'loading...'}</p>
-                </div>
               </div>
               <div className="flex gap-3 mt-5">
                 <button
