@@ -73,6 +73,31 @@ const BellIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const UserCircleIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <circle cx="12" cy="10" r="3" />
+    <path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662" />
+  </svg>
+);
+
+const SmartphoneIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <rect x="5" y="2" width="14" height="20" rx="2" />
+    <line x1="12" y1="18" x2="12.01" y2="18" />
+  </svg>
+);
+
+const TrashAutoIcon = ({ className }: { className?: string }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="3 6 5 6 21 6" />
+    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    <path d="M10 11v6" />
+    <path d="M14 11v6" />
+    <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+  </svg>
+);
+
 /* ================================================================
    Types
    ================================================================ */
@@ -875,12 +900,25 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   return (
     <div className="min-h-screen bg-slate-50">
       {toast.UI}
-      <div className="max-w-lg mx-auto px-4 py-8 sm:py-12 pb-28 sm:pb-12">
+
+      {/* Sticky top bar */}
+      <header className="sticky top-0 z-30 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100">
+        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
+          <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
+            <UserCircleIcon className="w-6 h-6" />
+          </button>
+          <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
+            <BellIcon className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
+
+      <div className="max-w-lg mx-auto px-4 py-6 pb-28 sm:pb-12">
 
         {/* Header */}
         <div className="text-center mb-6">
           <Logo />
-          <p className="text-slate-400 mt-2 text-xs tracking-wide">ログイン不要で依頼受付まで</p>
+          <p className="text-slate-400 mt-1.5 text-xs tracking-wide">ログイン不要で依頼受付まで</p>
         </div>
 
         {/* ── 作成済みの予定リスト（常時表示） ── */}
@@ -980,12 +1018,16 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
               次へ →
             </button>
 
-
-            <p>
-              ※過ぎた予定は自動で削除されます。<br />
-              <br />
-              ※作成したデバイスでのみ編集が続けられます
-            </p>
+            <div className="mt-5 bg-teal-50/70 border border-teal-100 rounded-2xl px-4 py-3.5 space-y-2">
+              <div className="flex items-center gap-2.5 text-sm text-slate-500">
+                <TrashAutoIcon className="w-4 h-4 text-teal-500 shrink-0" />
+                <span>過ぎた予定は自動で削除されます。</span>
+              </div>
+              <div className="flex items-center gap-2.5 text-sm text-slate-500">
+                <SmartphoneIcon className="w-4 h-4 text-teal-500 shrink-0" />
+                <span>作成したデバイスでのみ編集が続けられます</span>
+              </div>
+            </div>
           </div>
         )}
 
