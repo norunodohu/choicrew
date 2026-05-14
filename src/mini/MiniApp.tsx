@@ -1310,7 +1310,7 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
             slotEnd: slot.end,
             message: message.trim(),
           }),
-        }).catch(() => { /* 通知失敗は無視 */ });
+        }).then(r => r.json()).then(d => console.log('[email notify]', d)).catch(e => console.error('[email notify error]', e));
       } catch { /* 通知失敗は無視 */ }
       saveRequesterName(name.trim());
       onSent(reqRef.id);
