@@ -303,7 +303,8 @@ app.post("/api/auth/google/firebase-token", async (req, res) => {
    ================================================================ */
 async function sendResendEmail(to: string, subject: string, text: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM || "noreply@choicrew.com";
+  const fromAddress = process.env.SMTP_FROM || "noreply@choicrew.com";
+  const from = `ChoiCrew <${fromAddress}>`;
   if (!apiKey) throw new Error("RESEND_API_KEY not configured");
 
   const res = await fetch("https://api.resend.com/emails", {
@@ -355,7 +356,7 @@ app.post("/api/mini/notify-email", async (req, res) => {
 
     await sendResendEmail(
       actualTo,
-      `【ChoiCrew Mini】${requesterName || "誰か"}さんから依頼が届きました`,
+      `${requesterName || "誰か"}さんからの依頼`,
       bodyLines.join("\n")
     );
 

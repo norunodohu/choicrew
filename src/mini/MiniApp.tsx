@@ -136,6 +136,7 @@ interface RequestEntry {
   requested_start?: string;
   requested_end?: string;
   requester_name: string;
+  requester_email?: string;
   message: string;
   status?: 'pending' | 'approved' | 'declined' | 'cancelled';
   created_at: Timestamp;
@@ -287,6 +288,22 @@ function saveRequesterName(name: string) {
   try { localStorage.setItem('choicrew_mini_requester', name); } catch { /* */ }
 }
 
+function loadRequesterEmail(): string {
+  try { return localStorage.getItem('choicrew_mini_requester_email') || ''; } catch { return ''; }
+}
+
+function saveRequesterEmail(email: string) {
+  try { localStorage.setItem('choicrew_mini_requester_email', email); } catch { /* */ }
+}
+
+function loadNotifEnabled(): boolean {
+  try { return localStorage.getItem('choicrew_mini_notif_email') !== 'off'; } catch { return true; }
+}
+
+function saveNotifEnabled(v: boolean) {
+  try { localStorage.setItem('choicrew_mini_notif_email', v ? 'on' : 'off'); } catch { /* */ }
+}
+
 function loadSentRequestIds(shareId: string): Map<string, string> {
   try {
     const raw = localStorage.getItem(`mini_sent_ids_${shareId}`);
@@ -434,6 +451,81 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
     </svg>
+  );
+}
+
+/* ================================================================
+   UserSettingsModal — 名前・メール・通知設定
+   ================================================================ */
+function UserSettingsModal({ onClose }: { onClose: () => void }) {
+  const [name, setName] = useState(loadRequesterName);
+  const [email, setEmail] = useState(loadRequesterEmail);
+  const [notif, setNotif] = useState(loadNotifEnabled);
+
+  const handleSave = () => {
+    saveRequesterName(name.trim());
+    saveRequesterEmail(email.trim());
+    saveNotifEnabled(notif);
+    onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/30 backdrop-blur-[2px] flex items-end sm:items-center justify-center z-50"
+      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4 animate-[slideUp_0.2s_ease-out]">
+        <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
+        <h3 className="text-lg font-bold text-slate-800">設定</h3>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-600 mb-1">表示名</label>
+          <input
+            type="text"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+            placeholder="やまだ"
+            maxLength={30}
+          />
+        </div>
+
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-600">メール通知</span>
+            <button
+              type="button"
+              onClick={() => setNotif(v => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notif ? 'bg-teal-500' : 'bg-slate-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${notif ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          {notif && (
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">メールアドレス</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+                placeholder="you@example.com"
+                maxLength={100}
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition">
+            キャンセル
+          </button>
+          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium hover:bg-teal-700 transition">
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -724,6 +816,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   const [theme, setTheme] = useState<ThemeKey>('simple');
   const [saving, setSaving] = useState(false);
   const [confirmDeleteShareId, setConfirmDeleteShareId] = useState<string | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const toast = useToast();
   const days = getDays(7);
   // Firebaseから予定名を取得するためのstate
@@ -900,11 +993,12 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   return (
     <div className="min-h-screen bg-slate-50">
       {toast.UI}
+      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-30 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
+          <button onClick={() => setShowSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
             <UserCircleIcon className="w-6 h-6" />
           </button>
           <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
@@ -1230,6 +1324,8 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
   hasEmail?: boolean;
 }) {
   const [name, setName] = useState(loadRequesterName);
+  const [email, setEmail] = useState(loadRequesterEmail);
+  const [notifEnabled, setNotifEnabled] = useState(loadNotifEnabled);
   const [requestStart, setRequestStart] = useState(normalizeTime(slot.start));
   const [requestEnd, setRequestEnd] = useState(normalizeTime(slot.end));
   const [message, setMessage] = useState('');
@@ -1277,10 +1373,14 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
         requested_start: normalizedStart,
         requested_end: normalizedEnd,
         requester_name: name.trim(),
+        requester_email: notifEnabled && email.trim() ? email.trim() : '',
         message: message.trim(),
         status: 'pending',
         created_at: Timestamp.fromDate(new Date()),
       });
+      saveRequesterName(name.trim());
+      saveRequesterEmail(email.trim());
+      saveNotifEnabled(notifEnabled);
       // オーナーにFCMプッシュ通知を送信
       try {
         const shareSnap = await getDoc(doc(db, 'mini_shares', shareId));
@@ -1312,7 +1412,6 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
           }),
         }).then(r => r.json()).then(d => console.log('[email notify]', d)).catch(e => console.error('[email notify error]', e));
       } catch { /* 通知失敗は無視 */ }
-      saveRequesterName(name.trim());
       onSent(reqRef.id);
     } catch (err) {
       console.error('Failed to send request:', err);
@@ -1417,6 +1516,33 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
           />
         </div>
 
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-slate-600">承認・キャンセル時にメール通知</span>
+            <button
+              type="button"
+              onClick={() => setNotifEnabled(v => !v)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notifEnabled ? 'bg-teal-500' : 'bg-slate-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${notifEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
+          {notifEnabled && (
+            <div>
+              <label htmlFor="req-email" className="block text-xs font-medium text-slate-500 mb-1">メールアドレス（任意）</label>
+              <input
+                id="req-email"
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+                placeholder="you@example.com"
+                maxLength={100}
+              />
+            </div>
+          )}
+        </div>
+
         {hasEmail && ownerName && (
           <p className="text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
             📧 {ownerName}さんはメール通知を設定しています
@@ -1501,6 +1627,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [deleting, setDeleting] = useState(false);
   const [myRequestStatuses, setMyRequestStatuses] = useState<Map<string, { status: string; id: string }>>(new Map());
   const [showOwnerMenu, setShowOwnerMenu] = useState(false);
+  const [showUserSettings, setShowUserSettings] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
@@ -1545,10 +1672,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
   const handleSaveNotifyEmail = async () => {
     if (!share) return;
-    if (platinumCode !== 'mario3015#') {
-      setEmailCodeError('プラチナコードが正しくありません');
-      return;
-    }
     if (!emailInput.trim()) { setEmailCodeError('メールアドレスを入力してください'); return; }
     setEmailSaving(true);
     setEmailCodeError('');
@@ -1866,6 +1989,22 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           await updateDoc(doc(db, 'mini_requests', r.id), { status: 'declined' });
         }
       }
+      // 依頼者にメール通知
+      if (req.requester_email) {
+        fetch('/api/mini/notify-requester', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: req.requester_email,
+            requesterName: req.requester_name,
+            ownerName: share?.displayName || share?.name || '',
+            status: 'approved',
+            slotDate: req.slot_date,
+            slotStart: normalizeTime(req.requested_start || req.slot_start),
+            slotEnd: normalizeTime(req.requested_end || req.slot_end),
+          }),
+        }).catch(() => {});
+      }
       toast.show('承認しました', 'success');
     } catch (err) {
       console.error(err);
@@ -1875,7 +2014,24 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
   const handleDecline = async (requestId: string) => {
     try {
+      const req = requests.find(r => r.id === requestId);
       await updateDoc(doc(db, 'mini_requests', requestId), { status: 'declined' });
+      // 依頼者にメール通知
+      if (req?.requester_email) {
+        fetch('/api/mini/notify-requester', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: req.requester_email,
+            requesterName: req.requester_name,
+            ownerName: share?.displayName || share?.name || '',
+            status: 'declined',
+            slotDate: req.slot_date,
+            slotStart: normalizeTime(req.requested_start || req.slot_start),
+            slotEnd: normalizeTime(req.requested_end || req.slot_end),
+          }),
+        }).catch(() => {});
+      }
       toast.show('辞退しました', 'success');
     } catch (err) {
       console.error(err);
@@ -1928,6 +2084,22 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         }
       }
       setConfirmCancelId(null);
+      // 依頼者にメール通知
+      if (req.requester_email) {
+        fetch('/api/mini/notify-requester', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: req.requester_email,
+            requesterName: req.requester_name,
+            ownerName: share?.displayName || share?.name || '',
+            status: 'cancelled',
+            slotDate: req.slot_date,
+            slotStart: normalizeTime(req.requested_start || req.slot_start),
+            slotEnd: normalizeTime(req.requested_end || req.slot_end),
+          }),
+        }).catch(() => {});
+      }
       toast.show('承認を取り消しました', 'success');
     } catch (err) {
       console.error(err);
@@ -2065,6 +2237,19 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   return (
     <div className={`min-h-screen ${T.pageBg} print:bg-white relative overflow-x-hidden`}>
       {toast.UI}
+      {showUserSettings && <UserSettingsModal onClose={() => setShowUserSettings(false)} />}
+
+      {/* Sticky top bar */}
+      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-100 print:hidden">
+        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
+          <button onClick={() => setShowUserSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
+            <UserCircleIcon className="w-6 h-6" />
+          </button>
+          <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
+            <BellIcon className="w-5 h-5" />
+          </button>
+        </div>
+      </header>
       {/* ── テーマ背景画像（absolute + 大きめサイズでモバイルのカクつき防止） ── */}
       {themeKey === 'darkbg' && (
         <div
@@ -2808,7 +2993,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             {share?.notify_email && (
               <p className="text-xs text-teal-600 bg-teal-50 rounded-xl px-3 py-2 mb-3">現在の通知先: {share.notify_email}</p>
             )}
-            <p className="text-xs text-slate-400 mb-4">依頼が届いたときにメールでお知らせします。有効化には<span className="font-semibold text-slate-600">プレミアム機能</span>のため、プラチナコードが必要です。</p>
+            <p className="text-xs text-slate-400 mb-4">依頼が届いたときにメールでお知らせします。</p>
             <div className="space-y-3">
               <div>
                 <label className="text-xs font-medium text-slate-500 mb-1 block">通知先メールアドレス</label>
@@ -2819,16 +3004,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                   placeholder="example@email.com"
                   className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
                   autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-slate-500 mb-1 block">プラチナコード</label>
-                <input
-                  type="password"
-                  value={platinumCode}
-                  onChange={e => { setPlatinumCode(e.target.value); setEmailCodeError(''); }}
-                  placeholder="コードを入力"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
                 />
               </div>
               {emailCodeError && <p className="text-xs text-red-500">{emailCodeError}</p>}
