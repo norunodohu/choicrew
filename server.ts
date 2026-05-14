@@ -301,6 +301,25 @@ app.post("/api/auth/google/firebase-token", async (req, res) => {
 /* ================================================================
    メール通知 for Mini share pages
    ================================================================ */
+async function sendResendEmail(to: string, subject: string, text: string): Promise<void> {
+  const apiKey = process.env.RESEND_API_KEY || process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM || "noreply@choicrew.com";
+  if (!apiKey) throw new Error("RESEND_API_KEY not configured");
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ from, to, subject, text }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Resend API error ${res.status}: ${body}`);
+  }
+}
+
 app.post("/api/mini/notify-email", async (req, res) => {
   const { shareId, requesterName, slotDate, slotStart, slotEnd, message: reqMessage } = req.body as {
     shareId?: string; requesterName?: string; slotDate?: string;
@@ -318,27 +337,10 @@ app.post("/api/mini/notify-email", async (req, res) => {
     const notifyEmail = data.notify_email as string | undefined;
     if (!notifyEmail) return res.json({ ok: false, reason: "no_email" });
 
-    const smtpHost = process.env.SMTP_HOST;
-    const smtpUser = process.env.SMTP_USER;
-    const smtpPass = process.env.SMTP_PASS;
-    const smtpFrom = process.env.SMTP_FROM || smtpUser;
-    if (!smtpHost || !smtpUser || !smtpPass) {
-      return res.status(503).json({ error: "SMTP not configured" });
-    }
-
-    // SMTP_TO が設定されている場合はそちらを優先（Resend無料プランのドメイン制限対応）
     const actualTo = process.env.SMTP_TO || notifyEmail;
-
     const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
     const shareUrl = `${appUrl}/mini/s/${shareId}`;
     const ownerName = (data.displayName || data.name || "管理者") as string;
-
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: parseInt(process.env.SMTP_PORT || "587"),
-      secure: process.env.SMTP_PORT === "465",
-      auth: { user: smtpUser, pass: smtpPass },
-    });
 
     const bodyLines = [
       `${ownerName}さんに新しい依頼が届きました。`,
@@ -351,12 +353,11 @@ app.post("/api/mini/notify-email", async (req, res) => {
       shareUrl,
     ];
 
-    await transporter.sendMail({
-      from: smtpFrom,
-      to: actualTo,
-      subject: `【ChoiCrew Mini】${requesterName || "誰か"}さんから依頼が届きました`,
-      text: bodyLines.join("\n"),
-    });
+    await sendResendEmail(
+      actualTo,
+      `【ChoiCrew Mini】${requesterName || "誰か"}さんから依頼が届きました`,
+      bodyLines.join("\n")
+    );
 
     res.json({ ok: true });
   } catch (err) {
@@ -370,38 +371,22 @@ app.post("/api/mini/email-confirm", async (req, res) => {
   const { to, shareId, ownerName } = req.body as { to?: string; shareId?: string; ownerName?: string };
   if (!to || !shareId) return res.status(400).json({ error: "to and shareId required" });
 
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const smtpFrom = process.env.SMTP_FROM || smtpUser;
-  if (!smtpHost || !smtpUser || !smtpPass) {
-    return res.status(503).json({ error: "SMTP not configured" });
-  }
-
   const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
   const shareUrl = `${appUrl}/mini/s/${shareId}`;
 
   try {
-    const transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: parseInt(process.env.SMTP_PORT || "587"),
-      secure: process.env.SMTP_PORT === "465",
-      auth: { user: smtpUser, pass: smtpPass },
-    });
-
-    await transporter.sendMail({
-      from: smtpFrom,
-      to: process.env.SMTP_TO || to,
-      subject: "【ChoiCrew Mini】メール通知が有効になりました",
-      text: [
+    await sendResendEmail(
+      process.env.SMTP_TO || to,
+      "【ChoiCrew Mini】メール通知が有効になりました",
+      [
         `${ownerName || ""}さん、メール通知の設定が完了しました。`,
         "",
         "これ以降、依頼が届いたときにこのアドレスへ通知が届きます。",
         "",
         "▼ 共有ページはこちら",
         shareUrl,
-      ].join("\n"),
-    });
+      ].join("\n")
+    );
 
     res.json({ ok: true });
   } catch (err) {
