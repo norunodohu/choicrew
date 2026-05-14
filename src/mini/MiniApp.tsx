@@ -1621,6 +1621,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   });
   const [showNotifExpand, setShowNotifExpand] = useState(false);
   const [editingSlots, setEditingSlots] = useState(false);
+  const [editDays, setEditDays] = useState<7 | 14 | 30>(7);
   const [draftSlots, setDraftSlots] = useState<TimeSlot[]>([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [savingSlots, setSavingSlots] = useState(false);
@@ -3125,11 +3126,20 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               <h2 className="text-lg font-bold text-slate-800">時間帯を編集</h2>
               <button onClick={() => setEditingSlots(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
             </div>
-            <div className="mb-4">
+            <div className="mb-4 flex items-center justify-between">
               <p className="text-xs text-slate-400">各日の時間帯を編集・追加・削除できます</p>
+              <select
+                value={editDays}
+                onChange={e => setEditDays(Number(e.target.value) as 7 | 14 | 30)}
+                className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 text-slate-600 bg-white focus:outline-none focus:ring-2 focus:ring-teal-400"
+              >
+                <option value={7}>7日間</option>
+                <option value={14}>14日間</option>
+                <option value={30}>30日間</option>
+              </select>
             </div>
             <div className="space-y-3">
-              {getDays(7).map(day => {
+              {getDays(editDays).map(day => {
                 const daySlots = draftSlots.filter(s => s.date === day.date);
                 return (
                   <div key={day.date} className={`rounded-xl p-4 border ${day.isToday ? 'border-teal-200 bg-teal-50/30' : 'border-slate-200 bg-slate-50'}`}>
