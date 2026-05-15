@@ -1853,6 +1853,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           const dateRange = computeDateRange(data.slots);
           const lastDate = [...data.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
           saveOwnedShare(shareId, data.title || data.name, dateRange, lastDate);
+          // プロフィール（名前・メール）を Firestore の値で上書き復元
+          if (data.displayName) {
+            saveRequesterName(data.displayName);
+            saveDraftData(data.title || data.name || '', data.displayName);
+          }
+          if (data.notify_email) {
+            saveRequesterEmail(data.notify_email);
+          }
           setTokenVerified(true);
         }
       } catch (err) {
