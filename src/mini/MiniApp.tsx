@@ -307,6 +307,13 @@ function saveDefaultSlotTime(start: string, end: string) {
   try { localStorage.setItem('choicrew_mini_default_time', JSON.stringify({ start, end })); } catch { /* */ }
 }
 
+function loadAiSupport(): boolean {
+  try { const v = localStorage.getItem('choicrew_mini_ai_support'); return v === null ? true : v === 'true'; } catch { return true; }
+}
+function saveAiSupport(val: boolean) {
+  try { localStorage.setItem('choicrew_mini_ai_support', String(val)); } catch { /* */ }
+}
+
 function loadSentRequestIds(shareId: string): Map<string, string> {
   try {
     const raw = localStorage.getItem(`mini_sent_ids_${shareId}`);
@@ -463,6 +470,7 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
 function UserSettingsModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(loadRequesterName);
   const [email, setEmail] = useState(loadRequesterEmail);
+  const [aiSupport, setAiSupport] = useState(loadAiSupport);
 
   const handleSave = () => {
     const prevName = loadRequesterName();
@@ -481,6 +489,7 @@ function UserSettingsModal({ onClose }: { onClose: () => void }) {
         updateDoc(doc(db, 'mini_shares', s.id), { notify_email: email.trim() }).catch(() => {});
       });
     }
+    saveAiSupport(aiSupport);
     onClose();
   };
 
@@ -518,6 +527,24 @@ function UserSettingsModal({ onClose }: { onClose: () => void }) {
             maxLength={100}
           />
           <p className="text-xs text-slate-400 mt-1.5">設定しておくと、承認・キャンセル時の通知先として自動で入力されます</p>
+        </div>
+
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <p className="text-sm font-medium text-slate-700">AIサポート</p>
+            <p className="text-xs text-slate-400">時間追加時に翌日/翌週への追加提案を表示</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setAiSupport(v => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+              aiSupport ? 'bg-teal-500' : 'bg-slate-200'
+            }`}
+          >
+            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${
+              aiSupport ? 'translate-x-6' : 'translate-x-1'
+            }`} />
+          </button>
         </div>
 
         <div className="flex gap-3 pt-1">
@@ -3068,36 +3095,60 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     {daySlots.length === 0 && (
                       <p className="text-xs text-slate-300">時間帯なし</p>
                     )}
-                    {daySlots.map(slot => (
-                      <div key={slot.id} className="flex items-center gap-2 mb-2 animate-[fadeIn_0.15s_ease-out]">
-                        <input
-                          type="time"
-                          value={slot.start}
-                          onChange={e => setDraftSlots(prev => prev.map(s => s.id === slot.id ? { ...s, start: e.target.value } : s))}
-                          className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-center bg-white"
-                        />
-                        <span className="text-slate-300 text-sm">–</span>
-                        <input
-                          type="time"
-                          value={slot.end}
-                          onChange={e => setDraftSlots(prev => prev.map(s => s.id === slot.id ? { ...s, end: e.target.value } : s))}
-                          className="flex-1 rounded-lg border border-slate-200 px-2 py-2 text-sm text-center bg-white"
-                        />
-                        <button
-                          onClick={() => setDraftSlots(prev => prev.filter(s => s.id !== slot.id))}
-                          className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg"
-                          aria-label="削除"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                    {daySlots.map(slot => {
+                      const activeReqs = requests.filter(r =>
+                        (r.status === 'pending' || r.status === 'approved') &&
+                        r.slot_date === slot.date &&
+                        normalizeTime(r.slot_start) === slot.start &&
+                        normalizeTime(r.slot_end) === slot.end
+                      );
+                      const isLocked = activeReqs.length > 0;
+                      return (
+                        <div key={slot.id} className="mb-2 animate-[fadeIn_0.15s_ease-out]">
+                          <div className={`flex items-center gap-2 ${isLocked ? 'opacity-60' : ''}`}>
+                            <input
+                              type="time"
+                              value={slot.start}
+                              readOnly={isLocked}
+                              onChange={isLocked ? undefined : e => setDraftSlots(prev => prev.map(s => s.id === slot.id ? { ...s, start: e.target.value } : s))}
+                              className={`flex-1 rounded-lg border px-2 py-2 text-sm text-center ${isLocked ? 'border-slate-100 bg-slate-100 cursor-not-allowed text-slate-400' : 'border-slate-200 bg-white'}`}
+                            />
+                            <span className="text-slate-300 text-sm">–</span>
+                            <input
+                              type="time"
+                              value={slot.end}
+                              readOnly={isLocked}
+                              onChange={isLocked ? undefined : e => setDraftSlots(prev => prev.map(s => s.id === slot.id ? { ...s, end: e.target.value } : s))}
+                              className={`flex-1 rounded-lg border px-2 py-2 text-sm text-center ${isLocked ? 'border-slate-100 bg-slate-100 cursor-not-allowed text-slate-400' : 'border-slate-200 bg-white'}`}
+                            />
+                            {isLocked ? (
+                              <span className="text-slate-300 p-1.5 text-base">🔒</span>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setDraftSlots(prev => prev.filter(s => s.id !== slot.id));
+                                  if (aiSuggestSlotId === slot.id) setAiSuggestSlotId(null);
+                                }}
+                                className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg"
+                                aria-label="削除"
+                              >✕</button>
+                            )}
+                          </div>
+                          {isLocked && (
+                            <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                              {activeReqs.map(r => r.requester_name || '依頼者').join('・')} の予定あり ·
+                              変更するには依頼を辞退してください
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                     {daySlots.some(s => s.start >= s.end) && (
                       <p className="text-xs text-red-400 mt-1">開始は終了より前にしてください</p>
                     )}
                     {/* Ai提案 */}
                     {(() => {
-                      if (!aiSuggestSlotId) return null;
+                      if (!aiSuggestSlotId || !loadAiSupport()) return null;
                       const triggerSlot = draftSlots.find(s => s.id === aiSuggestSlotId);
                       if (!triggerSlot || triggerSlot.date !== day.date) return null;
                       const allEditDates = new Set(getDays(editDays).map(d => d.date));
@@ -3116,22 +3167,39 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                       const dismiss = (key: string) => setAiAnswered(prev => new Set([...prev, key]));
                       return (
                         <div className="mt-3 pt-3 border-t border-teal-100 animate-[fadeIn_0.2s_ease-out]">
-                          <p className="text-[11px] font-semibold text-teal-600 mb-2">✨ Ai提案</p>
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-[11px] font-semibold text-teal-600">✨ Ai提案</p>
+                            <button
+                              onClick={() => setAiSuggestSlotId(null)}
+                              className="text-slate-300 hover:text-slate-500 text-base leading-none p-0.5 transition"
+                              aria-label="閉じる"
+                            >✕</button>
+                          </div>
                           <div className="space-y-2">
                             {canSuggestNextDay && (
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs text-slate-600">翔日の同じ時間にも入れますか？</span>
+                                <span className="text-xs text-slate-600">翌日の同じ時間にも入れますか？</span>
                                 <div className="flex gap-1.5 shrink-0">
-                                  <button onClick={() => { setDraftSlots(prev => [...prev, { id: genId(6), date: nextDayDate, start: triggerSlot.start, end: triggerSlot.end }]); dismiss('nextDay'); }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
+                                  <button onClick={() => {
+                                    const newId = genId(6);
+                                    setDraftSlots(prev => [...prev, { id: newId, date: nextDayDate, start: triggerSlot.start, end: triggerSlot.end }]);
+                                    setAiSuggestSlotId(newId);
+                                    setAiAnswered(new Set());
+                                  }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
                                   <button onClick={() => dismiss('nextDay')} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">いいえ</button>
                                 </div>
                               </div>
                             )}
                             {canSuggestNextWeek && (
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs text-slate-600">翔週の同じ時間にも入れますか？</span>
+                                <span className="text-xs text-slate-600">翌週の同じ時間にも入れますか？</span>
                                 <div className="flex gap-1.5 shrink-0">
-                                  <button onClick={() => { setDraftSlots(prev => [...prev, { id: genId(6), date: nextWeekDate, start: triggerSlot.start, end: triggerSlot.end }]); dismiss('nextWeek'); }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
+                                  <button onClick={() => {
+                                    const newId = genId(6);
+                                    setDraftSlots(prev => [...prev, { id: newId, date: nextWeekDate, start: triggerSlot.start, end: triggerSlot.end }]);
+                                    setAiSuggestSlotId(newId);
+                                    setAiAnswered(new Set());
+                                  }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
                                   <button onClick={() => dismiss('nextWeek')} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">いいえ</button>
                                 </div>
                               </div>
@@ -3146,6 +3214,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               </div>
                             )}
                           </div>
+                          <button
+                            onClick={() => { saveAiSupport(false); setAiSuggestSlotId(null); }}
+                            className="mt-2 text-[10px] text-slate-300 hover:text-slate-400 transition"
+                          >今後提案しない</button>
                         </div>
                       );
                     })()}

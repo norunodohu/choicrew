@@ -396,6 +396,40 @@ app.post("/api/mini/email-confirm", async (req, res) => {
   }
 });
 
+// 依頼者への承認/辞退/取消メール通知
+app.post("/api/mini/notify-requester", async (req, res) => {
+  const { to, requesterName, ownerName, status, slotDate, slotStart, slotEnd } = req.body as {
+    to?: string; requesterName?: string; ownerName?: string;
+    status?: string; slotDate?: string; slotStart?: string; slotEnd?: string;
+  };
+  if (!to) return res.status(400).json({ error: "to required" });
+
+  const statusLabels: Record<string, string> = {
+    approved: "承認されました",
+    declined: "辞退されました",
+    cancelled: "承認が取り消されました",
+  };
+  const label = statusLabels[status || ""] || "ステータスが変更されました";
+  const subject = `【ChoiCrew】あなたの依頼が${label}`;
+
+  const bodyLines = [
+    `${requesterName || ""}さん、${ownerName || ""}さんからの返答があります。`,
+    "",
+    `ステータス: ${label}`,
+    `日時: ${slotDate} ${slotStart}〜${slotEnd}`,
+    "",
+    "ChoiCrew Mini",
+  ];
+
+  try {
+    await sendResendEmail(process.env.SMTP_TO || to, subject, bodyLines.join("\n"));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("notify-requester error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 /* ================================================================
    Owner Fingerprint + IP (Layer 2 authentication)
    ================================================================ */
