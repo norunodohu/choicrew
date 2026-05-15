@@ -296,6 +296,17 @@ function saveRequesterEmail(email: string) {
   try { localStorage.setItem('choicrew_mini_requester_email', email); } catch { /* */ }
 }
 
+function loadDefaultSlotTime(): { start: string; end: string } {
+  try {
+    const s = localStorage.getItem('choicrew_mini_default_time');
+    if (s) return JSON.parse(s);
+  } catch { /* */ }
+  return { start: '10:00', end: '17:00' };
+}
+function saveDefaultSlotTime(start: string, end: string) {
+  try { localStorage.setItem('choicrew_mini_default_time', JSON.stringify({ start, end })); } catch { /* */ }
+}
+
 function loadSentRequestIds(shareId: string): Map<string, string> {
   try {
     const raw = localStorage.getItem(`mini_sent_ids_${shareId}`);
@@ -1588,6 +1599,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [editingSlots, setEditingSlots] = useState(false);
   const [editDays, setEditDays] = useState<7 | 14 | 30>(7);
   const [draftSlots, setDraftSlots] = useState<TimeSlot[]>([]);
+  const [aiSuggestSlotId, setAiSuggestSlotId] = useState<string | null>(null);
+  const [aiAnswered, setAiAnswered] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [savingSlots, setSavingSlots] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -2854,7 +2867,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               <button
                 type="button"
                 className="text-base font-bold text-slate-800 hover:text-teal-600 transition text-left"
-                onClick={() => setEditingRequesterName({ id: selectedRequest.id, name: selectedRequest.requester_name })}
+                onClick={() => { setSelectedRequest(null); setEditingRequesterName({ id: selectedRequest.id, name: selectedRequest.requester_name }); }}
               >
                 {getRequesterAlias(selectedRequest.requester_name)}
                 <span className="text-xs text-slate-400 ml-1 font-normal">（名前を変更）</span>
@@ -3040,7 +3053,13 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                         {day.label}
                       </p>
                       <button
-                        onClick={() => setDraftSlots(prev => [...prev, { id: genId(6), date: day.date, start: '10:00', end: '17:00' }])}
+                        onClick={() => {
+                          const def = loadDefaultSlotTime();
+                          const newId = genId(6);
+                          setDraftSlots(prev => [...prev, { id: newId, date: day.date, start: def.start, end: def.end }]);
+                          setAiSuggestSlotId(newId);
+                          setAiAnswered(new Set());
+                        }}
                         className="text-xs text-teal-600 font-medium hover:text-teal-800 transition"
                       >
                         ＋追加
@@ -3076,6 +3095,60 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     {daySlots.some(s => s.start >= s.end) && (
                       <p className="text-xs text-red-400 mt-1">開始は終了より前にしてください</p>
                     )}
+                    {/* Ai提案 */}
+                    {(() => {
+                      if (!aiSuggestSlotId) return null;
+                      const triggerSlot = draftSlots.find(s => s.id === aiSuggestSlotId);
+                      if (!triggerSlot || triggerSlot.date !== day.date) return null;
+                      const allEditDates = new Set(getDays(editDays).map(d => d.date));
+                      const nextDayDate = format(addDays(new Date(triggerSlot.date + 'T00:00:00'), 1), 'yyyy-MM-dd');
+                      const nextWeekDate = format(addDays(new Date(triggerSlot.date + 'T00:00:00'), 7), 'yyyy-MM-dd');
+                      const canSuggestNextDay = !aiAnswered.has('nextDay') &&
+                        allEditDates.has(nextDayDate) &&
+                        !draftSlots.some(s => s.date === nextDayDate && s.start === triggerSlot.start && s.end === triggerSlot.end);
+                      const canSuggestNextWeek = !aiAnswered.has('nextWeek') &&
+                        allEditDates.has(nextWeekDate) &&
+                        !draftSlots.some(s => s.date === nextWeekDate && s.start === triggerSlot.start && s.end === triggerSlot.end);
+                      const def = loadDefaultSlotTime();
+                      const canSuggestDefault = !aiAnswered.has('default') &&
+                        (def.start !== triggerSlot.start || def.end !== triggerSlot.end);
+                      if (!canSuggestNextDay && !canSuggestNextWeek && !canSuggestDefault) return null;
+                      const dismiss = (key: string) => setAiAnswered(prev => new Set([...prev, key]));
+                      return (
+                        <div className="mt-3 pt-3 border-t border-teal-100 animate-[fadeIn_0.2s_ease-out]">
+                          <p className="text-[11px] font-semibold text-teal-600 mb-2">✨ Ai提案</p>
+                          <div className="space-y-2">
+                            {canSuggestNextDay && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-slate-600">翔日の同じ時間にも入れますか？</span>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button onClick={() => { setDraftSlots(prev => [...prev, { id: genId(6), date: nextDayDate, start: triggerSlot.start, end: triggerSlot.end }]); dismiss('nextDay'); }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
+                                  <button onClick={() => dismiss('nextDay')} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">いいえ</button>
+                                </div>
+                              </div>
+                            )}
+                            {canSuggestNextWeek && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-slate-600">翔週の同じ時間にも入れますか？</span>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button onClick={() => { setDraftSlots(prev => [...prev, { id: genId(6), date: nextWeekDate, start: triggerSlot.start, end: triggerSlot.end }]); dismiss('nextWeek'); }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
+                                  <button onClick={() => dismiss('nextWeek')} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">いいえ</button>
+                                </div>
+                              </div>
+                            )}
+                            {canSuggestDefault && (
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs text-slate-600">追加時のデフォルト時間にしますか？<span className="text-slate-400 ml-1">{triggerSlot.start}–{triggerSlot.end}</span></span>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button onClick={() => { saveDefaultSlotTime(triggerSlot.start, triggerSlot.end); dismiss('default'); }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
+                                  <button onClick={() => dismiss('default')} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">いいえ</button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })}
