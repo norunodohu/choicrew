@@ -1039,9 +1039,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             <UserCircleIcon className="w-6 h-6" />
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
-          <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
-            <BellIcon className="w-5 h-5" />
-          </button>
+          <div className="w-9" />
         </div>
       </header>
 
@@ -2304,9 +2302,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             <UserCircleIcon className="w-6 h-6" />
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
-          <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
-            <BellIcon className="w-5 h-5" />
-          </button>
+          <div className="w-9" />
         </div>
       </header>
       {/* ── テーマ背景画像（absolute + 大きめサイズでモバイルのカクつき防止） ── */}
