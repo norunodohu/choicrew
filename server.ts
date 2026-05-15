@@ -404,22 +404,42 @@ app.post("/api/mini/notify-requester", async (req, res) => {
   };
   if (!to) return res.status(400).json({ error: "to required" });
 
-  const statusLabels: Record<string, string> = {
-    approved: "承認されました",
-    declined: "辞退されました",
-    cancelled: "承認が取り消されました",
-  };
-  const label = statusLabels[status || ""] || "ステータスが変更されました";
-  const subject = `【ChoiCrew】あなたの依頼が${label}`;
+  const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
+  const noreplyNote = "※ このメールは自動送信です。返信しても届きません。";
 
-  const bodyLines = [
-    `${requesterName || ""}さん、${ownerName || ""}さんからの返答があります。`,
-    "",
-    `ステータス: ${label}`,
-    `日時: ${slotDate} ${slotStart}〜${slotEnd}`,
-    "",
-    "ChoiCrew Mini",
-  ];
+  // slotDate は yyyy-MM-dd 形式 → M/d に変換
+  const dateLabel = slotDate
+    ? slotDate.replace(/^\d{4}-0?(\d+)-0?(\d+)$/, "$1/$2")
+    : slotDate || "";
+
+  const statusLabel =
+    status === "approved" ? "承認されました" :
+    status === "declined" ? "辞退されました" :
+    "キャンセルされました";
+
+  const subject = `${dateLabel}の依頼が${statusLabel}`;
+  const mainLine = `${slotDate} ${slotStart}〜${slotEnd} の依頼が${statusLabel}。`;
+
+  let bodyLines: string[];
+  if (status === "approved") {
+    bodyLines = [
+      mainLine,
+      "",
+      appUrl,
+      "",
+      "※承認日時に誤りがある場合は、当サイトにてキャンセル依頼をお願いいたします。なお、行き違い防止のため、直接メッセージでもご連絡いただけますと幸いです。",
+      "",
+      noreplyNote,
+    ];
+  } else {
+    bodyLines = [
+      mainLine,
+      "",
+      appUrl,
+      "",
+      noreplyNote,
+    ];
+  }
 
   try {
     await sendResendEmail(process.env.SMTP_TO || to, subject, bodyLines.join("\n"));
