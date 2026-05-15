@@ -1976,7 +1976,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     saveSentRequestId(shareId, key, requestId);
     const next = saveSentSlot(shareId, key, sentSlots);
     setSentSlots(next);
+    // 楽観的にステータスをpendingに更新（Firestoreリスナーが追いつくまでUIが即反映）
+    setMyRequestStatuses(prev => new Map([...prev, [key, { status: 'pending', id: requestId }]]));
     setRequestSlot(null);
+    setDeclinedSlotTime(null);
     toast.show('依頼を送信しました', 'success');
   };
 
@@ -3185,9 +3188,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                         </div>
                       );
                     })}
-                    {daySlots.some(s => s.start >= s.end) && (
-                      <p className="text-xs text-red-400 mt-1">開始は終了より前にしてください</p>
-                    )}
+
                     {/* Ai提案 */}
                     {(() => {
                       if (!aiSuggestSlotId || !loadAiSupport()) return null;
