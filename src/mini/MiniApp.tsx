@@ -1049,7 +1049,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
 
         {/* Header */}
         <div className="text-center mb-6">
-          <p className="text-slate-400 mt-1.5 text-xs tracking-wide">ログイン不要で依頼受付まで</p>
+          <p className="text-slate-400 mt-1.5 text-xs tracking-wide">ログイン不要で依頼を受け付けます</p>
         </div>
 
         {/* ── 作成済みリスト OR 作成フォーム ── */}
@@ -1091,9 +1091,9 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             </div>
             <button
               onClick={() => { setShowCreateForm(true); setStep(1); setCreateMode(null); setSlots([]); setExpandedDays(new Set()); }}
-              className="w-full flex items-center justify-center gap-2 bg-teal-600 text-white rounded-2xl py-4 font-bold text-base hover:bg-teal-700 transition shadow-sm"
+              className="mx-auto flex items-center justify-center gap-1.5 bg-teal-600 text-white rounded-2xl px-8 py-3 font-bold text-sm hover:bg-teal-700 transition shadow-sm"
             >
-              ＋ 予定表を作成（１週間分）
+              ＋ 予定表を作る
             </button>
           </div>
         ) : (
@@ -1109,10 +1109,15 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             <StepIndicator />
 
         {/* ── Step 1: Title + DisplayName ── */}
-        {step === 1 && (
+        {step === 1 && (() => {
+          const profileName = loadRequesterName().trim();
+          const canNext = !!title.trim() && !!(profileName || displayName.trim());
+          return (
           <div className="animate-[fadeIn_0.2s_ease-out]">
             <h2 className="text-xl font-bold text-slate-800 mb-1">予定表を作成（１週間分）</h2>
-            <p className="text-sm text-slate-400 mb-5">公開される予定表タイトルと名前を入力してください</p>
+            <p className="text-sm text-slate-400 mb-5">
+              {profileName ? 'タイトルを入力してください' : '予定表のタイトルと名前を入力してください'}
+            </p>
             <div className="space-y-4 mb-6">
               <div>
                 <label className="block text-sm font-medium text-slate-600 mb-1.5">タイトル</label>
@@ -1120,28 +1125,37 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && canNext) setStep(2); }}
                   placeholder="空いてます"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent placeholder:text-slate-300 bg-white"
                   maxLength={40}
                   autoFocus
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-600 mb-1.5">表示名(公開相手に分かればOK)</label>
-                <input
-                  type="text"
-                  value={displayName}
-                  onChange={e => setDisplayName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && title.trim() && displayName.trim()) setStep(2); }}
-                  placeholder="やまだ"
-                  className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent placeholder:text-slate-300 bg-white"
-                  maxLength={30}
-                />
-              </div>
+              {profileName ? (
+                <div className="flex items-center gap-2.5 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-xs text-slate-400">作成者名</span>
+                  <span className="text-sm font-semibold text-slate-700">{profileName}</span>
+                  <button onClick={() => setShowSettings(true)} className="text-xs text-slate-300 hover:text-teal-500 ml-auto transition">変更</button>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-1.5">表示名(公開相手に分かればOK)</label>
+                  <input
+                    type="text"
+                    value={displayName}
+                    onChange={e => setDisplayName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && canNext) setStep(2); }}
+                    placeholder="やまだ"
+                    className="w-full rounded-xl border border-slate-200 px-4 py-3.5 text-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent placeholder:text-slate-300 bg-white"
+                    maxLength={30}
+                  />
+                </div>
+              )}
             </div>
             <button
-              onClick={() => title.trim() && displayName.trim() && setStep(2)}
-              disabled={!title.trim() || !displayName.trim()}
+              onClick={() => canNext && setStep(2)}
+              disabled={!canNext}
               className="w-full bg-teal-600 text-white rounded-xl py-3.5 font-bold hover:bg-teal-700 disabled:opacity-40 transition text-base shadow-sm"
             >
               次へ →
@@ -1158,7 +1172,8 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
               </div>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Step 2: Mode selection or Quick slot picker ── */}
         {step === 2 && (
@@ -2392,10 +2407,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               <div className="relative -mt-0.5">
                 <button
                   onClick={() => setShowOwnerMenu(v => !v)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition text-base leading-none"
+                  className="w-7 h-7 flex flex-col items-center justify-center gap-[4px] rounded-lg text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition"
                   aria-label="メニュー"
                 >
-                  ⋯
+                  <span className="block w-4 h-[2px] rounded-full bg-current" />
+                  <span className="block w-4 h-[2px] rounded-full bg-current" />
+                  <span className="block w-4 h-[2px] rounded-full bg-current" />
                 </button>
                 {showOwnerMenu && (
                   <>
@@ -3207,10 +3224,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                       const canSuggestNextWeek = !aiAnswered.has('nextWeek') &&
                         allEditDates.has(nextWeekDate) &&
                         !draftSlots.some(s => s.date === nextWeekDate && s.start === triggerSlot.start && s.end === triggerSlot.end);
-                      const def = loadDefaultSlotTime();
-                      const canSuggestDefault = !aiAnswered.has('default') &&
-                        (def.start !== triggerSlot.start || def.end !== triggerSlot.end);
-                      if (!canSuggestNextDay && !canSuggestNextWeek && !canSuggestDefault) return null;
+                      if (!canSuggestNextDay && !canSuggestNextWeek) return null;
                       const dismiss = (key: string) => setAiAnswered(prev => new Set([...prev, key]));
                       return (
                         <div className="mt-3 pt-3 border-t border-teal-100 animate-[fadeIn_0.2s_ease-out]">
@@ -3251,15 +3265,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 </div>
                               </div>
                             )}
-                            {canSuggestDefault && (
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs text-slate-600">追加時のデフォルト時間にしますか？<span className="text-slate-400 ml-1">{triggerSlot.start}–{triggerSlot.end}</span></span>
-                                <div className="flex gap-1.5 shrink-0">
-                                  <button onClick={() => { saveDefaultSlotTime(triggerSlot.start, triggerSlot.end); dismiss('default'); }} className="text-xs px-2.5 py-1 rounded-lg bg-teal-500 text-white font-medium hover:bg-teal-600 transition">はい</button>
-                                  <button onClick={() => dismiss('default')} className="text-xs px-2.5 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">いいえ</button>
-                                </div>
-                              </div>
-                            )}
+
                           </div>
                           <button
                             onClick={() => { saveAiSupport(false); setAiSuggestSlotId(null); }}
