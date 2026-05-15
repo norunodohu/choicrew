@@ -1034,6 +1034,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
           <button onClick={() => setShowSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
             <UserCircleIcon className="w-6 h-6" />
           </button>
+          <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
           <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
             <BellIcon className="w-5 h-5" />
           </button>
@@ -1044,7 +1045,6 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
 
         {/* Header */}
         <div className="text-center mb-6">
-          <Logo />
           <p className="text-slate-400 mt-1.5 text-xs tracking-wide">ログイン不要で依頼受付まで</p>
         </div>
 
@@ -1348,11 +1348,12 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
    RequestModal
    ================================================================ */
 
-function RequestModal({ shareId, slot, onClose, onSent }: {
+function RequestModal({ shareId, slot, onClose, onSent, declinedTime }: {
   shareId: string;
   slot: { date: string; start: string; end: string };
   onClose: () => void;
   onSent: (requestId: string) => void;
+  declinedTime?: { start: string; end: string } | null;
 }) {
   const [name, setName] = useState(loadRequesterName);
   const email = loadRequesterEmail();
@@ -1361,6 +1362,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [showSameTimeConfirm, setShowSameTimeConfirm] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1392,8 +1394,20 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
       setError('依頼時間の範囲が正しくありません。');
       return;
     }
+    // 前回辞退と同じ時間なら確認
+    if (declinedTime &&
+        normalizedStart === normalizeTime(declinedTime.start) &&
+        normalizedEnd === normalizeTime(declinedTime.end)) {
+      setShowSameTimeConfirm(true);
+      return;
+    }
+    await doSend(normalizedStart, normalizedEnd);
+  };
+
+  const doSend = async (normalizedStart: string, normalizedEnd: string) => {
     setSending(true);
     setError('');
+    setShowSameTimeConfirm(false);
     try {
       const reqRef = await addDoc(collection(db, 'mini_requests'), {
         share_id: shareId,
@@ -1558,23 +1572,40 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
           <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
         )}
 
-        <div className="flex gap-3 pt-2">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
-                       hover:bg-slate-50 font-medium transition"
-          >
-            キャンセル
-          </button>
-          <button
-            onClick={handleSend}
-            disabled={!name.trim() || sending}
-            className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium
-                       hover:bg-teal-700 disabled:opacity-40 transition"
-          >
-            {sending ? '送信中...' : '送信する'}
-          </button>
-        </div>
+        {showSameTimeConfirm ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2.5">
+            <p className="text-sm text-amber-800">この時間で一度辞退されていますが、再度依頼しますか？</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowSameTimeConfirm(false)}
+                className="flex-1 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium text-sm transition"
+              >やめる</button>
+              <button
+                onClick={() => doSend(normalizeTime(requestStart), normalizeTime(requestEnd))}
+                disabled={sending}
+                className="flex-1 py-2 rounded-xl bg-teal-600 text-white font-medium text-sm hover:bg-teal-700 disabled:opacity-40 transition"
+              >{sending ? '送信中...' : '再依頼する'}</button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600
+                         hover:bg-slate-50 font-medium transition"
+            >
+              キャンセル
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={!name.trim() || sending}
+              className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium
+                         hover:bg-teal-700 disabled:opacity-40 transition"
+            >
+              {sending ? '送信中...' : (declinedTime ? '再依頼する' : '送信する')}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1616,6 +1647,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [notFound, setNotFound] = useState(false);
   const [expired, setExpired] = useState(false);
   const [requestSlot, setRequestSlot] = useState<{ date: string; start: string; end: string } | null>(null);
+  const [declinedSlotTime, setDeclinedSlotTime] = useState<{ start: string; end: string } | null>(null);
   const [sentSlots, setSentSlots] = useState<Set<string>>(() => loadSentSlots(shareId));
   const [copied, setCopied] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(() => {
@@ -2249,6 +2281,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           <button onClick={() => setShowUserSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
             <UserCircleIcon className="w-6 h-6" />
           </button>
+          <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
           <button className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
             <BellIcon className="w-5 h-5" />
           </button>
@@ -2323,11 +2356,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         </div>
       )}
       <div className="max-w-lg mx-auto px-4 py-8 sm:py-12">
-
-        {/* Logo */}
-        <div className="text-center mb-5 print:hidden">
-          <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
-        </div>
 
         {/* Just-created banner */}
         {justCreated && (
@@ -2575,6 +2603,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 承認済み
                               </div>
                             )}
+                            {myReqStatus?.status === 'declined' && (
+                              <p className="text-xs text-slate-400 mt-1.5">辞退されました</p>
+                            )}
                             {!expired && reqs.length > 0 && !isOwner && (
                               isExclusive && hasApproved ? (
                                 myReqStatus?.status === 'approved' ? (
@@ -2603,9 +2634,19 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 承認済み ✓
                               </span>
                             ) : myReqStatus?.status === 'declined' ? (
-                              <span className="text-sm text-slate-500 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
-                                辞退されました
-                              </span>
+                              <button
+                                onClick={() => {
+                                  const declinedReq = requests.find(r => r.id === myReqStatus.id);
+                                  setDeclinedSlotTime({
+                                    start: normalizeTime(declinedReq?.requested_start || declinedReq?.slot_start || slot.start),
+                                    end: normalizeTime(declinedReq?.requested_end || declinedReq?.slot_end || slot.end),
+                                  });
+                                  setRequestSlot(slot);
+                                }}
+                                className={`${T.accentBtn} text-sm font-medium rounded-xl px-4 py-2.5 transition-all`}
+                              >
+                                再依頼する
+                              </button>
                             ) : myReqStatus?.status === 'cancelled' ? (
                               <span className="text-sm text-red-400 font-medium bg-red-50 px-3 py-1.5 rounded-lg">
                                 キャンセル済み
@@ -2991,8 +3032,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         <RequestModal
           shareId={shareId}
           slot={requestSlot}
-          onClose={() => setRequestSlot(null)}
+          onClose={() => { setRequestSlot(null); setDeclinedSlotTime(null); }}
           onSent={(requestId) => handleSent(requestSlot, requestId)}
+          declinedTime={declinedSlotTime}
         />
       )}
 
