@@ -1549,8 +1549,7 @@ function RequestModal({ shareId, slot, onClose, onSent }: {
 function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; justCreated: boolean; ownerToken?: string | null }) {
   const [share, setShare] = useState<ShareData | null>(null);
   const [requests, setRequests] = useState<RequestEntry[]>([]);
-  // 依頼一覧の表示/非表示
-  const [showRequestList, setShowRequestList] = useState(false);
+  const [selectedRequest, setSelectedRequest] = useState<RequestEntry | null>(null);
     // 期限切れ依頼をDBから削除
     useEffect(() => {
       const deleteExpiredRequests = async () => {
@@ -1586,7 +1585,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     if (Notification.permission !== 'granted') return false;
     try { return localStorage.getItem(`mini_notif_${shareId}`) !== 'off'; } catch { return true; }
   });
-  const [showNotifExpand, setShowNotifExpand] = useState(false);
   const [editingSlots, setEditingSlots] = useState(false);
   const [editDays, setEditDays] = useState<7 | 14 | 30>(7);
   const [draftSlots, setDraftSlots] = useState<TimeSlot[]>([]);
@@ -2299,64 +2297,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           </div>
         )}
 
-        {/* Owner: compact URL strip */}
-        {isOwner && (
-          <div className="flex items-center gap-2 mb-5 print:hidden">
-            <button
-              onClick={handleCopy}
-              className="flex-1 flex items-center gap-2 bg-white/80 backdrop-blur border border-slate-200 rounded-xl px-3 py-2 text-sm hover:bg-white transition min-w-0"
-            >
-              <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-              <span className="truncate text-xs text-slate-400 font-mono">{url.replace('https://', '')}</span>
-              <span className={`shrink-0 text-xs font-semibold ml-auto ${copied ? 'text-teal-600' : 'text-slate-500'}`}>{copied ? '✓ コピー済み' : 'コピー'}</span>
-            </button>
-            <div className="relative shrink-0">
-              <button
-                onClick={() => setShowOwnerMenu(v => !v)}
-                className="w-9 h-9 flex items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:bg-slate-50 transition text-lg"
-                aria-label="メニュー"
-              >
-                ⋯
-              </button>
-              {showOwnerMenu && (
-                <div className="absolute right-0 top-11 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[170px] z-20 animate-[fadeIn_0.15s_ease-out]">
-                  <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">✏️ 時間を編集</button>
-                  <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🎨 テーマを変更</button>
-                  
-                    <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱管理を引きつぐ</button>
-                  
-                  {'Notification' in window && Notification.permission !== 'denied' && (
-                    <button style={{ display: 'none' }} 
-                      onClick={async () => {
-                        setShowOwnerMenu(false);
-                        if (notifEnabled) {
-                          await unregisterFCMToken(); setNotifEnabled(false);
-                        } else {
-                          if (Notification.permission === 'granted') {
-                            try { localStorage.removeItem(`mini_notif_${shareId}`); } catch { /* */ }
-                            setNotifEnabled(true); registerFCMToken();
-                          } else {
-                            const perm = await Notification.requestPermission();
-                            if (perm === 'granted') {
-                              try { localStorage.removeItem(`mini_notif_${shareId}`); } catch { /* */ }
-                              setNotifEnabled(true); registerFCMToken();
-                            }
-                          }
-                        }
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                    >
-                      <BellIcon className="w-3.5 h-3.5" />
-                      依頼通知 {notifEnabled ? <span className="text-[10px] text-teal-600 bg-teal-50 rounded-full px-1.5 py-0.5 font-medium">ON</span> : <span className="text-[10px] text-slate-400 bg-slate-100 rounded-full px-1.5 py-0.5 font-medium">OFF</span>}
-                    </button>
-                  )}
-                  <hr className="my-1 border-slate-100" />
-                  <button onClick={() => { setShowDeleteConfirm(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50">削除する</button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+
 
         {/* Expired warning */}
         {expired && (
@@ -2373,21 +2314,33 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               {share.title || share.name + 'さんの空き時間'}
             </h1>
             {isOwner && (
-              <button
-                onClick={() => { setEditTitleVal(share.title || ''); setEditDisplayNameVal(share.displayName || share.name); setShowEditTitle(true); }}
-                className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition -mt-0.5"
-                aria-label="タイトルを編集"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-              </button>
+              <div className="relative -mt-0.5">
+                <button
+                  onClick={() => setShowOwnerMenu(v => !v)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition text-base leading-none"
+                  aria-label="メニュー"
+                >
+                  ⋯
+                </button>
+                {showOwnerMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowOwnerMenu(false)} />
+                    <div className="absolute left-0 top-8 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[180px] z-20 animate-[fadeIn_0.15s_ease-out]">
+                      <button onClick={() => { handleCopy(); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📋 URLをコピー{copied ? <span className="ml-1 text-xs text-teal-500">✓</span> : null}</button>
+                      <button onClick={() => { setEditTitleVal(share.title || ''); setEditDisplayNameVal(share.displayName || share.name); setShowEditTitle(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">✏️ タイトル変更</button>
+                      <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🎨 テーマを変更</button>
+                      <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱 管理を引きつぐ</button>
+                      <hr className="my-1 border-slate-100" />
+                      <button onClick={() => { setShowDeleteConfirm(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50">削除する</button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
           </div>
           <p className={`text-sm ${T.subText} mt-1`}>
             作成者：{share.displayName || share.name}
           </p>
-          {isOwner && requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length > 0 && (
-            <p className="text-sm text-teal-600 font-medium mt-1">{requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length}件の依頼</p>
-          )}
         </div>
 
         {/* Edit title modal */}
@@ -2485,97 +2438,39 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           </div>
         )}
 
-        {/* Owner: Request summary */}
-        {isOwner && requests.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').length > 0 && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 mb-6 print:hidden">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-slate-700">依頼一覧</h2>
-              <button
-                className="text-xs text-teal-600 border border-teal-200 rounded-lg px-2 py-1 hover:bg-teal-50 transition"
-                onClick={() => setShowRequestList(v => !v)}
-              >
-                {showRequestList ? '非表示' : '表示'}
-              </button>
-            </div>
-            {showRequestList && (
-              <div className="space-y-2">
-                {requests
-                  .filter(r => !r.status || r.status === 'pending' || r.status === 'approved')
-                  .sort((a, b) => b.created_at.toMillis() - a.created_at.toMillis())
-                  .map(r => (
-                  <div key={r.id} className={`flex items-start gap-3 p-2.5 rounded-xl ${
-                    r.status === 'approved' ? 'bg-blue-50 border border-blue-100' :
-                    'bg-slate-50'
-                  }`}>
-                    <Avatar name={getRequesterAlias(r.requester_name)} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => setEditingRequesterName({ id: r.id, name: r.requester_name })}
-                          className="text-sm font-semibold text-slate-700 hover:text-teal-600 transition text-left"
-                        >
-                          {getRequesterAlias(r.requester_name)}
-                        </button>
-                        {requesterAliases[r.requester_name]?.trim() ? (
-                          <span className="text-[11px] text-slate-400">元: {r.requester_name}</span>
-                        ) : null}
-                        <span className="text-[11px] text-slate-400">
-                          {formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}
-                        </span>
-                        {r.status === 'approved' && (
-                          <span className="text-[11px] font-medium text-blue-600 bg-blue-100 rounded-full px-2 py-0.5">承認済み</span>
-                        )}
-                        {r.status === 'declined' && (
-                          <span className="text-[11px] font-medium text-slate-500 bg-slate-200 rounded-full px-2 py-0.5">辞退済み</span>
-                        )}
-                        {r.status === 'cancelled' && (
-                          <span className="text-[11px] font-medium text-red-500 bg-red-100 rounded-full px-2 py-0.5">キャンセル済み</span>
-                        )}
-                      </div>
-                      {r.message && (
-                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{r.message}</p>
-                      )}
-                      {(!r.status || r.status === 'pending') ? (
-                        <div className="flex gap-2 mt-2">
-                          <button
-                            onClick={() => handleApprove(r.id)}
-                            className="px-3 py-1 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 active:scale-95 transition-all"
-                          >承認</button>
-                          <button
-                            onClick={() => handleDecline(r.id)}
-                            className="px-3 py-1 rounded-lg bg-slate-200 text-slate-600 text-xs font-medium hover:bg-slate-300 active:scale-95 transition-all"
-                          >辞退</button>
-                        </div>
-                      ) : r.status === 'approved' ? (
-                        <div className="flex gap-2 mt-2">
-                          {confirmCancelId === r.id ? (
-                            <>
-                              <span className="text-xs text-slate-500 self-center">本当に取り消しますか？</span>
-                              <button
-                                onClick={() => handleCancel(r.id)}
-                                className="px-3 py-1 rounded-lg bg-red-500 text-white text-xs font-medium hover:bg-red-600 active:scale-95 transition-all"
-                              >取り消す</button>
-                              <button
-                                onClick={() => setConfirmCancelId(null)}
-                                className="px-3 py-1 rounded-lg bg-slate-100 text-slate-500 text-xs font-medium hover:bg-slate-200 active:scale-95 transition-all"
-                              >戻る</button>
-                            </>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmCancelId(r.id)}
-                              className="px-3 py-1 rounded-lg bg-red-50 text-red-500 text-xs font-medium hover:bg-red-100 active:scale-95 transition-all border border-red-100"
-                            >承認を取り消す</button>
-                          )}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+        {/* Owner: Request list (always visible, simple) */}
+        {isOwner && (() => {
+          const todayStr = format(new Date(), 'yyyy-MM-dd');
+          const activeReqs = requests
+            .filter(r => (!r.status || r.status === 'pending' || r.status === 'approved') && r.slot_date >= todayStr)
+            .sort((a, b) => a.slot_date.localeCompare(b.slot_date) || a.slot_start.localeCompare(b.slot_start));
+          if (activeReqs.length === 0) return null;
+          return (
+            <div id="request-list-section" className="bg-white rounded-2xl border border-slate-200 p-4 mb-5 print:hidden">
+              <div className="flex items-center gap-2 mb-2">
+                <h2 className="text-sm font-semibold text-slate-700">依頼一覧</h2>
+                <span className="bg-teal-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{activeReqs.length}</span>
+              </div>
+              <div className="space-y-0.5">
+                {activeReqs.map(r => (
+                  <button
+                    key={r.id}
+                    className="w-full text-left flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 transition"
+                    onClick={() => setSelectedRequest(r)}
+                  >
+                    <span className="text-xs font-medium text-slate-700 truncate flex-1">{getRequesterAlias(r.requester_name)}</span>
+                    <span className="text-[11px] text-slate-400 shrink-0">{formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}</span>
+                    {r.status === 'approved' ? (
+                      <span className="shrink-0 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">承認済み</span>
+                    ) : (
+                      <span className="shrink-0 text-[10px] font-bold text-teal-600 bg-teal-50 rounded-full px-2 py-0.5">依頼中</span>
+                    )}
+                  </button>
                 ))}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })()}
 
         {/* Visitor: brief instruction + pending summary */}
         {!isOwner && !expired && sortedSlots.length > 0 && (
@@ -2705,7 +2600,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                   <Avatar name={getRequesterAlias(r.requester_name)} />
                                   <button
                                     type="button"
-                                    onClick={() => setEditingRequesterName({ id: r.id, name: r.requester_name })}
+                                    onClick={() => setSelectedRequest(r)}
                                     className="text-xs font-medium text-slate-600 hover:text-teal-600 transition text-left"
                                   >
                                     {getRequesterAlias(r.requester_name)}
@@ -2844,6 +2739,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       {isOwner && (
         <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-1.5 print:hidden">
           <button
+            onClick={() => { if (share) { setDraftSlots(share.slots.map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); } }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full shadow-md text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all"
+          >
+            ✏️ 時間を編集
+          </button>
+          <button
             onClick={() => setShowStatusModal(true)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-medium transition-all ${
               isDraft
@@ -2940,6 +2841,73 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               >
                 この共有を削除する
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 依頼詳細モーダル */}
+      {selectedRequest && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedRequest(null); setConfirmCancelId(null); }}>
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <button
+                type="button"
+                className="text-base font-bold text-slate-800 hover:text-teal-600 transition text-left"
+                onClick={() => setEditingRequesterName({ id: selectedRequest.id, name: selectedRequest.requester_name })}
+              >
+                {getRequesterAlias(selectedRequest.requester_name)}
+                <span className="text-xs text-slate-400 ml-1 font-normal">（名前を変更）</span>
+              </button>
+              <button onClick={() => { setSelectedRequest(null); setConfirmCancelId(null); }} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
+            </div>
+            <div className="space-y-2.5 text-sm mb-5">
+              <div className="flex justify-between">
+                <span className="text-slate-500">依頼枠</span>
+                <span className="font-medium">{formatSlotDate(selectedRequest.slot_date)} {selectedRequest.slot_start}–{selectedRequest.slot_end}</span>
+              </div>
+              {selectedRequest.requested_start && selectedRequest.requested_end && (
+                <div className="flex justify-between">
+                  <span className="text-slate-500">希望時間</span>
+                  <span className="font-medium">{selectedRequest.requested_start}–{selectedRequest.requested_end}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-slate-500">依頼日時</span>
+                <span className="text-xs text-slate-400">{selectedRequest.created_at?.toDate ? format(selectedRequest.created_at.toDate(), 'M/d HH:mm') : ''}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">状態</span>
+                {selectedRequest.status === 'approved' ? (
+                  <span className="text-xs font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">承認済み</span>
+                ) : (
+                  <span className="text-xs font-bold text-teal-600 bg-teal-50 rounded-full px-2 py-0.5">依頼中</span>
+                )}
+              </div>
+              {selectedRequest.message && (
+                <div>
+                  <span className="text-slate-500 block mb-1">メッセージ</span>
+                  <p className="bg-slate-50 rounded-lg p-2.5 text-slate-700 text-xs leading-relaxed">{selectedRequest.message}</p>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              {(!selectedRequest.status || selectedRequest.status === 'pending') ? (
+                <>
+                  <button onClick={async () => { await handleApprove(selectedRequest.id); setSelectedRequest(null); }} className="flex-1 bg-blue-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-blue-600 active:scale-95 transition-all">承認</button>
+                  <button onClick={async () => { await handleDecline(selectedRequest.id); setSelectedRequest(null); }} className="flex-1 bg-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-slate-300 active:scale-95 transition-all">辞退</button>
+                </>
+              ) : selectedRequest.status === 'approved' ? (
+                confirmCancelId === selectedRequest.id ? (
+                  <>
+                    <span className="text-xs text-slate-500 self-center">本当に取り消しますか？</span>
+                    <button onClick={async () => { await handleCancel(selectedRequest.id); setSelectedRequest(null); setConfirmCancelId(null); }} className="px-3 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 active:scale-95 transition-all">取り消す</button>
+                    <button onClick={() => setConfirmCancelId(null)} className="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition">戻る</button>
+                  </>
+                ) : (
+                  <button onClick={() => setConfirmCancelId(selectedRequest.id)} className="w-full border border-red-100 text-red-500 rounded-xl py-2.5 text-sm font-semibold hover:bg-red-50 active:scale-95 transition-all">承認を取り消す</button>
+                )
+              ) : null}
             </div>
           </div>
         </div>
