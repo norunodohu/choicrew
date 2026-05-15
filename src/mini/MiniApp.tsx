@@ -244,10 +244,12 @@ async function nativeShare(title: string, url: string): Promise<boolean> {
 function loadDraftData(): { title: string; displayName: string } {
   try {
     const raw = localStorage.getItem('choicrew_mini_draft');
+    const savedName = localStorage.getItem('choicrew_mini_requester') || '';
     if (raw) {
       const p = JSON.parse(raw);
-      return { title: p.title || p.name || '', displayName: p.displayName || p.name || '' };
+      return { title: p.title || p.name || '', displayName: p.displayName || p.name || savedName };
     }
+    return { title: '', displayName: savedName };
   } catch { /* ignore */ }
   return { title: '', displayName: '' };
 }
@@ -477,6 +479,8 @@ function UserSettingsModal({ onClose }: { onClose: () => void }) {
     const prevEmail = loadRequesterEmail();
     saveRequesterName(name.trim());
     saveRequesterEmail(email.trim());
+    // draftData の displayName も同期
+    saveDraftData(loadDraftData().title, name.trim());
     // 名前が変更された場合、所有する全予定の displayName も更新（バックグラウンド）
     if (name.trim() && name.trim() !== prevName) {
       loadOwnedShares().forEach(s => {
@@ -1034,12 +1038,8 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-30 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100">
-        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button onClick={() => setShowSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
-            <UserCircleIcon className="w-6 h-6" />
-          </button>
+        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-center">
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
-          <div className="w-9" />
         </div>
       </header>
 
@@ -2297,12 +2297,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-100 print:hidden">
-        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button onClick={() => setShowUserSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
-            <UserCircleIcon className="w-6 h-6" />
-          </button>
+        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-center">
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
-          <div className="w-9" />
         </div>
       </header>
       {/* ── テーマ背景画像（absolute + 大きめサイズでモバイルのカクつき防止） ── */}
