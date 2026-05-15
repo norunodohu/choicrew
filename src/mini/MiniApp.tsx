@@ -455,17 +455,15 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
 }
 
 /* ================================================================
-   UserSettingsModal — 名前・メール・通知設定
+   UserSettingsModal — プロフィール設定
    ================================================================ */
 function UserSettingsModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState(loadRequesterName);
   const [email, setEmail] = useState(loadRequesterEmail);
-  const [notif, setNotif] = useState(loadNotifEnabled);
 
   const handleSave = () => {
     saveRequesterName(name.trim());
     saveRequesterEmail(email.trim());
-    saveNotifEnabled(notif);
     onClose();
   };
 
@@ -476,7 +474,7 @@ function UserSettingsModal({ onClose }: { onClose: () => void }) {
     >
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4 animate-[slideUp_0.2s_ease-out]">
         <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
-        <h3 className="text-lg font-bold text-slate-800">設定</h3>
+        <h3 className="text-lg font-bold text-slate-800">プロフィール設定</h3>
 
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">表示名</label>
@@ -487,33 +485,22 @@ function UserSettingsModal({ onClose }: { onClose: () => void }) {
             className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
             placeholder="やまだ"
             maxLength={30}
+            autoFocus
           />
+          <p className="text-xs text-slate-400 mt-1.5">依頼フォームや予定作成時のデフォルト名として使われます</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-600">メール通知</span>
-            <button
-              type="button"
-              onClick={() => setNotif(v => !v)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notif ? 'bg-teal-500' : 'bg-slate-200'}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${notif ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
-          </div>
-          {notif && (
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">メールアドレス</label>
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
-                placeholder="you@example.com"
-                maxLength={100}
-              />
-            </div>
-          )}
+        <div>
+          <label className="block text-sm font-medium text-slate-600 mb-1">メールアドレス</label>
+          <input
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+            placeholder="you@example.com"
+            maxLength={100}
+          />
+          <p className="text-xs text-slate-400 mt-1.5">設定しておくと、承認・キャンセル時の通知先として自動で入力されます</p>
         </div>
 
         <div className="flex gap-3 pt-1">
@@ -808,7 +795,7 @@ const THEMES: Record<ThemeKey, {
 function CreateView({ onCreated }: { onCreated: (id: string, name: string) => void }) {
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState(() => loadDraftData().title);
-  const [displayName, setDisplayName] = useState(() => loadDraftData().displayName);
+  const [displayName, setDisplayName] = useState(() => loadRequesterName() || loadDraftData().displayName);
   const [createMode, setCreateMode] = useState<'quick' | 'custom' | null>(null);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
@@ -1325,7 +1312,6 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
 }) {
   const [name, setName] = useState(loadRequesterName);
   const [email, setEmail] = useState(loadRequesterEmail);
-  const [notifEnabled, setNotifEnabled] = useState(loadNotifEnabled);
   const [requestStart, setRequestStart] = useState(normalizeTime(slot.start));
   const [requestEnd, setRequestEnd] = useState(normalizeTime(slot.end));
   const [message, setMessage] = useState('');
@@ -1373,14 +1359,13 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
         requested_start: normalizedStart,
         requested_end: normalizedEnd,
         requester_name: name.trim(),
-        requester_email: notifEnabled && email.trim() ? email.trim() : '',
+        requester_email: email.trim(),
         message: message.trim(),
         status: 'pending',
         created_at: Timestamp.fromDate(new Date()),
       });
       saveRequesterName(name.trim());
       saveRequesterEmail(email.trim());
-      saveNotifEnabled(notifEnabled);
       // オーナーにFCMプッシュ通知を送信
       try {
         const shareSnap = await getDoc(doc(db, 'mini_shares', shareId));
@@ -1516,38 +1501,25 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
           />
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium text-slate-600">承認・キャンセル時にメール通知</span>
-            <button
-              type="button"
-              onClick={() => setNotifEnabled(v => !v)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notifEnabled ? 'bg-teal-500' : 'bg-slate-200'}`}
-            >
-              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${notifEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-            </button>
-          </div>
-          {notifEnabled && (
-            <div>
-              <label htmlFor="req-email" className="block text-xs font-medium text-slate-500 mb-1">メールアドレス（任意）</label>
-              <input
-                id="req-email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
-                placeholder="you@example.com"
-                maxLength={100}
-              />
-            </div>
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-2">
+          <label htmlFor="req-email" className="block text-sm font-medium text-slate-600">
+            メールアドレス（承認・キャンセル時に通知）
+          </label>
+          <input
+            id="req-email"
+            type="email"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+            placeholder="you@example.com"
+            maxLength={100}
+          />
+          {email.trim() ? (
+            <p className="text-xs text-teal-600">承認・キャンセルのとき <span className="font-medium">{email.trim()}</span> あてにメールが届きます。</p>
+          ) : (
+            <p className="text-xs text-slate-400">プロフィール設定でメールアドレスを設定しておくと次回から自動で入力されます。</p>
           )}
         </div>
-
-        {hasEmail && ownerName && (
-          <p className="text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded-lg px-3 py-2">
-            📧 {ownerName}さんはメール通知を設定しています
-          </p>
-        )}
 
         {error && (
           <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
