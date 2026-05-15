@@ -296,14 +296,6 @@ function saveRequesterEmail(email: string) {
   try { localStorage.setItem('choicrew_mini_requester_email', email); } catch { /* */ }
 }
 
-function loadNotifEnabled(): boolean {
-  try { return localStorage.getItem('choicrew_mini_notif_email') !== 'off'; } catch { return true; }
-}
-
-function saveNotifEnabled(v: boolean) {
-  try { localStorage.setItem('choicrew_mini_notif_email', v ? 'on' : 'off'); } catch { /* */ }
-}
-
 function loadSentRequestIds(shareId: string): Map<string, string> {
   try {
     const raw = localStorage.getItem(`mini_sent_ids_${shareId}`);
@@ -462,8 +454,22 @@ function UserSettingsModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState(loadRequesterEmail);
 
   const handleSave = () => {
+    const prevName = loadRequesterName();
+    const prevEmail = loadRequesterEmail();
     saveRequesterName(name.trim());
     saveRequesterEmail(email.trim());
+    // 名前が変更された場合、所有する全予定の displayName も更新（バックグラウンド）
+    if (name.trim() && name.trim() !== prevName) {
+      loadOwnedShares().forEach(s => {
+        updateDoc(doc(db, 'mini_shares', s.id), { displayName: name.trim() }).catch(() => {});
+      });
+    }
+    // メールが変更された場合、所有する全予定の notify_email も更新（バックグラウンド）
+    if (email.trim() && email.trim() !== prevEmail) {
+      loadOwnedShares().forEach(s => {
+        updateDoc(doc(db, 'mini_shares', s.id), { notify_email: email.trim() }).catch(() => {});
+      });
+    }
     onClose();
   };
 
@@ -881,6 +887,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         name: displayName.trim() || title.trim(),
         title: title.trim(),
         displayName: displayName.trim(),
+        notify_email: loadRequesterEmail(),
         slots: slotData,
         theme,
         bookingMode,
@@ -890,6 +897,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       });
       saveOwnerToken(id, ownerToken);
       saveDraftData(title.trim(), displayName.trim());
+      if (displayName.trim()) saveRequesterName(displayName.trim());
       const dateRange = computeDateRange(slotData);
       const lastDate = [...slotData].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
       saveOwnedShare(id, title.trim(), dateRange, lastDate);
@@ -1302,16 +1310,14 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
    RequestModal
    ================================================================ */
 
-function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
+function RequestModal({ shareId, slot, onClose, onSent }: {
   shareId: string;
   slot: { date: string; start: string; end: string };
   onClose: () => void;
   onSent: (requestId: string) => void;
-  ownerName?: string;
-  hasEmail?: boolean;
 }) {
   const [name, setName] = useState(loadRequesterName);
-  const [email, setEmail] = useState(loadRequesterEmail);
+  const email = loadRequesterEmail();
   const [requestStart, setRequestStart] = useState(normalizeTime(slot.start));
   const [requestEnd, setRequestEnd] = useState(normalizeTime(slot.end));
   const [message, setMessage] = useState('');
@@ -1365,7 +1371,6 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
         created_at: Timestamp.fromDate(new Date()),
       });
       saveRequesterName(name.trim());
-      saveRequesterEmail(email.trim());
       // オーナーにFCMプッシュ通知を送信
       try {
         const shareSnap = await getDoc(doc(db, 'mini_shares', shareId));
@@ -1501,25 +1506,15 @@ function RequestModal({ shareId, slot, onClose, onSent, ownerName, hasEmail }: {
           />
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 space-y-2">
-          <label htmlFor="req-email" className="block text-sm font-medium text-slate-600">
-            メールアドレス（承認・キャンセル時に通知）
-          </label>
-          <input
-            id="req-email"
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
-            placeholder="you@example.com"
-            maxLength={100}
-          />
-          {email.trim() ? (
-            <p className="text-xs text-teal-600">承認・キャンセルのとき <span className="font-medium">{email.trim()}</span> あてにメールが届きます。</p>
-          ) : (
-            <p className="text-xs text-slate-400">プロフィール設定でメールアドレスを設定しておくと次回から自動で入力されます。</p>
-          )}
-        </div>
+        {email ? (
+          <div className="rounded-2xl border border-teal-100 bg-teal-50/70 px-4 py-3">
+            <p className="text-sm text-teal-700">📧 承認・キャンセルのとき <span className="font-medium">{email}</span> あてにメールが届きます。</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <p className="text-sm text-slate-500">📭 承認・キャンセル時の通知メールを受け取るには、左上のプロフィール設定でメールアドレスを登録してください。</p>
+          </div>
+        )}
 
         {error && (
           <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
@@ -1609,8 +1604,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [showMgmtQr, setShowMgmtQr] = useState(false);
   const [showEditTitle, setShowEditTitle] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
-  const [emailInput, setEmailInput] = useState('');
-  const [platinumCode, setPlatinumCode] = useState('');
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailCodeError, setEmailCodeError] = useState('');
   const [editTitleVal, setEditTitleVal] = useState('');
@@ -1645,10 +1638,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
   const handleSaveNotifyEmail = async () => {
     if (!share) return;
-    if (!emailInput.trim()) { setEmailCodeError('メールアドレスを入力してください'); return; }
     setEmailSaving(true);
     setEmailCodeError('');
-    const newEmail = emailInput.trim();
+    const newEmail = loadRequesterEmail();
+    if (!newEmail) { setEmailCodeError('プロフィール設定でメールアドレスを登録してください'); setEmailSaving(false); return; }
     try {
       await updateDoc(doc(db, 'mini_shares', shareId), { notify_email: newEmail });
       setShare(prev => prev ? { ...prev, notify_email: newEmail } : prev);
@@ -2329,9 +2322,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 <div className="absolute right-0 top-11 bg-white border border-slate-200 rounded-xl shadow-xl py-1 min-w-[170px] z-20 animate-[fadeIn_0.15s_ease-out]">
                   <button onClick={() => { setDraftSlots((share?.slots || []).map(s => ({ id: genId(6), ...s }))); setEditingSlots(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">✏️ 時間を編集</button>
                   <button onClick={() => { setShowThemePicker(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">🎨 テーマを変更</button>
-                  <button onClick={() => { setEmailInput(share.notify_email || ''); setPlatinumCode(''); setEmailCodeError(''); setShowEmailModal(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">
-                    📧 メール通知{share.notify_email ? <span className="ml-2 text-[10px] text-teal-600 bg-teal-50 rounded-full px-1.5 py-0.5 font-medium">登録済</span> : null}
-                  </button>
                   
                     <button onClick={() => { setShowMgmtQr(true); setShowOwnerMenu(false); }} className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50">📱管理を引きつぐ</button>
                   
@@ -2955,43 +2945,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
         </div>
       )}
 
-      {/* メール通知モーダル */}
-      {showEmailModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50" onClick={() => setShowEmailModal(false)}>
-          <div className="bg-white rounded-3xl p-6 w-full max-w-sm mx-4 shadow-2xl mb-4 sm:mb-0" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-slate-800">📧 メール通知</h2>
-              <button onClick={() => setShowEmailModal(false)} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
-            </div>
-            {share?.notify_email && (
-              <p className="text-xs text-teal-600 bg-teal-50 rounded-xl px-3 py-2 mb-3">現在の通知先: {share.notify_email}</p>
-            )}
-            <p className="text-xs text-slate-400 mb-4">依頼が届いたときにメールでお知らせします。</p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-slate-500 mb-1 block">通知先メールアドレス</label>
-                <input
-                  type="email"
-                  value={emailInput}
-                  onChange={e => setEmailInput(e.target.value)}
-                  placeholder="example@email.com"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400 focus:border-transparent"
-                  autoFocus
-                />
-              </div>
-              {emailCodeError && <p className="text-xs text-red-500">{emailCodeError}</p>}
-            </div>
-            <button
-              onClick={handleSaveNotifyEmail}
-              disabled={emailSaving}
-              className="mt-5 w-full bg-teal-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-teal-600 active:scale-95 transition-all disabled:opacity-50"
-            >
-              {emailSaving ? '登録中...' : '登録する'}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 管理用QRモーダル */}
       {showMgmtQr && (() => {
         const token = share?.owner_token || loadOwnerToken(shareId);
@@ -3032,8 +2985,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           slot={requestSlot}
           onClose={() => setRequestSlot(null)}
           onSent={(requestId) => handleSent(requestSlot, requestId)}
-          ownerName={share?.displayName || share?.name}
-          hasEmail={!!share?.notify_email}
         />
       )}
 
