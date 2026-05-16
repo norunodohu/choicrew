@@ -2301,7 +2301,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const T = THEMES[themeKey] || THEMES.simple;
 
   return (
-    <div className={`min-h-screen ${T.pageBg} print:bg-white relative overflow-x-hidden`}>
+    <div className={`min-h-screen ${T.pageBg} print:bg-white relative`}>
       {toast.UI}
       {showUserSettings && <UserSettingsModal onClose={() => setShowUserSettings(false)} share={share} setShare={setShare} />}
 
