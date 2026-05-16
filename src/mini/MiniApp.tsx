@@ -1861,9 +1861,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           const lastDate = [...data.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
           saveOwnedShare(shareId, data.title || data.name, dateRange, lastDate);
           // 元の管理者のプロフィール情報も引き継ぐ
-          if (data.displayName) saveRequesterName(data.displayName);
+          if (data.displayName) {
+            saveRequesterName(data.displayName);
+            saveDraftData(data.title || data.name || '', data.displayName);
+          }
           if (data.notify_email) saveRequesterEmail(data.notify_email);
           setTokenVerified(true);
+          // ?owner=TOKEN をURLから削除（誤って共有されないように）
+          window.history.replaceState({}, '', `/mini/s/${shareId}`);
         }
       } catch (err) {
         console.error('Failed to load share:', err);
