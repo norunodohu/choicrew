@@ -2306,13 +2306,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       {showUserSettings && <UserSettingsModal onClose={() => setShowUserSettings(false)} share={share} setShare={setShare} />}
 
       {/* Sticky top bar */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-sm border-b border-slate-100 print:hidden">
+      <header className="sticky top-0 z-50 bg-white backdrop-blur-sm border-b border-slate-100 print:hidden">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
           <button onClick={() => setShowUserSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
             <UserCircleIcon className="w-6 h-6" />
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
-        </div>
         </div>
       </header>
       {/* ── テーマ背景画像（absolute + 大きめサイズでモバイルのカクつき防止） ── */}
