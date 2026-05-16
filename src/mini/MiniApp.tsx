@@ -2307,8 +2307,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-white backdrop-blur-sm border-b border-slate-100 print:hidden">
-        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button onClick={() => setShowUserSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
+        <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-center relative">
+          <button onClick={() => setShowUserSettings(true)} className="absolute left-4 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
             <UserCircleIcon className="w-6 h-6" />
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
@@ -2681,8 +2681,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 キャンセル済み
                               </span>
                             ) : sent ? (
-                              <span className="inline-flex items-center gap-1 text-sm text-teal-700 font-semibold bg-gradient-to-r from-teal-50 to-cyan-50 border border-teal-200 px-3 py-1.5 rounded-lg">
-                                <span className="animate-pulse">✨</span> リクエスト中
+                              <span className="inline-flex items-center gap-1 text-sm text-orange-700 font-semibold bg-orange-50 border-2 border-dotted border-orange-400 px-3 py-1.5 rounded-lg">
+                                <span className="animate-pulse">⚠️</span> 未承認
                               </span>
                             ) : isPaused ? (
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
