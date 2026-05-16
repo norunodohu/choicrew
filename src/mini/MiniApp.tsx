@@ -467,7 +467,7 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
 /* ================================================================
    UserSettingsModal — プロフィール設定
    ================================================================ */
-function UserSettingsModal({ onClose }: { onClose: () => void }) {
+function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; share?: ShareData | null; setShare?: (share: ShareData) => void }) {
   const [name, setName] = useState(loadRequesterName);
   const [email, setEmail] = useState(loadRequesterEmail);
   const [aiSupport, setAiSupport] = useState(loadAiSupport);
@@ -482,12 +482,20 @@ function UserSettingsModal({ onClose }: { onClose: () => void }) {
       loadOwnedShares().forEach(s => {
         updateDoc(doc(db, 'mini_shares', s.id), { displayName: name.trim() }).catch(() => {});
       });
+      // 現在表示中の予定がある場合は即座に更新
+      if (share && setShare) {
+        setShare({ ...share, displayName: name.trim() });
+      }
     }
     // メールが変更された場合、所有する全予定の notify_email も更新（バックグラウンド）
     if (email.trim() && email.trim() !== prevEmail) {
       loadOwnedShares().forEach(s => {
         updateDoc(doc(db, 'mini_shares', s.id), { notify_email: email.trim() }).catch(() => {});
       });
+      // 現在表示中の予定がある場合は即座に更新
+      if (share && setShare) {
+        setShare({ ...share, notify_email: email.trim() });
+      }
     }
     saveAiSupport(aiSupport);
     onClose();
@@ -1855,6 +1863,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           const dateRange = computeDateRange(data.slots);
           const lastDate = [...data.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
           saveOwnedShare(shareId, data.title || data.name, dateRange, lastDate);
+          // 元の管理者のプロフィール情報も引き継ぐ
+          if (data.displayName) saveRequesterName(data.displayName);
+          if (data.notify_email) saveRequesterEmail(data.notify_email);
           setTokenVerified(true);
         }
       } catch (err) {
@@ -2295,7 +2306,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   return (
     <div className={`min-h-screen ${T.pageBg} print:bg-white relative overflow-x-hidden`}>
       {toast.UI}
-      {showUserSettings && <UserSettingsModal onClose={() => setShowUserSettings(false)} />}
+      {showUserSettings && <UserSettingsModal onClose={() => setShowUserSettings(false)} share={share} setShare={setShare} />}
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-sm border-b border-slate-100 print:hidden">
