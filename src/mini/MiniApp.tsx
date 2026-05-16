@@ -1035,7 +1035,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       {/* Sticky top bar */}
       <header className="sticky top-0 z-30 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button onClick={() => setShowSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
+          <button onClick={() => setShowSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-teal-600 hover:text-teal-700 hover:bg-teal-50 transition z-40">
             <UserCircleIcon className="w-6 h-6" />
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
