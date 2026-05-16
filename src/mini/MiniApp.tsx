@@ -468,8 +468,8 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
    UserSettingsModal — プロフィール設定
    ================================================================ */
 function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; share?: ShareData | null; setShare?: (share: ShareData) => void }) {
-  const [name, setName] = useState(loadRequesterName);
-  const [email, setEmail] = useState(loadRequesterEmail);
+  const [name, setName] = useState(() => loadRequesterName() || share?.displayName || '');
+  const [email, setEmail] = useState(() => loadRequesterEmail() || share?.notify_email || '');
   const [aiSupport, setAiSupport] = useState(loadAiSupport);
 
   const handleSave = () => {
