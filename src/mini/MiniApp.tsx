@@ -3393,36 +3393,6 @@ export default function MiniApp() {
     return () => { document.head.removeChild(style); };
   }, []);
 
-  const BadgeHeader = () => (
-    <div className="fixed top-4 right-4 z-50 flex gap-3">
-      {/* 依頼一覧バッジ（青） */}
-      <button
-        className="relative"
-        onClick={() => setShowBadgeModal(true)}
-        aria-label="承認済み依頼一覧"
-      >
-        <TaskIcon className="w-7 h-7 text-blue-500" />
-        {badgeCounts.approved > 0 && (
-          <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.5em] text-center border border-white">
-            {badgeCounts.approved}
-          </span>
-        )}
-      </button>
-      {/* 通知ベルバッジ（赤） */}
-      <button
-        className="relative"
-        onClick={() => setShowBadgeModal(true)}
-        aria-label="未承認通知一覧"
-      >
-        <BellIcon className="w-7 h-7 text-red-500" />
-        {badgeCounts.pending > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 min-w-[1.5em] text-center border border-white animate-pulse">
-            {badgeCounts.pending}
-          </span>
-        )}
-      </button>
-    </div>
-  );
 
   const BadgeModal = () => (
     showBadgeModal ? (
@@ -3459,7 +3429,6 @@ export default function MiniApp() {
   return (
     <ErrorBoundary>
       {content}
-      <BadgeHeader />
       <BadgeModal />
     </ErrorBoundary>
   );
