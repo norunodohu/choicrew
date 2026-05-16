@@ -339,7 +339,7 @@ app.post("/api/mini/notify-email", async (req, res) => {
     if (!notifyEmail) return res.json({ ok: false, reason: "no_email" });
 
     const actualTo = process.env.SMTP_TO || notifyEmail;
-    const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+    const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
     const shareUrl = `${appUrl}/mini/s/${shareId}`;
     const ownerName = (data.displayName || data.name || "管理者") as string;
 
@@ -372,7 +372,7 @@ app.post("/api/mini/email-confirm", async (req, res) => {
   const { to, shareId, ownerName } = req.body as { to?: string; shareId?: string; ownerName?: string };
   if (!to || !shareId) return res.status(400).json({ error: "to and shareId required" });
 
-  const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
+  const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
   const shareUrl = `${appUrl}/mini/s/${shareId}`;
 
   try {
