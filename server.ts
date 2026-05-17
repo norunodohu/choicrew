@@ -361,6 +361,11 @@ app.post("/api/mini/notify-email", async (req, res) => {
     );
 
     res.json({ ok: true });
+
+    // 依頼受信のタイミングでバックグラウンドクリーンアップ
+    if (getApps().length) {
+      runCleanup().catch(e => console.error("[bg cleanup]", e));
+    }
   } catch (err) {
     console.error("Email notify error:", err);
     res.status(500).json({ error: String(err) });
@@ -446,6 +451,61 @@ app.post("/api/mini/notify-requester", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("notify-requester error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+/* ================================================================
+   Cleanup — 期限切れ予定・過去スロット依頼の削除
+   ================================================================ */
+async function runCleanup(): Promise<{ deletedShares: number; deletedRequests: number }> {
+  const adminDb = getFirestore();
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+  let deletedShares = 0;
+  let deletedRequests = 0;
+
+  // 1. expires_at が過去の予定と関連依頼を削除
+  const expiredSnap = await adminDb.collection("mini_shares")
+    .where("expires_at", "<", now)
+    .get();
+  for (const shareDoc of expiredSnap.docs) {
+    const reqSnap = await adminDb.collection("mini_requests")
+      .where("share_id", "==", shareDoc.id)
+      .get();
+    const batch = adminDb.batch();
+    reqSnap.docs.forEach(d => { batch.delete(d.ref); deletedRequests++; });
+    batch.delete(shareDoc.ref);
+    await batch.commit();
+    deletedShares++;
+  }
+
+  // 2. 過去日のスロット依頼を削除
+  const oldReqSnap = await adminDb.collection("mini_requests")
+    .where("slot_date", "<", todayStr)
+    .get();
+  if (!oldReqSnap.empty) {
+    const batch = adminDb.batch();
+    oldReqSnap.docs.forEach(d => { batch.delete(d.ref); deletedRequests++; });
+    await batch.commit();
+  }
+
+  console.log(`[cleanup] shares: ${deletedShares}, requests: ${deletedRequests}`);
+  return { deletedShares, deletedRequests };
+}
+
+// Vercel Cron または手動実行用エンドポイント
+app.get("/api/mini/cleanup", async (req, res) => {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.headers["authorization"] !== `Bearer ${cronSecret}`) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  if (!getApps().length) return res.status(503).json({ error: "admin not configured" });
+  try {
+    const result = await runCleanup();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error("cleanup error:", err);
     res.status(500).json({ error: String(err) });
   }
 });

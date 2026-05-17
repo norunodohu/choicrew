@@ -74,9 +74,11 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-
-
-
-
+  ],
+  "crons": [
+    {
+      "path": "/api/mini/cleanup",
+      "schedule": "0 2 * * *"
+    }
   ]
 }
