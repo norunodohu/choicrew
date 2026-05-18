@@ -1372,12 +1372,13 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
    RequestModal
    ================================================================ */
 
-function RequestModal({ shareId, slot, onClose, onSent, declinedTime }: {
+function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSettings }: {
   shareId: string;
   slot: { date: string; start: string; end: string };
   onClose: () => void;
   onSent: (requestId: string) => void;
   declinedTime?: { start: string; end: string } | null;
+  onOpenSettings?: () => void;
 }) {
   const [name, setName] = useState(loadRequesterName);
   const email = loadRequesterEmail();
@@ -1499,28 +1500,13 @@ function RequestModal({ shareId, slot, onClose, onSent, declinedTime }: {
         {/* Drag handle — mobile */}
         <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
 
-        <h3 className="text-lg font-bold text-slate-800">依頼を送る</h3>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">元の空き</p>
-              <p className="text-base font-semibold tracking-tight text-slate-800">
-                {formatSlotDate(slot.date)} {slot.start} - {slot.end}
-              </p>
-            </div>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-slate-200">
-              ここから依頼できます
-            </span>
-          </div>
-          <TimeBar start={slot.start} end={slot.end} />
+        <div>
+          <p className="text-2xl font-bold text-slate-800 tracking-tight">{formatSlotDate(slot.date)}</p>
+          <p className="text-xl font-semibold text-teal-600 mt-0.5">{slot.start} – {slot.end}</p>
         </div>
 
         <div className="rounded-2xl border border-teal-100 bg-teal-50/60 p-4 space-y-3">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-500">依頼する時間</p>
-            <p className="text-sm text-slate-600">必要なら開始と終了を変えて送れます。</p>
-          </div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-teal-500">依頼する時間</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label htmlFor="req-start" className="block text-sm font-medium text-slate-700 mb-1">
@@ -1583,13 +1569,16 @@ function RequestModal({ shareId, slot, onClose, onSent, declinedTime }: {
         </div>
 
         {email ? (
-          <div className="rounded-2xl border border-teal-100 bg-teal-50/70 px-4 py-3">
-            <p className="text-sm text-teal-700">📧 承認・キャンセルのとき <span className="font-medium">{email}</span> あてにメールが届きます。</p>
-          </div>
+          <p className="text-xs text-slate-400">✉️ メール通知設定済み</p>
         ) : (
-          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
-            <p className="text-sm text-slate-500">📭 承認・キャンセル時の通知メールを受け取るには、左上のプロフィール設定でメールアドレスを登録してください。</p>
-          </div>
+          <p className="text-xs text-slate-400">
+            メール通知が設定されていません。{' '}
+            {onOpenSettings && (
+              <button onClick={onOpenSettings} className="underline text-teal-500 hover:text-teal-600 transition">
+                設定はこちら
+              </button>
+            )}
+          </p>
         )}
 
         {error && (
@@ -2651,7 +2640,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 myReqStatus?.status === 'approved' ? (
                                   <p className="text-xs text-blue-600 font-medium mt-2">あなたのリクエストが承認されました</p>
                                 ) : (
-                                  <p className="text-xs text-slate-400 mt-2">枠が埋まりました</p>
+                                  <p className="text-xs text-blue-600 font-medium mt-2">他の人の依頼で枠が埋まりました</p>
                                 )
                               ) : (
                                 <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}人が希望</p>
@@ -3073,6 +3062,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           onClose={() => { setRequestSlot(null); setDeclinedSlotTime(null); }}
           onSent={(requestId) => handleSent(requestSlot, requestId)}
           declinedTime={declinedSlotTime}
+          onOpenSettings={() => { setRequestSlot(null); setDeclinedSlotTime(null); setShowUserSettings(true); }}
         />
       )}
 
