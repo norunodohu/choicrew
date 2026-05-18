@@ -2287,8 +2287,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   }
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const sevenDaysLaterStr = format(addDays(new Date(), 6), 'yyyy-MM-dd');
   const sortedSlots = [...share.slots]
-    .filter(s => s.date >= todayStr)
+    .filter(s => s.date >= todayStr && (isOwner || s.date <= sevenDaysLaterStr))
     .sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
       return a.start.localeCompare(b.start);
