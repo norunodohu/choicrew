@@ -2417,12 +2417,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               <div className="relative -mt-0.5">
                 <button
                   onClick={() => setShowOwnerMenu(v => !v)}
-                  className="w-7 h-7 flex flex-col items-center justify-center gap-[4px] rounded-lg text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-300 hover:text-teal-500 hover:bg-teal-50 transition text-lg font-bold"
                   aria-label="メニュー"
                 >
-                  <span className="block w-4 h-[2px] rounded-full bg-current" />
-                  <span className="block w-4 h-[2px] rounded-full bg-current" />
-                  <span className="block w-4 h-[2px] rounded-full bg-current" />
+                  ···
                 </button>
                 {showOwnerMenu && (
                   <>
@@ -2561,7 +2559,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     onClick={() => setSelectedRequest(r)}
                   >
                     <span className="text-xs font-medium text-slate-700 truncate flex-1">{getRequesterAlias(r.requester_name)}</span>
-                    <span className="text-[11px] text-slate-400 shrink-0">{formatSlotDate(r.slot_date)} {r.slot_start}–{r.slot_end}</span>
+                    <span className="text-[11px] text-slate-400 shrink-0">{formatSlotDate(r.slot_date)} {r.requested_start || r.slot_start}–{r.requested_end || r.slot_end}</span>
                     {r.status === 'approved' ? (
                       <span className="shrink-0 text-[10px] font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">承認済み</span>
                     ) : (
@@ -2623,8 +2621,16 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                       : isFilledByOther
                       ? 'border-slate-100'
                       : 'border-slate-200';
+                    const firstReq = reqs.length > 0 ? reqs[0] : undefined;
                     return (
-                      <div key={i} className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${borderClass}${isFilledByOther ? ' opacity-50' : ''}`}>
+                      <div
+                        key={i}
+                        className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors cursor-pointer ${borderClass}${isFilledByOther ? ' opacity-50' : ''} hover:shadow-md hover:scale-[1.01]`}
+                        onClick={() => firstReq && setSelectedRequest(firstReq)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') firstReq && setSelectedRequest(firstReq); }}
+                      >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
                             <p className={`text-2xl font-semibold tracking-tight ${T.timeText}`}>
@@ -2713,13 +2719,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               {reqs.filter(r => !r.status || r.status === 'pending' || r.status === 'approved').map(r => (
                                 <div key={r.id} className={`flex items-center gap-1.5 bg-white border rounded-full pl-1 pr-2.5 py-1 ${r.status === 'approved' ? 'border-blue-200 bg-blue-50/70' : 'border-slate-200'}`} title={r.message || undefined}>
                                   <Avatar name={getRequesterAlias(r.requester_name)} />
-                                  <button
-                                    type="button"
-                                    onClick={() => setSelectedRequest(r)}
-                                    className="text-xs font-medium text-slate-600 hover:text-teal-600 transition text-left"
-                                  >
+                                  <span className="text-xs font-medium text-slate-600 text-left">
                                     {getRequesterAlias(r.requester_name)}
-                                  </button>
+                                  </span>
                                   {r.status === 'approved' && (
                                     <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-100 rounded-full px-2 py-0.5">
                                       承認済み
