@@ -2640,7 +2640,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 myReqStatus?.status === 'approved' ? (
                                   <p className="text-xs text-blue-600 font-medium mt-2">あなたのリクエストが承認されました</p>
                                 ) : (
-                                  <p className="text-xs text-blue-600 font-medium mt-2">他の人の依頼で枠が埋まりました</p>
+                                  <p className="text-xs text-blue-600 font-medium mt-2">枠が埋まりました</p>
                                 )
                               ) : (
                                 <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}人が希望</p>
