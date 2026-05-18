@@ -2615,7 +2615,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     return (
                       <div
                         key={i}
-                        className={`${isFilledByOther ? 'bg-slate-100 border border-slate-100' : T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner ? 'cursor-pointer' : ''} ${isFilledByOther ? '' : borderClass} ${isFilledByOther ? '' : 'hover:shadow-md hover:scale-[1.01]'} ${isFilledByOther ? 'text-slate-400' : ''}`}
+                        className={`${isFilledByOther ? 'bg-slate-100 border border-slate-100' : T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner ? 'cursor-pointer hover:shadow-md hover:scale-[1.01]' : ''} ${isFilledByOther ? '' : borderClass} ${isFilledByOther ? 'text-slate-400' : ''}`}
                         onClick={() => isOwner && firstReq && setSelectedRequest(firstReq)}
                         role={isOwner ? 'button' : undefined}
                         tabIndex={isOwner ? 0 : undefined}
