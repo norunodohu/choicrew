@@ -2625,11 +2625,11 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     return (
                       <div
                         key={i}
-                        className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors cursor-pointer ${borderClass}${isFilledByOther ? ' opacity-50' : ''} hover:shadow-md hover:scale-[1.01]`}
-                        onClick={() => firstReq && setSelectedRequest(firstReq)}
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') firstReq && setSelectedRequest(firstReq); }}
+                        className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner ? 'cursor-pointer' : ''} ${borderClass}${isFilledByOther ? ' opacity-50' : ''} hover:shadow-md hover:scale-[1.01]`}
+                        onClick={() => isOwner && firstReq && setSelectedRequest(firstReq)}
+                        role={isOwner ? 'button' : undefined}
+                        tabIndex={isOwner ? 0 : undefined}
+                        onKeyDown={(e) => { if (isOwner && (e.key === 'Enter' || e.key === ' ')) firstReq && setSelectedRequest(firstReq); }}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
@@ -3008,6 +3008,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 </div>
               )}
             </div>
+            {isOwner && (
             <div className="flex gap-2">
               {(!selectedRequest.status || selectedRequest.status === 'pending') ? (
                 <>
@@ -3026,6 +3027,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 )
               ) : null}
             </div>
+            )}
           </div>
         </div>
       )}
