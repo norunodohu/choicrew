@@ -2614,7 +2614,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     const isExclusive = share?.bookingMode !== 'multiple';
                     const hasApproved = reqs.some(r => r.status === 'approved');
                     const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
-                    const isFilledByOther = !isOwner && isExclusive && hasApproved && myReqStatus?.status !== 'approved';
+                    const isFilledByOther = !isOwner && isExclusive && hasApproved && !myReqStatus;
                     const borderClass = isOwner && reqs.length > 0
                       ? 'border-teal-200 border-l-[3px] border-l-teal-400'
                       : myReqStatus?.status === 'approved'
@@ -2626,7 +2626,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     return (
                       <div
                         key={i}
-                        className={`${T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner ? 'cursor-pointer' : ''} ${borderClass}${isFilledByOther ? ' opacity-50' : ''} hover:shadow-md hover:scale-[1.01]`}
+                        className={`${isFilledByOther ? 'bg-slate-100 border border-slate-100' : T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner ? 'cursor-pointer' : ''} ${isFilledByOther ? '' : borderClass} ${isFilledByOther ? '' : 'hover:shadow-md hover:scale-[1.01]'}`}
                         onClick={() => isOwner && firstReq && setSelectedRequest(firstReq)}
                         role={isOwner ? 'button' : undefined}
                         tabIndex={isOwner ? 0 : undefined}
@@ -2637,7 +2637,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                             <p className={`text-2xl font-semibold tracking-tight ${T.timeText}`}>
                               {slot.start}<span className="text-slate-300 mx-1.5">–</span>{slot.end}
                             </p>
-                            <TimeBar start={slot.start} end={slot.end} />
                             {myReqStatus?.status === 'approved' && (
                               <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-full">
                                 <span className="w-2 h-2 rounded-full bg-blue-500" />
