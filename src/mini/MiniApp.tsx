@@ -2626,7 +2626,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                     return (
                       <div
                         key={i}
-                        className={`${isFilledByOther ? 'bg-slate-100 border border-slate-100' : T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner ? 'cursor-pointer' : ''} ${isFilledByOther ? '' : borderClass} ${isFilledByOther ? '' : 'hover:shadow-md hover:scale-[1.01]'}`}
+                        className={`${isFilledByOther ? 'bg-slate-100 border border-slate-100' : T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner ? 'cursor-pointer' : ''} ${isFilledByOther ? '' : borderClass} ${isFilledByOther ? '' : 'hover:shadow-md hover:scale-[1.01]'} ${isFilledByOther ? 'text-slate-400' : ''}`}
                         onClick={() => isOwner && firstReq && setSelectedRequest(firstReq)}
                         role={isOwner ? 'button' : undefined}
                         tabIndex={isOwner ? 0 : undefined}
@@ -2634,7 +2634,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
-                            <p className={`text-2xl font-semibold tracking-tight ${T.timeText}`}>
+                            <p className={`text-2xl font-semibold tracking-tight ${isFilledByOther ? 'text-slate-400' : T.timeText}`}>
                               {slot.start}<span className="text-slate-300 mx-1.5">–</span>{slot.end}
                             </p>
                             {myReqStatus?.status === 'approved' && (
