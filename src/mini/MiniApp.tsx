@@ -2955,68 +2955,66 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       {/* 依頼詳細モーダル */}
       {selectedRequest && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedRequest(null); setConfirmCancelId(null); }}>
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <button
-                type="button"
-                className="text-base font-bold text-slate-800 hover:text-teal-600 transition text-left"
-                onClick={() => { setSelectedRequest(null); setEditingRequesterName({ id: selectedRequest.id, name: selectedRequest.requester_name }); }}
-              >
-                {getRequesterAlias(selectedRequest.requester_name)}
-                <span className="text-xs text-slate-400 ml-1 font-normal">（名前を変更）</span>
-              </button>
-              <button onClick={() => { setSelectedRequest(null); setConfirmCancelId(null); }} className="text-slate-400 hover:text-slate-600 text-xl px-2">✕</button>
-            </div>
-            <div className="space-y-2.5 text-sm mb-5">
-              <div className="flex justify-between">
-                <span className="text-slate-500">依頼枠</span>
-                <span className="font-medium">{formatSlotDate(selectedRequest.slot_date)} {selectedRequest.slot_start}–{selectedRequest.slot_end}</span>
+          <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-xs text-slate-400 mb-0.5">からの依頼</p>
+                <button
+                  type="button"
+                  className="text-xl font-bold text-slate-800 hover:text-teal-600 transition text-left"
+                  onClick={() => { setSelectedRequest(null); setEditingRequesterName({ id: selectedRequest.id, name: selectedRequest.requester_name }); }}
+                >
+                  {getRequesterAlias(selectedRequest.requester_name)}
+                </button>
               </div>
-              {selectedRequest.requested_start && selectedRequest.requested_end && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500">希望時間</span>
-                  <span className="font-medium">{selectedRequest.requested_start}–{selectedRequest.requested_end}</span>
-                </div>
-              )}
-              <div className="flex justify-between">
-                <span className="text-slate-500">依頼日時</span>
-                <span className="text-xs text-slate-400">{selectedRequest.created_at?.toDate ? format(selectedRequest.created_at.toDate(), 'M/d HH:mm') : ''}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-slate-500">状態</span>
-                {selectedRequest.status === 'approved' ? (
-                  <span className="text-xs font-bold text-blue-600 bg-blue-50 rounded-full px-2 py-0.5">承認済み</span>
-                ) : (
-                  <span className="text-xs font-bold text-teal-600 bg-teal-50 rounded-full px-2 py-0.5">依頼中</span>
-                )}
-              </div>
-              {selectedRequest.message && (
-                <div>
-                  <span className="text-slate-500 block mb-1">メッセージ</span>
-                  <p className="bg-slate-50 rounded-lg p-2.5 text-slate-700 text-xs leading-relaxed">{selectedRequest.message}</p>
-                </div>
-              )}
+              <button onClick={() => { setSelectedRequest(null); setConfirmCancelId(null); }} className="text-slate-300 hover:text-slate-500 text-lg px-1 mt-0.5">✕</button>
             </div>
-            {isOwner && (
-            <div className="flex gap-2">
-              {(!selectedRequest.status || selectedRequest.status === 'pending') ? (
-                <>
-                  <button onClick={async () => { await handleApprove(selectedRequest.id); setSelectedRequest(null); }} className="flex-1 bg-blue-500 text-white rounded-xl py-2.5 text-sm font-semibold hover:bg-blue-600 active:scale-95 transition-all">承認</button>
-                  <button onClick={async () => { await handleDecline(selectedRequest.id); setSelectedRequest(null); }} className="flex-1 bg-slate-200 text-slate-600 rounded-xl py-2.5 text-sm font-semibold hover:bg-slate-300 active:scale-95 transition-all">辞退</button>
-                </>
-              ) : selectedRequest.status === 'approved' ? (
-                confirmCancelId === selectedRequest.id ? (
-                  <>
-                    <span className="text-xs text-slate-500 self-center">本当に取り消しますか？</span>
-                    <button onClick={async () => { await handleCancel(selectedRequest.id); setSelectedRequest(null); setConfirmCancelId(null); }} className="px-3 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 active:scale-95 transition-all">取り消す</button>
-                    <button onClick={() => setConfirmCancelId(null)} className="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition">戻る</button>
-                  </>
-                ) : (
-                  <button onClick={() => setConfirmCancelId(selectedRequest.id)} className="w-full border border-red-100 text-red-500 rounded-xl py-2.5 text-sm font-semibold hover:bg-red-50 active:scale-95 transition-all">承認を取り消す</button>
-                )
-              ) : null}
-            </div>
+
+            {/* Date / time */}
+            <p className="text-2xl font-bold text-slate-800 tracking-tight">
+              {formatSlotDate(selectedRequest.slot_date)}
+            </p>
+            <p className="text-xl font-semibold text-teal-600 mt-0.5 mb-5">
+              {selectedRequest.requested_start || selectedRequest.slot_start}–{selectedRequest.requested_end || selectedRequest.slot_end}
+            </p>
+
+            {/* Message */}
+            {selectedRequest.message && (
+              <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-3 py-2.5 mb-5 leading-relaxed">
+                {selectedRequest.message}
+              </p>
             )}
+
+            {/* Action buttons */}
+            {isOwner && (
+              <div className="flex gap-2">
+                {(!selectedRequest.status || selectedRequest.status === 'pending') ? (
+                  <>
+                    <button onClick={async () => { await handleApprove(selectedRequest.id); setSelectedRequest(null); }} className="flex-1 bg-teal-500 text-white rounded-xl py-3 text-sm font-semibold hover:bg-teal-600 active:scale-95 transition-all">承認</button>
+                    <button onClick={async () => { await handleDecline(selectedRequest.id); setSelectedRequest(null); }} className="flex-1 bg-slate-100 text-slate-500 rounded-xl py-3 text-sm font-semibold hover:bg-slate-200 active:scale-95 transition-all">辞退</button>
+                  </>
+                ) : selectedRequest.status === 'approved' ? (
+                  confirmCancelId === selectedRequest.id ? (
+                    <>
+                      <span className="text-xs text-slate-500 self-center flex-1">本当に取り消しますか？</span>
+                      <button onClick={async () => { await handleCancel(selectedRequest.id); setSelectedRequest(null); setConfirmCancelId(null); }} className="px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 active:scale-95 transition-all">取り消す</button>
+                      <button onClick={() => setConfirmCancelId(null)} className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition">戻る</button>
+                    </>
+                  ) : (
+                    <button onClick={() => setConfirmCancelId(selectedRequest.id)} className="w-full border border-slate-200 text-slate-400 rounded-xl py-2.5 text-sm font-medium hover:bg-slate-50 active:scale-95 transition-all">承認を取り消す</button>
+                  )
+                ) : null}
+              </div>
+            )}
+
+            {/* Timestamp */}
+            <div className="flex justify-end mt-4">
+              <span className="text-[10px] text-slate-300">
+                {selectedRequest.created_at?.toDate ? format(selectedRequest.created_at.toDate(), 'M/d HH:mm') : ''}
+              </span>
+            </div>
           </div>
         </div>
       )}
