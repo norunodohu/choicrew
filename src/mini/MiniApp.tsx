@@ -187,7 +187,7 @@ function isDateToday(dateStr: string): boolean {
 }
 
 function makeShareUrl(id: string): string {
-  return `${window.location.origin}/mini/s/${id}`;
+  return `https://choicrew.com/mini/s/${id}`;
 }
 
 function makeQrUrl(url: string, size = 160): string {
@@ -1905,13 +1905,16 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             const newStatus = req.status || 'pending';
             newStatusMap.set(key, { status: newStatus, id: reqId });
             if (prevStatus !== undefined && prevStatus !== newStatus) {
+              const startTime = req.requested_start || req.slot_start;
+              const endTime = req.requested_end || req.slot_end;
               const msgs: Record<string, string> = {
-                approved: '依頼が承認されました！',
+                approved: `${formatSlotDate(req.slot_date)} ${startTime}–${endTime} の${req.requester_name}さんへの依頼が承認されました`,
                 declined: '依頼が辞退されました',
                 cancelled: '依頼がキャンセルされました',
               };
               if ('Notification' in window && Notification.permission === 'granted' && msgs[newStatus]) {
-                new Notification(msgs[newStatus], { icon: '/choicrew-mark.svg', tag: 'choicrew-status-change' });
+                const shareUrl = makeShareUrl(shareId);
+                new Notification(msgs[newStatus], { body: shareUrl, icon: '/choicrew-mark.svg', tag: 'choicrew-status-change' });
               }
             }
             myStatusRef.current.set(key, newStatus);
