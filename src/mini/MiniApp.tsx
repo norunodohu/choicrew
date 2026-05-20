@@ -314,6 +314,21 @@ function saveAiSupport(val: boolean) {
   try { localStorage.setItem('choicrew_mini_ai_support', String(val)); } catch { /* */ }
 }
 
+function loadSlotExpireDays(): 7 | 14 | 21 | null {
+  try { const v = localStorage.getItem('choicrew_mini_slot_expire_days'); return v ? (Number(v) as 7 | 14 | 21) : 7; } catch { return 7; }
+}
+function saveSlotExpireDays(days: 7 | 14 | 21 | null) {
+  try { localStorage.setItem('choicrew_mini_slot_expire_days', days ? String(days) : ''); } catch { /* */ }
+}
+
+function getSlotExpireLabelJa(days: 7 | 14 | 21 | null): string {
+  if (days === null) return '全期間';
+  if (days === 7) return '1週間';
+  if (days === 14) return '2週間';
+  if (days === 21) return '3週間';
+  return '1週間';
+}
+
 function loadSentRequestIds(shareId: string): Map<string, string> {
   try {
     const raw = localStorage.getItem(`mini_sent_ids_${shareId}`);
@@ -470,6 +485,7 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
 function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; share?: ShareData | null; setShare?: (share: ShareData) => void }) {
   const [name, setName] = useState(() => loadRequesterName() || share?.displayName || '');
   const [email, setEmail] = useState(() => loadRequesterEmail() || share?.notify_email || '');
+  const [slotExpireDays, setSlotExpireDays] = useState<7 | 14 | 21 | null>(loadSlotExpireDays);
   const [aiSupport, setAiSupport] = useState(loadAiSupport);
 
   const handleSave = () => {
@@ -497,6 +513,7 @@ function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; 
         setShare({ ...share, notify_email: email.trim() });
       }
     }
+    saveSlotExpireDays(slotExpireDays);
     saveAiSupport(aiSupport);
     onClose();
   };
@@ -535,6 +552,36 @@ function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; 
             maxLength={100}
           />
           <p className="text-xs text-slate-400 mt-1.5">設定しておくと、承認・キャンセル時の通知先として自動で入力されます</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-600 mb-2">予定公開期間</label>
+          <div className="space-y-2">
+            {[7, 14, 21].map(days => (
+              <label key={days} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="slot-expire"
+                  value={days}
+                  checked={slotExpireDays === days}
+                  onChange={() => setSlotExpireDays(days as 7 | 14 | 21)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm text-slate-700">{days === 7 ? '1週間' : days === 14 ? '2週間' : '3週間'}</span>
+              </label>
+            ))}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                name="slot-expire"
+                checked={slotExpireDays === null}
+                onChange={() => setSlotExpireDays(null)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm text-slate-700">全期間</span>
+            </label>
+          </div>
+          <p className="text-xs text-slate-400 mt-1.5">公開した予定がこの期間公開されます</p>
         </div>
 
         <div className="flex items-center justify-between py-1">
@@ -2279,13 +2326,15 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   }
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const sevenDaysLaterStr = format(addDays(new Date(), 6), 'yyyy-MM-dd');
+  const slotExpireDays = loadSlotExpireDays();
+  const expireDateStr = slotExpireDays === null ? format(addDays(new Date(), 365), 'yyyy-MM-dd') : format(addDays(new Date(), slotExpireDays - 1), 'yyyy-MM-dd');
   const sortedSlots = [...share.slots]
-    .filter(s => s.date >= todayStr && (isOwner || s.date <= sevenDaysLaterStr))
+    .filter(s => s.date >= todayStr && (isOwner || s.date <= expireDateStr))
     .sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
       return a.start.localeCompare(b.start);
     });
+  const slotExpireLabel = getSlotExpireLabelJa(slotExpireDays);
 
   const groupedSlots: Record<string, typeof sortedSlots> = {};
   for (const slot of sortedSlots) {
@@ -2798,7 +2847,13 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
 
         {/* Footer CTA (visitor) */}
         {!isOwner && (
-          <div className="text-center border-t border-slate-100 pt-8 mt-4 print:hidden">
+          <>
+            {/* 公開期間表示 */}
+            <div className="text-xs text-slate-400 text-center mt-6 print:hidden">
+              この予定リストは{slotExpireLabel}公開で設定されています
+            </div>
+
+            <div className="text-center border-t border-slate-100 pt-8 mt-4 print:hidden">
             <p className="text-sm text-slate-500 mb-3">あなたも空き時間を共有しませんか？</p>
             <a
               href="/mini/"
@@ -2831,7 +2886,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 className="underline text-slate-400 hover:text-slate-500 transition"
               >ブラウザで開いてください</button>
             </p>
-          </div>
+            </div>
+          </>
         )}
 
         {isOwner && (
