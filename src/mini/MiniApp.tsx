@@ -367,6 +367,7 @@ async function restoreRequestsByGroupId(
         console.log('[restore] Found', groupSnap.docs.length, 'requests in group');
         
         const map = new Map(existingIds);
+        const groupRequests: Array<{ slotKey: string; req: any }> = [];
         
         // グループ内の全依頼を localStorage に追加
         groupSnap.docs.forEach((d) => {
@@ -374,6 +375,7 @@ async function restoreRequestsByGroupId(
           const slotKey = `${reqData.slot_date}_${reqData.slot_start}_${reqData.slot_end}`;
           console.log('[restore] Adding slotKey:', slotKey, 'requestId:', d.id);
           map.set(slotKey, d.id);
+          groupRequests.push({ slotKey, req: { id: d.id, status: reqData.status } });
         });
         
         // 更新を保存
@@ -381,6 +383,10 @@ async function restoreRequestsByGroupId(
           localStorage.setItem(`mini_sent_ids_${shareId}`, JSON.stringify([...map.entries()]));
           console.log('[restore] Saved to localStorage:', map.size, 'entries');
         } catch { /* */ }
+        
+        // グループ内全依頼を返す（UI 更新用）
+        (window as any).__mini_group_requests = groupRequests;
+        window.dispatchEvent(new CustomEvent('mini_group_requests_restored', { detail: groupRequests }));
         
         return lastUpdated || 0;  // グループの last_updated を返す
       }
