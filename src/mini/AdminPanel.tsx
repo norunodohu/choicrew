@@ -88,16 +88,18 @@ export default function AdminPanel() {
         request_count: selected.size,
       });
 
-      // 選択された依頼を全て更新
+      // 選択された依頼を全て更新（古い user_group_id を削除して新しいものを設定）
       await Promise.all(
         Array.from(selected).map((id) =>
-          updateDoc(doc(db, 'mini_requests', id), { user_group_id: groupId })
+          updateDoc(doc(db, 'mini_requests', id), { 
+            user_group_id: groupId
+          })
         )
       );
 
       setError('');
       setSelected(new Set());
-      alert(`紐づけ完了: ${groupId}`);
+      alert(`紐づけ完了: ${groupId}\n古い紐づけは上書きされました`);
     } catch (err) {
       setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
     } finally {
