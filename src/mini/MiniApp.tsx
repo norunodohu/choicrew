@@ -3003,7 +3003,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               </a>
             </div>
             {/* 第3層フォールバック: ブラウザで開いてください */}
-            <p className="mt-6 text-xs text-slate-300 hover:text-slate-400 transition cursor-default">
+            <p className="text-center mt-6 text-xs text-slate-300 hover:text-slate-400 transition cursor-default">
               管理者の方は<button
                 onClick={() => {
                   const ua = navigator.userAgent || '';
@@ -3026,7 +3026,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 className="underline text-slate-400 hover:text-slate-500 transition"
               >ブラウザで開いてください</button>
             </p>
-            </div>
           </>
         )}
 
