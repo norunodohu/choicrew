@@ -49,7 +49,7 @@ window.addEventListener("error", (e) => {
 import { db, messaging } from '../firebase';
 import {
   doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot,
-  query, where, Timestamp,
+  query, where, Timestamp, getDocs,
 } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
 import { format, addDays } from 'date-fns';
