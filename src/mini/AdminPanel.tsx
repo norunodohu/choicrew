@@ -99,7 +99,38 @@ export default function AdminPanel() {
 
       setError('');
       setSelected(new Set());
-      alert(`紐づけ完了: ${groupId}\n古い紐づけは上書きされました`);
+      alert(`紐づけ完了: ${groupId}`);
+    } catch (err) {
+      setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnlink = async () => {
+    if (selected.size === 0) {
+      setError('依頼を選択してください');
+      return;
+    }
+
+    if (!window.confirm(`${selected.size}個の依頼の紐づけを解除しますか？`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // 選択された依頼の user_group_id を削除
+      await Promise.all(
+        Array.from(selected).map((id) =>
+          updateDoc(doc(db, 'mini_requests', id), { 
+            user_group_id: null
+          })
+        )
+      );
+
+      setError('');
+      setSelected(new Set());
+      alert('紐づけを解除しました');
     } catch (err) {
       setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
     } finally {
@@ -164,17 +195,30 @@ export default function AdminPanel() {
             <span className="text-sm text-slate-600">
               {selected.size > 0 ? `${selected.size}個選択` : '全選択'}
             </span>
-            <button
-              onClick={handleLink}
-              disabled={selected.size === 0 || loading}
-              className={`ml-auto px-6 py-2 font-semibold rounded-lg transition ${
-                selected.size === 0 || loading
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-teal-600 text-white hover:bg-teal-700'
-              }`}
-            >
-              {loading ? '処理中...' : '紐づけ'}
-            </button>
+            <div className="ml-auto flex gap-2">
+              <button
+                onClick={handleUnlink}
+                disabled={selected.size === 0 || loading}
+                className={`px-4 py-2 font-semibold rounded-lg transition ${
+                  selected.size === 0 || loading
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
+              >
+                {loading ? '処理中...' : '解除'}
+              </button>
+              <button
+                onClick={handleLink}
+                disabled={selected.size === 0 || loading}
+                className={`px-6 py-2 font-semibold rounded-lg transition ${
+                  selected.size === 0 || loading
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'bg-teal-600 text-white hover:bg-teal-700'
+                }`}
+              >
+                {loading ? '処理中...' : '紐づけ'}
+              </button>
+            </div>
           </div>
 
           {/* 依頼一覧 */}
@@ -244,8 +288,8 @@ export default function AdminPanel() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-sm text-slate-600">
-                        <code className="bg-slate-100 px-2 py-1 rounded text-xs">
-                          {req.user_group_id ? req.user_group_id.substring(0, 12) + '...' : '-'}
+                        <code className="bg-slate-100 px-2 py-1 rounded text-xs break-all">
+                          {req.user_group_id || '-'}
                         </code>
                       </td>
                     </tr>
