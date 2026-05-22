@@ -340,7 +340,7 @@ function loadSentRequestIds(shareId: string): Map<string, string> {
 async function restoreRequestsByGroupId(
   shareId: string,
   existingIds: Map<string, string>
-): Promise<void> {
+): Promise<number> {
   try {
     console.log('[restore] Starting restore for shareId:', shareId, 'existingIds:', existingIds.size);
     
@@ -352,6 +352,11 @@ async function restoreRequestsByGroupId(
       console.log('[restore] Found groupId:', groupId);
 
       if (groupId) {
+        // グループ情報から last_updated を取得
+        const groupDoc = await getDoc(doc(db, 'user_groups', groupId));
+        const lastUpdated = (groupDoc.data() as any)?.last_updated?.toMillis();
+        console.log('[restore] Group last_updated:', lastUpdated);
+
         // 同じグループの全依頼を取得
         const groupQ = query(
           collection(db, 'mini_requests'),
@@ -376,26 +381,28 @@ async function restoreRequestsByGroupId(
           localStorage.setItem(`mini_sent_ids_${shareId}`, JSON.stringify([...map.entries()]));
           console.log('[restore] Saved to localStorage:', map.size, 'entries');
         } catch { /* */ }
-        break; // 最初の存在する user_group_id だけで十分
+        
+        return lastUpdated || 0;  // グループの last_updated を返す
       }
     }
+    return 0;
   } catch (err) {
     console.warn('Failed to restore requests by group ID:', err);
+    return 0;
   }
 }
 
-function getLazyGroupCheckDate(shareId: string): string | null {
+function getLazyGroupCheckInfo(shareId: string): number {
   try {
-    return localStorage.getItem(`mini_group_check_date_${shareId}`);
+    return parseInt(localStorage.getItem(`mini_group_check_ts_${shareId}`) || '0', 10);
   } catch {
-    return null;
+    return 0;
   }
 }
 
-function saveLazyGroupCheckDate(shareId: string): void {
+function saveLazyGroupCheckInfo(shareId: string, timestamp: number): void {
   try {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    localStorage.setItem(`mini_group_check_date_${shareId}`, today);
+    localStorage.setItem(`mini_group_check_ts_${shareId}`, timestamp.toString());
   } catch { /* */ }
 }
 
@@ -1969,27 +1976,26 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           // ?owner=TOKEN をURLから削除（誤って共有されないように）
           window.history.replaceState({}, '', `/mini/s/${shareId}`);
         } else {
-          // 依頼者の場合: 1日1回だけグループID経由での自動復旧を試みる
-          const lastCheckDate = getLazyGroupCheckDate(shareId);
-          const today = format(new Date(), 'yyyy-MM-dd');
+          // 依頼者の場合: グループ内容が更新されたら復旧を実行
+          const prevCheckTs = getLazyGroupCheckInfo(shareId);
+          console.log('[requester-restore] prevCheckTs:', prevCheckTs);
           
-          console.log('[requester-restore] lastCheckDate:', lastCheckDate, 'today:', today);
+          const existingIds = loadSentRequestIds(shareId);
           
-          if (lastCheckDate !== today) {
-            // 日付が変わった → Firestore で確認
-            const existingIds = loadSentRequestIds(shareId);
-            console.log('[requester-restore] Triggering restore, existingIds size:', existingIds.size);
+          if (existingIds.size > 0) {
+            // 前回チェック時の last_updated と比較
+            const currentTs = await restoreRequestsByGroupId(shareId, existingIds);
+            console.log('[requester-restore] currentTs:', currentTs, 'prevCheckTs:', prevCheckTs);
             
-            if (existingIds.size > 0) {
-              restoreRequestsByGroupId(shareId, existingIds).catch(console.warn);
+            if (currentTs !== prevCheckTs) {
+              console.log('[requester-restore] Group was updated, saving new timestamp');
+              saveLazyGroupCheckInfo(shareId, currentTs);
             } else {
-              console.log('[requester-restore] No existing IDs in localStorage');
+              console.log('[requester-restore] No change in group timestamp');
             }
-            saveLazyGroupCheckDate(shareId);
           } else {
-            console.log('[requester-restore] Same day, skipping restore');
+            console.log('[requester-restore] No existing IDs in localStorage');
           }
-          // 同じ日なら Firestore 確認はスキップ（localStorage のみ使用）
         }
       } catch (err) {
         console.error('Failed to load share:', err);

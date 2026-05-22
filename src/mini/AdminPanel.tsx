@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, onSnapshot, updateDoc, doc, Timestamp } from 'firebase/firestore';
+import { collection, query, onSnapshot, updateDoc, doc, Timestamp, setDoc } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -79,6 +79,14 @@ export default function AdminPanel() {
     try {
       // 新しいグループ ID を生成
       const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      // グループ情報を記録（last_updated を付与）
+      await setDoc(doc(db, 'user_groups', groupId), {
+        group_id: groupId,
+        created_at: Timestamp.now(),
+        last_updated: Timestamp.now(),
+        request_count: selected.size,
+      });
 
       // 選択された依頼を全て更新
       await Promise.all(
