@@ -139,6 +139,7 @@ interface RequestEntry {
   requester_email?: string;
   message: string;
   status?: 'pending' | 'approved' | 'declined' | 'cancelled';
+  email_notified_at?: Timestamp | null;
   created_at: Timestamp;
   user_group_id?: string;
 }
@@ -1568,6 +1569,7 @@ function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSett
         requester_email: email.trim(),
         message: message.trim(),
         status: 'pending',
+        email_notified_at: email.trim() ? Timestamp.fromDate(new Date()) : null,
         created_at: Timestamp.fromDate(new Date()),
       });
       saveRequesterName(name.trim());
@@ -2863,8 +2865,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               </span>
                             ) : sent ? (() => {
                               const sentReq = requests.find(r => r.id === myReqStatus?.id);
-                              const hasEmail = !!sentReq?.requester_email;
-                              console.log('[email-debug]', { id: myReqStatus?.id, sentReq: { ...sentReq, requester_email: sentReq?.requester_email } });
+                              const hasEmail = !!sentReq?.email_notified_at;
                               return (
                                 <div className="inline-flex items-center gap-2 flex-wrap">
                                   <span className="inline-flex items-center gap-1 text-sm text-orange-700 font-semibold bg-orange-50 border-2 border-dotted border-orange-400 px-3 py-1.5 rounded-lg">
