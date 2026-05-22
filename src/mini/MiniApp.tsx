@@ -376,6 +376,21 @@ async function restoreRequestsByGroupId(
   }
 }
 
+function getLazyGroupCheckDate(shareId: string): string | null {
+  try {
+    return localStorage.getItem(`mini_group_check_date_${shareId}`);
+  } catch {
+    return null;
+  }
+}
+
+function saveLazyGroupCheckDate(shareId: string): void {
+  try {
+    const today = format(new Date(), 'yyyy-MM-dd');
+    localStorage.setItem(`mini_group_check_date_${shareId}`, today);
+  } catch { /* */ }
+}
+
 function saveSentRequestId(shareId: string, key: string, requestId: string) {
   const map = loadSentRequestIds(shareId);
   map.set(key, requestId);
@@ -1946,11 +1961,19 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           // ?owner=TOKEN をURLから削除（誤って共有されないように）
           window.history.replaceState({}, '', `/mini/s/${shareId}`);
         } else {
-          // 依頼者の場合: グループID経由での自動復旧を試みる
-          const existingIds = loadSentRequestIds(shareId);
-          if (existingIds.size > 0) {
-            restoreRequestsByGroupId(shareId, existingIds).catch(console.warn);
+          // 依頼者の場合: 1日1回だけグループID経由での自動復旧を試みる
+          const lastCheckDate = getLazyGroupCheckDate(shareId);
+          const today = format(new Date(), 'yyyy-MM-dd');
+          
+          if (lastCheckDate !== today) {
+            // 日付が変わった → Firestore で確認
+            const existingIds = loadSentRequestIds(shareId);
+            if (existingIds.size > 0) {
+              restoreRequestsByGroupId(shareId, existingIds).catch(console.warn);
+            }
+            saveLazyGroupCheckDate(shareId);
           }
+          // 同じ日なら Firestore 確認はスキップ（localStorage のみ使用）
         }
       } catch (err) {
         console.error('Failed to load share:', err);
