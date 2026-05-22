@@ -2819,7 +2819,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                 myReqStatus?.status === 'approved' ? (
                                   <p className="text-xs text-blue-600 font-medium mt-2">あなたのリクエストが承認されました</p>
                                 ) : (
-                                  <p className="text-xs text-blue-600 font-medium mt-2">枠が埋まりました</p>
+                                  <p className="text-xs text-slate-400 font-medium mt-2">枠が埋まりました</p>
                                 )
                               ) : sent ? (
                                 <p className="text-xs text-orange-600 font-medium mt-2">※希望リクエストを出しています。承認待ちです。</p>
