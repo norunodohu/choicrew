@@ -2849,14 +2849,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
                                 閲覧のみ
                               </span>
-                            ) : isExclusive && hasApproved ? null : (
+                            ) : isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending') ? null : (
                               <button
                                 onClick={() => setRequestSlot(slot)}
                                 className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
-                                disabled={isExclusive && reqs.some(r => r.status === 'pending')}
-                                title={isExclusive && reqs.some(r => r.status === 'pending') ? '希望者がいます' : ''}
+                                disabled={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending')}
+                                title={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending') ? '希望者がいます' : ''}
                               >
-                                {isExclusive && reqs.some(r => r.status === 'pending') ? '希望者あり' : '依頼する'}
+                                {isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending') ? '希望者あり' : '依頼する'}
                               </button>
                             )}
                           </div>
