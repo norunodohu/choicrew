@@ -1990,6 +1990,19 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             if (currentTs !== prevCheckTs) {
               console.log('[requester-restore] Group was updated, saving new timestamp');
               saveLazyGroupCheckInfo(shareId, currentTs);
+              
+              // 復旧後、localStorage から再度 sentIds を読み込んで myRequestStatuses を更新
+              // (Firestore リスナーが発火するまで待つのではなく、手動更新)
+              setTimeout(() => {
+                const updatedSentIds = loadSentRequestIds(shareId);
+                const statusMap = new Map<string, { status: string; id: string }>();
+                updatedSentIds.forEach((reqId, key) => {
+                  statusMap.set(key, { status: 'pending', id: reqId });
+                });
+                if (statusMap.size > 0) {
+                  setMyRequestStatuses(statusMap);
+                }
+              }, 100);
             } else {
               console.log('[requester-restore] No change in group timestamp');
             }
