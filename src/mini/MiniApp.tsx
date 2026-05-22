@@ -2723,20 +2723,38 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           );
         })()}
 
-        {/* Visitor: brief instruction + pending summary */}
-        {!isOwner && !expired && sortedSlots.length > 0 && (
-          <div className="text-center mb-4 space-y-1">
-            <p className="text-sm text-slate-400">希望の時間帯を選んで依頼できます</p>
-            {myRequestStatuses.size > 0 && (() => {
-              const pendingCount = [...myRequestStatuses.values()].filter(v => v.status === 'pending').length;
-              return pendingCount > 0 ? (
-                <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-600 bg-teal-50 border border-teal-100 rounded-full px-4 py-1">
-                  <span className="animate-pulse">✨</span> リクエスト中 {pendingCount}件
-                </p>
-              ) : null;
-            })()}
-          </div>
-        )}
+        {/* Visitor: pending/approved summary */}
+        {!isOwner && !expired && sortedSlots.length > 0 && myRequestStatuses.size > 0 && (() => {
+          const pendingCount = [...myRequestStatuses.values()].filter(v => v.status === 'pending').length;
+          const approvedCount = [...myRequestStatuses.values()].filter(v => v.status === 'approved').length;
+          
+          // Get first request to check for email notification
+          const firstReqId = [...myRequestStatuses.values()][0]?.id;
+          const firstReq = requests.find(r => r.id === firstReqId);
+          const hasEmailNotified = !!firstReq?.requester_email;
+          
+          return (
+            <div className="text-center mb-4">
+              <div className="inline-flex items-center gap-2 flex-wrap justify-center text-sm font-semibold">
+                {pendingCount > 0 && (
+                  <span className="inline-flex items-center gap-1 bg-orange-50 border border-orange-200 text-orange-700 rounded-full px-3 py-1">
+                    <span>⚠️</span> 依頼中 {pendingCount}件(未承認)
+                  </span>
+                )}
+                {approvedCount > 0 && (
+                  <span className="inline-flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-700 rounded-full px-3 py-1">
+                    <span>👍</span> 依頼済み {approvedCount}件(承認)
+                  </span>
+                )}
+                {hasEmailNotified && (
+                  <span className="inline-flex items-center gap-1 bg-slate-50 border border-slate-200 text-slate-700 rounded-full px-3 py-1">
+                    <span>✉️</span> 通知済み
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Date-grouped slot cards */}
         <div className="space-y-6 mb-8">
@@ -2843,11 +2861,22 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               <span className="text-sm text-red-400 font-medium bg-red-50 px-3 py-1.5 rounded-lg">
                                 キャンセル済み
                               </span>
-                            ) : sent ? (
-                              <span className="inline-flex items-center gap-1 text-sm text-orange-700 font-semibold bg-orange-50 border-2 border-dotted border-orange-400 px-3 py-1.5 rounded-lg">
-                                <span className="animate-pulse">⚠️</span> 未承認
-                              </span>
-                            ) : isPaused ? (
+                            ) : sent ? (() => {
+                              const sentReq = requests.find(r => r.id === myReqStatus?.id);
+                              const hasEmail = !!sentReq?.requester_email;
+                              return (
+                                <div className="inline-flex items-center gap-2 flex-wrap">
+                                  <span className="inline-flex items-center gap-1 text-sm text-orange-700 font-semibold bg-orange-50 border-2 border-dotted border-orange-400 px-3 py-1.5 rounded-lg">
+                                    <span className="animate-pulse">⚠️</span> 未承認
+                                  </span>
+                                  {hasEmail && (
+                                    <span className="inline-flex items-center gap-1 text-xs text-slate-600 bg-slate-100 px-2 py-1 rounded">
+                                      <span>✉️</span> 通知済み
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })() : isPaused ? (
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
                                 閲覧のみ
                               </span>
@@ -2964,15 +2993,15 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               この予定リストは{slotExpireLabel}公開で設定されています
             </div>
 
-            <div className="text-center border-t border-slate-100 pt-8 mt-4 print:hidden">
-            <p className="text-sm text-slate-500 mb-3">あなたも空き時間を共有しませんか？</p>
-            <a
-              href="/mini/"
-              className="inline-block bg-amber-200 text-white rounded-xl px-4 py-1
-                         font-medium hover:bg-amber-300 transition shadow-sm"
-            >
-              空き時間を作成する
-            </a>
+            <div className="text-center border-t border-slate-100 pt-6 mt-4 print:hidden">
+              <p className="text-xs text-slate-400 mb-2">あなたも空き時間を共有しませんか？</p>
+              <a
+                href="/mini/"
+                className="text-sm text-teal-600 hover:text-teal-700 font-medium underline"
+              >
+                空き時間を作成する
+              </a>
+            </div>
             {/* 第3層フォールバック: ブラウザで開いてください */}
             <p className="mt-6 text-xs text-slate-300 hover:text-slate-400 transition cursor-default">
               管理者の方は<button
