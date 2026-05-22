@@ -2,9 +2,12 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import MiniApp from './mini/MiniApp.tsx';
+import AdminPanel from './mini/AdminPanel.tsx';
 import './index.css';
 
-const isMini = window.location.pathname.startsWith('/mini');
+const pathname = window.location.pathname;
+const isMini = pathname.startsWith('/mini');
+const isAdmin = pathname.startsWith('/admin');
 
 // 起動成功 → リロードフラグをクリア
 sessionStorage.removeItem('__choicrew_reload');
@@ -47,6 +50,6 @@ window.addEventListener("error", (e) => {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {isMini ? <MiniApp /> : <App />}
+    {isAdmin ? <AdminPanel /> : isMini ? <MiniApp /> : <App />}
   </StrictMode>,
 );
