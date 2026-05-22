@@ -2824,7 +2824,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                   <p className="text-xs text-slate-400 font-medium mt-2">枠が埋まりました</p>
                                 )
                               ) : sent ? (
-                                <p className="text-xs text-orange-600 font-medium mt-2">※希望リクエストを出しています。承認待ちです。</p>
+                                <p className="text-xs text-orange-600 font-medium mt-2">リクエストを送りました。承認待ちです。</p>
                               ) : (
                                 <p className="text-xs text-teal-600 font-medium mt-2">{reqs.length}人が希望</p>
                               )
