@@ -1998,7 +1998,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
               saveLazyGroupCheckInfo(shareId, currentTs);
               
               // 復旧後、localStorage から再度 sentIds を読み込んで myRequestStatuses を更新
-              // (Firestore リスナーが発火するまで待つのではなく、手動更新)
               setTimeout(() => {
                 const updatedSentIds = loadSentRequestIds(shareId);
                 const statusMap = new Map<string, { status: string; id: string }>();
