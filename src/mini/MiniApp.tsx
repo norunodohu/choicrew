@@ -2758,12 +2758,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                 <div className="space-y-2.5">
                   {dateSlots.map((slot, i) => {
                     const key = slotKey(slot);
-                    const sent = sentSlots.has(key);
+                    const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
+                    const sent = sentSlots.has(key) || myReqStatus?.status === 'pending';
                     const reqs = requestsForSlot(slot).filter(r => !r.status || r.status === 'pending' || r.status === 'approved');
                     // exclusiveモード: 1人でもapprovedがいれば他は依頼不可
                     const isExclusive = share?.bookingMode !== 'multiple';
                     const hasApproved = reqs.some(r => r.status === 'approved');
-                    const myReqStatus = !isOwner ? myRequestStatuses.get(key) : undefined;
                     const isFilledByOther = !isOwner && isExclusive && hasApproved && !myReqStatus;
                     const borderClass = isOwner && reqs.length > 0
                       ? 'border-teal-200 border-l-[3px] border-l-teal-400'
@@ -2849,7 +2849,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
                                 閲覧のみ
                               </span>
-                            ) : isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending') ? null : (
+                            ) : (isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending')) || (isExclusive && hasApproved) ? null : (
                               <button
                                 onClick={() => setRequestSlot(slot)}
                                 className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
