@@ -2864,7 +2864,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                             ) : sent ? (() => {
                               const sentReq = requests.find(r => r.id === myReqStatus?.id);
                               const hasEmail = !!sentReq?.requester_email;
-                              console.log('[tag-debug]', { key, myReqStatusId: myReqStatus?.id, sentReq, hasEmail, requestsLength: requests.length });
+                              console.log('[email-debug]', { id: myReqStatus?.id, sentReq: { ...sentReq, requester_email: sentReq?.requester_email } });
                               return (
                                 <div className="inline-flex items-center gap-2 flex-wrap">
                                   <span className="inline-flex items-center gap-1 text-sm text-orange-700 font-semibold bg-orange-50 border-2 border-dotted border-orange-400 px-3 py-1.5 rounded-lg">
