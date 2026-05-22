@@ -140,6 +140,7 @@ interface RequestEntry {
   message: string;
   status?: 'pending' | 'approved' | 'declined' | 'cancelled';
   created_at: Timestamp;
+  user_group_id?: string;
 }
 
 interface OwnedShareEntry {
@@ -334,6 +335,45 @@ function loadSentRequestIds(shareId: string): Map<string, string> {
     const raw = localStorage.getItem(`mini_sent_ids_${shareId}`);
     return raw ? new Map(JSON.parse(raw)) : new Map();
   } catch { return new Map(); }
+}
+
+async function restoreRequestsByGroupId(
+  shareId: string,
+  existingIds: Map<string, string>
+): Promise<void> {
+  try {
+    // localStorage に保存されている依頼 ID から user_group_id を取得
+    for (const [, requestId] of existingIds.entries()) {
+      const reqDoc = await getDoc(doc(db, 'mini_requests', requestId));
+      const groupId = (reqDoc.data() as any)?.user_group_id;
+
+      if (groupId) {
+        // 同じグループの全依頼を取得
+        const groupQ = query(
+          collection(db, 'mini_requests'),
+          where('share_id', '==', shareId),
+          where('user_group_id', '==', groupId)
+        );
+        const groupSnap = await getDocs(groupQ);
+        const map = new Map(existingIds);
+        
+        // グループ内の全依頼を localStorage に追加
+        groupSnap.docs.forEach((d) => {
+          const reqData = d.data() as any;
+          const slotKey = `${reqData.slot_date}_${reqData.slot_start}_${reqData.slot_end}`;
+          map.set(slotKey, d.id);
+        });
+        
+        // 更新を保存
+        try {
+          localStorage.setItem(`mini_sent_ids_${shareId}`, JSON.stringify([...map.entries()]));
+        } catch { /* */ }
+        break; // 最初の存在する user_group_id だけで十分
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to restore requests by group ID:', err);
+  }
 }
 
 function saveSentRequestId(shareId: string, key: string, requestId: string) {
@@ -1905,6 +1945,12 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           setTokenVerified(true);
           // ?owner=TOKEN をURLから削除（誤って共有されないように）
           window.history.replaceState({}, '', `/mini/s/${shareId}`);
+        } else {
+          // 依頼者の場合: グループID経由での自動復旧を試みる
+          const existingIds = loadSentRequestIds(shareId);
+          if (existingIds.size > 0) {
+            restoreRequestsByGroupId(shareId, existingIds).catch(console.warn);
+          }
         }
       } catch (err) {
         console.error('Failed to load share:', err);
