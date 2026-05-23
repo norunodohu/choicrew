@@ -49,7 +49,7 @@ window.addEventListener("error", (e) => {
 import { db, messaging } from '../firebase';
 import {
   doc, setDoc, getDoc, updateDoc, deleteDoc, collection, addDoc, onSnapshot,
-  query, where, Timestamp, getDocs,
+  query, where, Timestamp, getDocs, deleteField,
 } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
 import { format, addDays } from 'date-fns';
@@ -123,6 +123,7 @@ interface ShareData {
   bookingMode?: 'multiple' | 'exclusive';
   paused?: boolean;
   draft?: boolean;
+  force_public?: boolean | null;
   owner_token?: string;
   notify_email?: string;
 }
@@ -1800,6 +1801,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [showOwnerMenu, setShowOwnerMenu] = useState(false);
   const [showUserSettings, setShowUserSettings] = useState(false);
   const [profileName, setProfileName] = useState(() => loadRequesterName());
+  const [showVisibilityModal, setShowVisibilityModal] = useState(false);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
@@ -1888,6 +1890,19 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const getRequesterAlias = useCallback((requesterName: string) => {
     return requesterAliases[requesterName]?.trim() || requesterName;
   }, [requesterAliases]);
+
+  const handleSetForcePublic = async (value: true | null) => {
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), {
+        force_public: value === null ? deleteField() : value,
+      });
+      setShare(prev => prev ? { ...prev, force_public: value ?? undefined } : prev);
+      toast.show(value === true ? 'この予定を公開にしました' : 'プロフィール設定に戻しました', 'success');
+      setShowVisibilityModal(false);
+    } catch {
+      toast.show('更新に失敗しました');
+    }
+  };
 
   const handleSaveRequesterAlias = async (requesterName: string, alias: string) => {
     const trimmed = alias.trim();
@@ -2459,6 +2474,53 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
       {toast.UI}
       {showUserSettings && <UserSettingsModal onClose={() => { setShowUserSettings(false); setProfileName(loadRequesterName()); }} share={share} setShare={setShare} />}
 
+      {/* 公開設定モーダル */}
+      {showVisibilityModal && isOwner && (() => {
+        const profileExpireDays = loadSlotExpireDays();
+        const createdAt = share?.created_at?.toDate() ?? new Date();
+        const expiryDate = profileExpireDays ? addDays(createdAt, profileExpireDays) : null;
+        const isExpiredByProfile = expiryDate ? new Date() > expiryDate : false;
+        const isEffectivelyPublic = share?.force_public === true ? true : !isExpiredByProfile;
+        const expireLabel = getSlotExpireLabelJa(profileExpireDays);
+        return (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-[2px] flex items-end sm:items-center justify-center z-50" onClick={() => setShowVisibilityModal(false)}>
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm mx-0 sm:mx-4 p-5 pb-8 sm:pb-5 shadow-2xl animate-[slideUp_0.2s_ease-out]" onClick={e => e.stopPropagation()}>
+              <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-4 sm:hidden" />
+              <h3 className="text-base font-bold text-slate-800 mb-3">この予定の公開設定</h3>
+
+              <div className={`rounded-xl p-3.5 mb-4 ${isEffectivelyPublic ? 'bg-teal-50 border border-teal-100' : 'bg-slate-50 border border-slate-200'}`}>
+                <p className={`text-sm font-semibold ${isEffectivelyPublic ? 'text-teal-700' : 'text-slate-600'}`}>
+                  {isEffectivelyPublic ? '公開中です' : '非公開になっています'}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  {share?.force_public === true
+                    ? 'この予定だけ手動で公開に設定されています'
+                    : `プロフィール設定：${expireLabel}公開${isExpiredByProfile ? '（期限切れ）' : ''}`}
+                </p>
+              </div>
+
+              {!isEffectivelyPublic && (
+                <button onClick={() => handleSetForcePublic(true)}
+                  className="w-full py-2.5 rounded-xl bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition mb-2">
+                  この予定だけ公開にする
+                </button>
+              )}
+              {share?.force_public === true && (
+                <button onClick={() => handleSetForcePublic(null)}
+                  className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-600 text-sm font-medium hover:bg-slate-50 transition mb-2">
+                  プロフィール設定に戻す（{expireLabel}公開）
+                </button>
+              )}
+
+              <button onClick={() => setShowVisibilityModal(false)}
+                className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition">
+                閉じる
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-white backdrop-blur-sm border-b border-slate-100 print:hidden">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-center relative">
@@ -2466,6 +2528,21 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
+          {isOwner && (() => {
+            const profileExpireDays = loadSlotExpireDays();
+            const createdAt = share?.created_at?.toDate() ?? new Date();
+            const expiryDate = profileExpireDays ? addDays(createdAt, profileExpireDays) : null;
+            const isExpiredByProfile = expiryDate ? new Date() > expiryDate : false;
+            const isEffectivelyPublic = share?.force_public === true ? true : !isExpiredByProfile;
+            return (
+              <button
+                onClick={() => setShowVisibilityModal(true)}
+                className={`absolute right-4 text-xs font-semibold px-2.5 py-1 rounded-full border transition print:hidden ${isEffectivelyPublic ? 'bg-teal-50 text-teal-600 border-teal-200 hover:bg-teal-100' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
+              >
+                {isEffectivelyPublic ? '公開中' : '非公開'}
+              </button>
+            );
+          })()}
         </div>
       </header>
       {/* ── テーマ背景画像（absolute + 大きめサイズでモバイルのカクつき防止） ── */}
