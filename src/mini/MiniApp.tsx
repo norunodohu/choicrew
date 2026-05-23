@@ -116,7 +116,7 @@ interface ShareData {
   title?: string;
   displayName?: string;
   requester_aliases?: Record<string, string>;
-  slots: { date: string; start: string; end: string }[];
+  slots: { date: string; start: string; end: string; force_public?: boolean }[];
   created_at: Timestamp;
   expires_at: Timestamp;
   theme?: ThemeKey;
@@ -1173,9 +1173,6 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       <div className="max-w-lg mx-auto px-4 py-6 pb-28 sm:pb-12">
 
         {/* Header */}
-        <div className="text-center mb-6">
-          <p className="text-slate-400 mt-1.5 text-xs tracking-wide">ログイン不要で依頼を受け付けます</p>
-        </div>
 
         {/* ── 作成済みリスト OR 作成フォーム ── */}
         {loadingOwned ? (
@@ -1802,6 +1799,9 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [showUserSettings, setShowUserSettings] = useState(false);
   const [profileName, setProfileName] = useState(() => loadRequesterName());
   const [showVisibilityModal, setShowVisibilityModal] = useState(false);
+  const [slotVisibilityModal, setSlotVisibilityModal] = useState<{ date: string; start: string; end: string; force_public?: boolean } | null>(null);
+  const [slotVisibilityNewExpire, setSlotVisibilityNewExpire] = useState<7 | 14 | 21 | null>(loadSlotExpireDays);
+  const [localExpireDays, setLocalExpireDays] = useState<7 | 14 | 21 | null>(loadSlotExpireDays);
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
@@ -1902,6 +1902,30 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
     } catch {
       toast.show('更新に失敗しました');
     }
+  };
+
+  const handleSlotForcePublic = async (slot: { date: string; start: string; end: string }) => {
+    if (!share) return;
+    const updatedSlots = share.slots.map(s =>
+      s.date === slot.date && s.start === slot.start && s.end === slot.end
+        ? { ...s, force_public: true }
+        : s
+    );
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), { slots: updatedSlots });
+      setShare(prev => prev ? { ...prev, slots: updatedSlots } : prev);
+      toast.show('このスロットを公開にしました', 'success');
+      setSlotVisibilityModal(null);
+    } catch {
+      toast.show('更新に失敗しました');
+    }
+  };
+
+  const handleSaveSlotExpireAndClose = (newExpire: 7 | 14 | 21 | null) => {
+    saveSlotExpireDays(newExpire);
+    setLocalExpireDays(newExpire);
+    setSlotVisibilityModal(null);
+    toast.show('公開期間を更新しました', 'success');
   };
 
   const handleSaveRequesterAlias = async (requesterName: string, alias: string) => {
@@ -2448,10 +2472,10 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   }
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
-  const slotExpireDays = loadSlotExpireDays();
+  const slotExpireDays = localExpireDays;
   const expireDateStr = slotExpireDays === null ? format(addDays(new Date(), 365), 'yyyy-MM-dd') : format(addDays(new Date(), slotExpireDays - 1), 'yyyy-MM-dd');
   const sortedSlots = [...share.slots]
-    .filter(s => s.date >= todayStr && (isOwner || s.date <= expireDateStr))
+    .filter(s => s.date >= todayStr && (isOwner || s.force_public === true || s.date <= expireDateStr))
     .sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
       return a.start.localeCompare(b.start);
@@ -2520,6 +2544,57 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           </div>
         );
       })()}
+
+      {/* スロット個別公開設定モーダル */}
+      {slotVisibilityModal && isOwner && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-[2px] flex items-end sm:items-center justify-center z-50" onClick={() => setSlotVisibilityModal(null)}>
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-sm mx-0 sm:mx-4 p-5 pb-8 sm:pb-5 shadow-2xl animate-[slideUp_0.2s_ease-out]" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-4 sm:hidden" />
+            <h3 className="text-base font-bold text-slate-800 mb-1">🔒 このスロットは非公開</h3>
+            <p className="text-xs text-slate-400 mb-4">
+              {slotVisibilityModal.date} {slotVisibilityModal.start}–{slotVisibilityModal.end}　・　
+              プロフィール設定「{getSlotExpireLabelJa(localExpireDays)}公開」の期間外のため非公開です
+            </p>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-4">
+              <p className="text-sm font-semibold text-slate-700 mb-2">公開期間を変更して公開</p>
+              <p className="text-xs text-slate-400 mb-3">プロフィールの公開期間設定を上書きします。保存した期間に含まれるスロットは公開されます。</p>
+              <select
+                value={slotVisibilityNewExpire === null ? 'null' : String(slotVisibilityNewExpire)}
+                onChange={e => setSlotVisibilityNewExpire(e.target.value === 'null' ? null : Number(e.target.value) as 7 | 14 | 21)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white mb-2"
+              >
+                <option value="7">1週間公開</option>
+                <option value="14">2週間公開</option>
+                <option value="21">3週間公開</option>
+                <option value="null">全期間公開</option>
+              </select>
+              <button
+                onClick={() => handleSaveSlotExpireAndClose(slotVisibilityNewExpire)}
+                className="w-full py-2.5 rounded-xl bg-teal-600 text-white text-sm font-medium hover:bg-teal-700 transition"
+              >
+                保存して公開
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mb-3">
+              <p className="text-sm font-semibold text-slate-700 mb-1">このスロットだけ公開</p>
+              <p className="text-xs text-slate-400 mb-3">公開期間設定はそのままで、この時間枚だけ特別に公開にします。</p>
+              <button
+                onClick={() => handleSlotForcePublic(slotVisibilityModal)}
+                className="w-full py-2.5 rounded-xl border-2 border-teal-400 text-teal-700 text-sm font-medium hover:bg-teal-50 transition"
+              >
+                このスロットだけ公開にする
+              </button>
+            </div>
+
+            <button onClick={() => setSlotVisibilityModal(null)}
+              className="w-full py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition">
+              閉じる
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-white backdrop-blur-sm border-b border-slate-100 print:hidden">
@@ -2913,10 +2988,13 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                                       : `${reqs.length}件`}
                                   </span>
                                 )}
-                                {slot.date > expireDateStr && !share?.force_public && (
-                                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
+                                {slot.date > expireDateStr && !share?.force_public && !slot.force_public && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setSlotVisibilityNewExpire(localExpireDays); setSlotVisibilityModal(slot); }}
+                                    className="text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full hover:bg-slate-100 transition"
+                                  >
                                     🔒 非公開
-                                  </span>
+                                  </button>
                                 )}
                               </div>
                             ) : expired ? (
