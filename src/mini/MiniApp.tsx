@@ -981,8 +981,10 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   const [confirmDeleteShareId, setConfirmDeleteShareId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [profileName, setProfileName] = useState(() => loadRequesterName());
+  const [activeDay, setActiveDay] = useState<string | null>(null);
+  const [extraWeeks, setExtraWeeks] = useState(0);
   const toast = useToast();
-  const days = getDays(7);
+  const days = getDays(7 + extraWeeks * 7);
   // Firebaseから予定名を取得するためのstate
   const [ownedShares, setOwnedShares] = useState<OwnedShareEntry[]>([]);
   const [loadingOwned, setLoadingOwned] = useState(true);
@@ -1034,6 +1036,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   const addSlot = (date: string, start = '10:00', end = '17:00') => {
     setSlots(prev => [...prev, { id: genId(6), date, start, end }]);
     setExpandedDays(prev => new Set([...prev, date]));
+    setActiveDay(date);
   };
 
   const updateSlot = (id: string, field: 'start' | 'end', value: string) => {
@@ -1092,8 +1095,8 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         const isExpanded = expandedDays.has(day.date) || daySlots.length > 0;
         if (!isExpanded) {
           return (
-            <button key={day.date} onClick={() => setExpandedDays(prev => new Set([...prev, day.date]))}
-              className={`w-full flex items-center justify-between rounded-xl px-4 py-3 border transition hover:shadow-sm bg-white border-slate-200 ${day.isWeekend ? 'bg-amber-50/40 border-amber-100' : ''} ${day.isToday ? 'border-l-[3px] border-l-teal-400' : ''}`}>
+            <button key={day.date} onClick={() => { setExpandedDays(prev => new Set([...prev, day.date])); setActiveDay(day.date); }}
+              className={`w-full flex items-center justify-between rounded-xl px-4 py-3 border transition hover:shadow-md shadow-sm bg-white border-slate-200 ${day.isWeekend ? 'bg-amber-50/40 border-amber-100' : ''} ${day.isToday ? 'border-l-[3px] border-l-teal-400' : ''}`}>
               <span className={`text-sm font-semibold ${day.isToday ? 'text-teal-700' : day.isWeekend ? 'text-amber-700' : 'text-slate-600'}`}>
                 {day.isToday && <span className="inline-block w-1.5 h-1.5 rounded-full bg-teal-500 mr-1.5 align-middle" />}
                 {day.label}
@@ -1121,22 +1124,27 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                   <TimeSpinner value={slot.end} onChange={v => updateSlot(slot.id, 'end', v)} isEnd />
                   <button onClick={() => removeSlot(slot.id)} className="text-slate-300 hover:text-red-400 p-1.5 transition-colors rounded-lg" aria-label="削除">✕</button>
                 </div>
-                {isValidSlotRange(slot.start, slot.end) && <TimeBar start={slot.start} end={slot.end} />}
                 {!isValidSlotRange(slot.start, slot.end) && <p className="text-xs text-red-500 mt-1">開始は終了より前にしてください</p>}
               </div>
             ))}
-            <div className="flex flex-wrap gap-1.5 mt-1">
-              {TIME_PRESETS.map(p => (
-                <button key={p.label} onClick={() => addSlot(day.date, p.start, p.end)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-100/50 transition">
-                  {p.label}<span className="text-teal-400">{p.sub}</span>
-                </button>
-              ))}
-              <button onClick={() => addSlot(day.date)} className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-100/50 transition">カスタム</button>
-            </div>
+            {day.date === activeDay && (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {TIME_PRESETS.map(p => (
+                  <button key={p.label} onClick={() => addSlot(day.date, p.start, p.end)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-100/50 shadow-sm transition">
+                    {p.label}<span className="text-teal-400">{p.sub}</span>
+                  </button>
+                ))}
+                <button onClick={() => addSlot(day.date)} className="inline-flex items-center px-2.5 py-1.5 rounded-lg text-xs font-medium bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-100/50 shadow-sm transition">カスタム</button>
+              </div>
+            )}
           </div>
         );
       })}
+      <button onClick={() => setExtraWeeks(prev => prev + 1)}
+        className="w-full mt-2 py-3 rounded-xl border border-dashed border-teal-300 text-teal-600 text-sm font-medium hover:bg-teal-50 transition shadow-sm">
+        ＋ さらに1週間追加
+      </button>
     </div>
   );
 
@@ -1245,9 +1253,9 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
           const canNext = !!title.trim() && !!(profileName || displayName.trim());
           return (
           <div className="animate-[fadeIn_0.2s_ease-out]">
-            <h2 className="text-xl font-bold text-slate-800 mb-1">予定表を作成（１週間分）</h2>
+            <h2 className="text-xl font-bold text-slate-800 mb-1">予定を作成</h2>
             <p className="text-sm text-slate-400 mb-5">
-              {profileName ? 'タイトルを入力してください' : '予定表のタイトルと名前を入力してください'}
+              {profileName ? 'タイトルを入力してください' : '予定のタイトルと名前を入力してください'}
             </p>
             <div className="space-y-4 mb-6">
               <div>
@@ -1271,7 +1279,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
                 </div>
               ) : (
                 <div>
-                  <label className="block text-sm font-medium text-slate-600 mb-1.5">表示名(公開相手に分かればOK)</label>
+                  <label className="block text-sm font-medium text-slate-600 mb-1.5">作成者名(公開相手に分かればOK)</label>
                   <input
                     type="text"
                     value={displayName}
@@ -1299,7 +1307,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
               </div>
               <div className="flex items-center gap-2.5 text-sm text-slate-500">
                 <SmartphoneIcon className="w-4 h-4 text-teal-500 shrink-0" />
-                <span>作成したデバイスでのみ編集が続けられます</span>
+                <span>作成したデバイスで編集が続けられます。</span>
               </div>
             </div>
           </div>
@@ -1312,7 +1320,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             {createMode === null ? (
               <>
                 <h2 className="text-xl font-bold text-slate-800 mb-1">作り方を選んでください</h2>
-                <p className="text-sm text-slate-400 mb-6">時間帯をどう追加しますか？</p>
+                <p className="text-sm text-slate-400 mb-6">迷ったらかんたん作成へ</p>
                 <div className="space-y-3">
                   <button onClick={() => setCreateMode('quick')}
                     className="w-full text-left bg-white border-2 border-teal-200 rounded-2xl p-5 hover:border-teal-400 hover:shadow-md transition-all group">
