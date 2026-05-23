@@ -632,38 +632,23 @@ function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; 
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-600 mb-2">予定公開期間</label>
-          <div className="space-y-2">
-            {[7, 14, 21].map(days => (
-              <label key={days} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="slot-expire"
-                  value={days}
-                  checked={slotExpireDays === days}
-                  onChange={() => setSlotExpireDays(days as 7 | 14 | 21)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm text-slate-700">{days === 7 ? '1週間' : days === 14 ? '2週間' : '3週間'}</span>
-              </label>
-            ))}
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="slot-expire"
-                checked={slotExpireDays === null}
-                onChange={() => setSlotExpireDays(null)}
-                className="w-4 h-4"
-              />
-              <span className="text-sm text-slate-700">全期間</span>
-            </label>
-          </div>
+          <label className="block text-sm font-medium text-slate-600 mb-1.5">予定公開期間</label>
+          <select
+            value={slotExpireDays === null ? 'null' : String(slotExpireDays)}
+            onChange={e => setSlotExpireDays(e.target.value === 'null' ? null : Number(e.target.value) as 7 | 14 | 21)}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+          >
+            <option value="7">1週間</option>
+            <option value="14">2週間</option>
+            <option value="21">3週間</option>
+            <option value="null">全期間</option>
+          </select>
           <p className="text-xs text-slate-400 mt-1.5">公開した予定がこの期間公開されます</p>
         </div>
 
         <div className="flex items-center justify-between py-1">
           <div>
-            <p className="text-sm font-medium text-slate-700">AIサポート</p>
+            <p className="text-sm font-medium text-slate-700">AIサポート<span className="ml-1 text-xs text-slate-400 font-normal">（ベータ）</span></p>
             <p className="text-xs text-slate-400">時間追加時に翌日/翌週への追加提案を表示</p>
           </div>
           <button
@@ -1176,8 +1161,8 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button onClick={() => setShowSettings(true)} className={`w-9 h-9 flex items-center justify-center rounded-full transition z-40 ${profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-sm font-bold' : 'text-teal-600 hover:text-teal-700 hover:bg-teal-50'}`}>
-            {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-6 h-6" />}
+          <button onClick={() => setShowSettings(true)} className={`w-8 h-8 flex items-center justify-center rounded-full transition z-40 ${profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : 'text-teal-600 hover:text-teal-700 hover:bg-teal-50'}`}>
+            {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
           <div className="w-9 h-9" />
@@ -1814,6 +1799,7 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   const [myRequestStatuses, setMyRequestStatuses] = useState<Map<string, { status: string; id: string }>>(new Map());
   const [showOwnerMenu, setShowOwnerMenu] = useState(false);
   const [showUserSettings, setShowUserSettings] = useState(false);
+  const [profileName, setProfileName] = useState(() => loadRequesterName());
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isDraft, setIsDraft] = useState(false);
@@ -2471,13 +2457,13 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   return (
     <div className={`min-h-screen ${T.pageBg} print:bg-white relative`}>
       {toast.UI}
-      {showUserSettings && <UserSettingsModal onClose={() => setShowUserSettings(false)} share={share} setShare={setShare} />}
+      {showUserSettings && <UserSettingsModal onClose={() => { setShowUserSettings(false); setProfileName(loadRequesterName()); }} share={share} setShare={setShare} />}
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-white backdrop-blur-sm border-b border-slate-100 print:hidden">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-center relative">
-          <button onClick={() => setShowUserSettings(true)} className="absolute left-4 w-9 h-9 flex items-center justify-center rounded-full text-slate-400 hover:text-teal-600 hover:bg-teal-50 transition">
-            <UserCircleIcon className="w-6 h-6" />
+          <button onClick={() => setShowUserSettings(true)} className={`absolute left-4 w-8 h-8 flex items-center justify-center rounded-full transition ${profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50'}`}>
+            {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
         </div>
