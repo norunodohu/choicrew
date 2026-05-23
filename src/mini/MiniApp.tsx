@@ -145,10 +145,26 @@ interface RequestEntry {
   user_group_id?: string;
 }
 
+interface ShareStats {
+  availableSlots: number;
+  pendingCount: number;
+  approvedCount: number;
+}
+
 interface OwnedShareEntry {
   id: string;
   name: string;
   created_at: number;
+  dateRange?: string;
+  lastDate?: string;
+  stats?: ShareStats;
+}
+
+interface VisitedShareEntry {
+  id: string;
+  name: string;
+  creatorName?: string;
+  visited_at: number;
   dateRange?: string;
   lastDate?: string;
 }
@@ -532,6 +548,33 @@ function loadOwnedShares(): OwnedShareEntry[] {
     if (!Array.isArray(parsed) || parsed.length === 0) return [];
     if (typeof parsed[0] === 'string') return parsed.map((id: string) => ({ id, name: '', created_at: 0 }));
     return parsed;
+  } catch { return []; }
+}
+
+function saveVisitedShare(shareId: string, name: string, creatorName?: string, dateRange?: string, lastDate?: string) {
+  try {
+    const raw = localStorage.getItem('mini_visited_shares');
+    let entries: VisitedShareEntry[] = raw ? JSON.parse(raw) : [];
+    const existing = entries.find(e => e.id === shareId);
+    if (existing) {
+      existing.visited_at = Date.now();
+      if (name) existing.name = name;
+      if (creatorName !== undefined) existing.creatorName = creatorName;
+      if (dateRange !== undefined) existing.dateRange = dateRange;
+      if (lastDate !== undefined) existing.lastDate = lastDate;
+    } else {
+      entries.push({ id: shareId, name, creatorName, visited_at: Date.now(), dateRange, lastDate });
+      if (entries.length > 30) entries = entries.slice(-30);
+    }
+    localStorage.setItem('mini_visited_shares', JSON.stringify(entries));
+  } catch { /* */ }
+}
+
+function loadVisitedShares(): VisitedShareEntry[] {
+  try {
+    const raw = localStorage.getItem('mini_visited_shares');
+    if (!raw) return [];
+    return JSON.parse(raw);
   } catch { return []; }
 }
 
@@ -974,6 +1017,8 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   // Firebaseから予定名を取得するためのstate
   const [ownedShares, setOwnedShares] = useState<OwnedShareEntry[]>([]);
   const [loadingOwned, setLoadingOwned] = useState(true);
+  const [visitedShares, setVisitedShares] = useState<VisitedShareEntry[]>([]);
+  const [loadingVisited, setLoadingVisited] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
   // Firebaseから予定名を取得
@@ -982,20 +1027,27 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       setLoadingOwned(true);
       const local = loadOwnedShares();
       if (local.length === 0) { setOwnedShares([]); setLoadingOwned(false); return; }
+      const todayFetch = format(new Date(), 'yyyy-MM-dd');
       const results: OwnedShareEntry[] = [];
       for (const entry of local) {
         try {
-          const snap = await getDoc(doc(db, 'mini_shares', entry.id));
+          const [snap, reqSnap] = await Promise.all([
+            getDoc(doc(db, 'mini_shares', entry.id)),
+            getDocs(query(collection(db, 'mini_requests'), where('share_id', '==', entry.id))),
+          ]);
           if (snap.exists()) {
             const data = snap.data();
+            const slots: { date: string }[] = data.slots || [];
+            const availableSlots = slots.filter(s => s.date >= todayFetch).length;
+            const pendingCount = reqSnap.docs.filter(d => { const r = d.data(); return !r.status || r.status === 'pending'; }).length;
+            const approvedCount = reqSnap.docs.filter(d => d.data().status === 'approved').length;
             results.push({
               id: entry.id,
               name: data.title || data.name || '',
               created_at: entry.created_at,
-              dateRange: computeDateRange(data.slots || []),
-              lastDate: (data.slots && data.slots.length > 0)
-                ? [...data.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || ''
-                : '',
+              dateRange: computeDateRange(slots as { date: string }[]),
+              lastDate: slots.length > 0 ? [...slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '',
+              stats: { availableSlots, pendingCount, approvedCount },
             });
           }
         } catch { /* ignore individual errors */ }
@@ -1004,6 +1056,41 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
       setLoadingOwned(false);
     };
     fetchOwnedShares();
+  }, []);
+
+  // 閲覧したことのある他人の予定を取得
+  useEffect(() => {
+    const fetchVisitedShares = async () => {
+      const local = loadVisitedShares();
+      const ownedIds = new Set(loadOwnedShares().map(e => e.id));
+      const nonOwned = local.filter(e => !ownedIds.has(e.id));
+      if (nonOwned.length === 0) { setVisitedShares([]); setLoadingVisited(false); return; }
+      const todayFetch = format(new Date(), 'yyyy-MM-dd');
+      const results: VisitedShareEntry[] = [];
+      for (const entry of nonOwned) {
+        try {
+          const snap = await getDoc(doc(db, 'mini_shares', entry.id));
+          if (snap.exists()) {
+            const data = snap.data();
+            const slots: { date: string }[] = data.slots || [];
+            if (slots.some(s => s.date >= todayFetch)) {
+              results.push({
+                id: entry.id,
+                name: data.title || data.name || '',
+                creatorName: data.displayName || data.name || '',
+                visited_at: entry.visited_at,
+                dateRange: computeDateRange(slots),
+                lastDate: [...slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '',
+              });
+            }
+          }
+        } catch { /* */ }
+      }
+      results.sort((a, b) => b.visited_at - a.visited_at);
+      setVisitedShares(results);
+      setLoadingVisited(false);
+    };
+    fetchVisitedShares();
   }, []);
 
   const removeOwnedShare = (id: string) => {
@@ -1136,6 +1223,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const activeShares = ownedShares.filter(e => e.name && (!e.lastDate || e.lastDate >= todayStr));
+  const activeVisitedShares = visitedShares.filter(e => e.name && (!e.lastDate || e.lastDate >= todayStr));
 
   const steps = createMode === 'custom' ? [1, 2, 3, 4] : [1, 2];
   const StepIndicator = () => (
@@ -1175,59 +1263,14 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
         {/* Header */}
 
         {/* ── 作成済みリスト OR 作成フォーム ── */}
-        {loadingOwned ? (
-          <div className="space-y-3 mb-6">
-            <SkeletonBlock className="h-16 w-full" />
-            <SkeletonBlock className="h-16 w-full" />
-          </div>
-        ) : activeShares.length > 0 && !showCreateForm ? (
+        {showCreateForm ? (
           <div className="animate-[fadeIn_0.2s_ease-out]">
-            <div className="space-y-3 mb-8">
-              {activeShares.slice(-5).reverse().map(entry => (
-                <div key={entry.id} className="flex items-center gap-2 group">
-                  <a
-                    href={`/mini/s/${entry.id}`}
-                    className="flex-1 flex items-center gap-4 bg-white border border-slate-200 hover:border-teal-300 hover:shadow-md rounded-2xl px-5 py-4 transition min-w-0"
-                  >
-                    <div className="w-3 h-3 rounded-full bg-teal-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-base font-bold text-slate-800 group-hover:text-teal-700 transition truncate">{entry.name}</p>
-                      {entry.dateRange && <p className="text-xs text-slate-400 mt-0.5">{entry.dateRange}</p>}
-                    </div>
-                    <span className="text-slate-300 group-hover:text-teal-500 transition text-lg">→</span>
-                  </a>
-                  {confirmDeleteShareId === entry.id ? (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button onClick={() => removeOwnedShare(entry.id)} className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition">削除</button>
-                      <button onClick={() => setConfirmDeleteShareId(null)} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">戻る</button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmDeleteShareId(entry.id)}
-                      className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-red-400 hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
-                      aria-label="削除"
-                    >✕</button>
-                  )}
-                </div>
-              ))}
-            </div>
             <button
-              onClick={() => { setShowCreateForm(true); setStep(1); setCreateMode(null); setSlots([]); setExpandedDays(new Set()); }}
-              className="mx-auto flex items-center justify-center gap-1.5 bg-teal-600 text-white rounded-2xl px-8 py-3 font-bold text-sm hover:bg-teal-700 transition shadow-sm"
+              onClick={() => { setShowCreateForm(false); setStep(1); setCreateMode(null); setSlots([]); setExpandedDays(new Set()); }}
+              className="flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition mb-5"
             >
-              ＋ 予定表を作る
+              ← 一覧に戻る
             </button>
-          </div>
-        ) : (
-          <div className="animate-[fadeIn_0.2s_ease-out]">
-            {showCreateForm && (
-              <button
-                onClick={() => { setShowCreateForm(false); setStep(1); setCreateMode(null); setSlots([]); setExpandedDays(new Set()); }}
-                className="flex items-center gap-1 text-sm text-slate-400 hover:text-slate-600 transition mb-5"
-              >
-                ← 一覧に戻る
-              </button>
-            )}
             <StepIndicator />
 
         {/* ── Step 1: Title + DisplayName ── */}
@@ -1465,6 +1508,106 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
             <button onClick={() => setStep(3)} className="w-full mt-3 py-2.5 text-sm text-slate-400 hover:text-slate-600 transition">← 戻る</button>
           </div>
         )}
+          </div>
+        ) : (
+          /* ── スケジュール一覧 ── */
+          <div className="animate-[fadeIn_0.2s_ease-out] space-y-6">
+
+            {/* 自分の予定 */}
+            {loadingOwned ? (
+              <div className="space-y-3">
+                <SkeletonBlock className="h-20 w-full" />
+                <SkeletonBlock className="h-20 w-full" />
+              </div>
+            ) : activeShares.length > 0 && (
+              <section>
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-1">自分の予定</h2>
+                <div className="space-y-2.5">
+                  {activeShares.slice(-10).reverse().map(entry => (
+                    <div key={entry.id} className="flex items-center gap-2 group">
+                      <a
+                        href={`/mini/s/${entry.id}`}
+                        className="flex-1 bg-white border border-slate-200 hover:border-teal-300 hover:shadow-md rounded-2xl px-4 py-3.5 transition min-w-0"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-2.5 h-2.5 rounded-full bg-teal-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition truncate">{entry.name}</p>
+                            {entry.dateRange && <p className="text-xs text-slate-400 mt-0.5">{entry.dateRange}</p>}
+                          </div>
+                          <span className="text-slate-300 group-hover:text-teal-500 transition shrink-0">→</span>
+                        </div>
+                        {entry.stats && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-2 ml-5">
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${entry.stats.availableSlots === 0 ? 'bg-slate-100 text-slate-400' : 'bg-teal-50 text-teal-600'}`}>
+                              空き {entry.stats.availableSlots} 件
+                            </span>
+                            {entry.stats.approvedCount > 0 && (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600">
+                                承認済み {entry.stats.approvedCount} 件
+                              </span>
+                            )}
+                            {entry.stats.pendingCount > 0 && (
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 animate-pulse">
+                                未承認 {entry.stats.pendingCount} 件
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </a>
+                      {confirmDeleteShareId === entry.id ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => removeOwnedShare(entry.id)} className="text-xs px-2 py-1 rounded-lg bg-red-500 text-white font-medium hover:bg-red-600 transition">削除</button>
+                          <button onClick={() => setConfirmDeleteShareId(null)} className="text-xs px-2 py-1 rounded-lg bg-slate-100 text-slate-500 font-medium hover:bg-slate-200 transition">戻る</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setConfirmDeleteShareId(entry.id)}
+                          className="shrink-0 w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-red-400 hover:bg-red-50 transition opacity-0 group-hover:opacity-100"
+                          aria-label="削除"
+                        >✕</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 参加した予定（他人の） */}
+            {!loadingVisited && activeVisitedShares.length > 0 && (
+              <section>
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-1">参加した予定</h2>
+                <div className="space-y-2.5">
+                  {activeVisitedShares.slice(0, 10).map(entry => (
+                    <a
+                      key={entry.id}
+                      href={`/mini/s/${entry.id}`}
+                      className="flex items-center gap-3 bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md rounded-2xl px-4 py-3.5 transition min-w-0 group"
+                    >
+                      <div className="w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-700 group-hover:text-slate-900 transition truncate">{entry.name}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {entry.creatorName && <span>{entry.creatorName}さん</span>}
+                          {entry.creatorName && entry.dateRange && <span className="mx-1">·</span>}
+                          {entry.dateRange && <span>{entry.dateRange}</span>}
+                        </p>
+                      </div>
+                      <span className="text-slate-300 group-hover:text-slate-500 transition shrink-0">→</span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 予定を作るボタン */}
+            <button
+              onClick={() => { setShowCreateForm(true); setStep(1); setCreateMode(null); setSlots([]); setExpandedDays(new Set()); }}
+              className="w-full flex items-center justify-center gap-1.5 bg-teal-600 text-white rounded-2xl px-8 py-3.5 font-bold text-sm hover:bg-teal-700 transition shadow-sm"
+            >
+              ＋ 予定表を作る
+            </button>
+
           </div>
         )}
 
@@ -2019,6 +2162,14 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           // ?owner=TOKEN をURLから削除（誤って共有されないように）
           window.history.replaceState({}, '', `/mini/s/${shareId}`);
         } else {
+          // 非オーナー閲覧: 訪問履歴に保存
+          if (!isOwnedShare(shareId)) {
+            const dateRange = computeDateRange(data.slots || []);
+            const lastDate = (data.slots || []).length > 0
+              ? [...(data.slots as { date: string }[])].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || ''
+              : '';
+            saveVisitedShare(shareId, data.title || data.name || '', data.displayName || data.name || '', dateRange, lastDate);
+          }
           // 依頼者の場合: グループ内容が更新されたら復旧を実行
           const prevCheckTs = getLazyGroupCheckInfo(shareId);
           console.log('[requester-restore] prevCheckTs:', prevCheckTs);
@@ -3207,19 +3358,6 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             className="flex items-center gap-1.5 px-3 py-2 rounded-full shadow-md text-sm font-medium bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-all"
           >
             ✏️ 時間を編集
-          </button>
-          <button
-            onClick={() => setShowStatusModal(true)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-full shadow-lg text-sm font-medium transition-all ${
-              isDraft
-                ? 'bg-slate-500 text-white hover:bg-slate-600'
-                : isPaused
-                ? 'bg-amber-500 text-white hover:bg-amber-600'
-                : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <span className={`w-3 h-3 rounded-full ${isDraft ? 'bg-slate-300' : isPaused ? 'bg-white' : 'bg-teal-500'}`} />
-            {isDraft ? '下書き（非公開）' : isPaused ? '閲覧専用' : '依頼受付中'}
           </button>
 
         </div>
