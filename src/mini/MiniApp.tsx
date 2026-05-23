@@ -2528,21 +2528,21 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
             {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
-          {isOwner && (() => {
-            const profileExpireDays = loadSlotExpireDays();
-            const createdAt = share?.created_at?.toDate() ?? new Date();
-            const expiryDate = profileExpireDays ? addDays(createdAt, profileExpireDays) : null;
-            const isExpiredByProfile = expiryDate ? new Date() > expiryDate : false;
-            const isEffectivelyPublic = share?.force_public === true ? true : !isExpiredByProfile;
-            return (
-              <button
-                onClick={() => setShowVisibilityModal(true)}
-                className={`absolute right-4 text-xs font-semibold px-2.5 py-1 rounded-full border transition print:hidden ${isEffectivelyPublic ? 'bg-teal-50 text-teal-600 border-teal-200 hover:bg-teal-100' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'}`}
-              >
-                {isEffectivelyPublic ? '公開中' : '非公開'}
-              </button>
-            );
-          })()}
+          {isOwner && (
+            <button
+              onClick={() => setShowStatusModal(true)}
+              className={`absolute right-4 flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border transition print:hidden ${
+                isDraft
+                  ? 'bg-slate-500 text-white border-slate-500 hover:bg-slate-600'
+                  : isPaused
+                  ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600'
+                  : 'bg-teal-50 text-teal-600 border-teal-200 hover:bg-teal-100'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full shrink-0 ${isDraft ? 'bg-slate-300' : isPaused ? 'bg-white' : 'bg-teal-500'}`} />
+              {isDraft ? '下書き（非公開）' : isPaused ? '陱覧専用' : '依頼受付中'}
+            </button>
+          )}
         </div>
       </header>
       {/* ── テーマ背景画像（absolute + 大きめサイズでモバイルのカクつき防止） ── */}
@@ -2905,13 +2905,20 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
                           </div>
                           <div className="ml-3 shrink-0 print:hidden">
                             {isOwner ? (
-                              reqs.length > 0 ? (
-                                <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
-                                  {share.bookingMode === 'multiple'
-                                    ? `${reqs.filter(r => r.status === 'approved').length}/${reqs.length}人`
-                                    : `${reqs.length}件`}
-                                </span>
-                              ) : null
+                              <div className="flex flex-col items-end gap-1">
+                                {reqs.length > 0 && (
+                                  <span className="text-sm text-teal-700 font-medium bg-teal-50 px-3 py-1.5 rounded-lg">
+                                    {share.bookingMode === 'multiple'
+                                      ? `${reqs.filter(r => r.status === 'approved').length}/${reqs.length}人`
+                                      : `${reqs.length}件`}
+                                  </span>
+                                )}
+                                {slot.date > expireDateStr && !share?.force_public && (
+                                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full">
+                                    🔒 非公開
+                                  </span>
+                                )}
+                              </div>
                             ) : expired ? (
                               <span className="text-xs text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg">期限切れ</span>
                             ) : myReqStatus?.status === 'approved' ? (
