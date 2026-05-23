@@ -980,6 +980,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   const [saving, setSaving] = useState(false);
   const [confirmDeleteShareId, setConfirmDeleteShareId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [profileName, setProfileName] = useState(() => loadRequesterName());
   const toast = useToast();
   const days = getDays(7);
   // Firebaseから予定名を取得するためのstate
@@ -1162,15 +1163,16 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   return (
     <div className="min-h-screen bg-slate-50">
       {toast.UI}
-      {showSettings && <UserSettingsModal onClose={() => setShowSettings(false)} />}
+      {showSettings && <UserSettingsModal onClose={() => { setShowSettings(false); setProfileName(loadRequesterName()); }} />}
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button onClick={() => setShowSettings(true)} className="w-9 h-9 flex items-center justify-center rounded-full text-teal-600 hover:text-teal-700 hover:bg-teal-50 transition z-40">
-            <UserCircleIcon className="w-6 h-6" />
+          <button onClick={() => setShowSettings(true)} className={`w-9 h-9 flex items-center justify-center rounded-full transition z-40 ${profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-sm font-bold' : 'text-teal-600 hover:text-teal-700 hover:bg-teal-50'}`}>
+            {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-6 h-6" />}
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
+          <div className="w-9 h-9" />
         </div>
       </header>
 
