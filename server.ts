@@ -4,9 +4,10 @@ import axios from "axios";
 import cors from "cors";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import bcryptjs from "bcryptjs";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, collection, query, where, getDocs, updateDoc, getDoc, setDoc, doc } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { fileURLToPath } from "url";
 
@@ -374,34 +375,405 @@ app.post("/api/mini/notify-email", async (req, res) => {
 
 // メール通知先登録の確認メール
 app.post("/api/mini/email-confirm", async (req, res) => {
-  const { to, shareId, ownerName } = req.body as { to?: string; shareId?: string; ownerName?: string };
-  if (!to || !shareId) return res.status(400).json({ error: "to and shareId required" });
+  const { to, isNew } = req.body as { to?: string; isNew?: boolean };
+  if (!to) return res.status(400).json({ error: "to required" });
 
   const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
-  const shareUrl = `${appUrl}/mini/s/${shareId}`;
+  
+  if (isNew) {
+    // 新規ユーザー：確認トークン付きメール送信
+    const token = Buffer.from(to).toString('base64');
+    const verifyUrl = `${appUrl}/mini/verify-email?token=${token}`;
+
+    try {
+      await sendResendEmail(
+        process.env.SMTP_TO || to,
+        "【ChoiCrew Mini】メールアドレス確認のお願い",
+        [
+          "ChoiCrew Mini をご利用いただきありがとうございます。",
+          "",
+          "以下のリンクをクリックして、メールアドレスを確認してください。",
+          verifyUrl,
+          "",
+          "このリンクは24時間有効です。",
+          "",
+          "※ このメールに心当たりがない場合は、このメールを削除してください。",
+        ].join("\n")
+      );
+
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Email confirm error:", err);
+      res.status(500).json({ error: String(err) });
+    }
+  } else {
+    // 既存ユーザー：確認メール送信（トークンなし）
+    try {
+      await sendResendEmail(
+        process.env.SMTP_TO || to,
+        "【ChoiCrew Mini】メール設定が更新されました",
+        [
+          "メール設定が更新されました。",
+          "",
+          "今後、このメールアドレスに通知が届きます。",
+          "管理者によって有効化されるまで、メール通知は送信されません。",
+          "",
+          "※ このメールは自動送信です。返信しても届きません。",
+        ].join("\n")
+      );
+
+      res.json({ ok: true });
+    } catch (err) {
+      console.error("Email confirm error:", err);
+      res.status(500).json({ error: String(err) });
+    }
+  }
+});
+
+// メール確認リンク & ログイン & 新規登録完了
+app.get("/api/mini/verify-email", async (req, res) => {
+  const { token, register } = req.query as { token?: string; register?: string };
+  if (!token) return res.status(400).json({ error: "token required" });
+
+  try {
+    const adminDb = getFirestore();
+    const decoded = Buffer.from(token, 'base64').toString('utf-8');
+    const [email, timestamp] = decoded.split(':');
+    
+    // タイムスタンプをチェック（5分以内か）
+    const tokenTime = parseInt(timestamp, 10);
+    const now = Date.now();
+    const expiryTime = 5 * 60 * 1000; // 5分
+    
+    if (isNaN(tokenTime) || now - tokenTime > expiryTime) {
+      return res.status(401).json({ error: "確認リンクが期限切れです。新しい確認メールをリクエストしてください。" });
+    }
+    
+    if (register) {
+      // 新規登録のメール確認
+      const userRef = doc(adminDb, 'mini_users', email);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        return res.status(404).json({ error: "ユーザーが見つかりません" });
+      }
+
+      // メール確認を完了
+      await updateDoc(userRef, { email_verified: true });
+
+      const user = userSnap.data();
+      const sessionToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
+
+      return res.json({
+        ok: true,
+        user: {
+          email,
+          name: user.name,
+          email_verified: true,
+        },
+        sessionToken,
+        isRegistration: true,
+      });
+    } else {
+      // 既存ユーザーのメール通知確認（互換性維持）
+      // メールアドレスでクエリ → 該当する全予定の email_verified も true に
+      const sharesSnap = await getDocs(
+        query(collection(adminDb, 'mini_shares'), where('notify_email', '==', email))
+      );
+
+      if (sharesSnap.size > 0) {
+        const updates = sharesSnap.docs.map(doc => updateDoc(doc.ref, { email_verified: true }));
+        await Promise.all(updates);
+      }
+
+      res.json({ ok: true, message: `${sharesSnap.size} 件の予定でメールを有効化しました` });
+    }
+  } catch (err) {
+    console.error("Email verify error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ログインメール送信
+app.post("/api/mini/send-login-email", async (req, res) => {
+  const { email } = req.body as { email?: string };
+  if (!email) return res.status(400).json({ error: "email required" });
+
+  const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
+  const token = Buffer.from(email).toString('base64');
+  const loginUrl = `${appUrl}/mini/verify-email?token=${token}`;
 
   try {
     await sendResendEmail(
-      process.env.SMTP_TO || to,
-      "【ChoiCrew Mini】メール通知が有効になりました",
+      process.env.SMTP_TO || email,
+      "【ChoiCrew Mini】ログインリンク",
       [
-        `${ownerName || ""}さん、メール通知の設定が完了しました。`,
+        "ChoiCrew Mini へのログインリンクです。",
         "",
-        "これ以降、依頼が届いたときにこのアドレスへ通知が届きます。",
+        "下のリンクをクリックしてログインしてください（24時間有効）:",
+        loginUrl,
         "",
-        "▼ 共有ページはこちら",
-        shareUrl,
+        "※ このメールに心当たりがない場合は、このメールを削除してください。",
       ].join("\n")
     );
 
     res.json({ ok: true });
   } catch (err) {
-    console.error("Email confirm error:", err);
+    console.error("Login email error:", err);
     res.status(500).json({ error: String(err) });
   }
 });
 
-// 依頼者への承認/辞退/取消メール通知
+// メールアドレスの存在確認
+app.post("/api/mini/check-email", async (req, res) => {
+  const { email } = req.body as { email?: string };
+  if (!email) return res.status(400).json({ error: "email required" });
+
+  try {
+    const adminDb = getFirestore();
+    const userRef = doc(adminDb, 'mini_users', email);
+    const userSnap = await getDoc(userRef);
+
+    res.json({ isNew: !userSnap.exists() });
+  } catch (err) {
+    console.error("Check email error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// 新規登録
+app.post("/api/mini/register", async (req, res) => {
+  const { email, password, name } = req.body as { email?: string; password?: string; name?: string };
+  if (!email || !password || !name) return res.status(400).json({ error: "email, password, name required" });
+  if (password.length < 6) return res.status(400).json({ error: "password must be 6+ characters" });
+
+  try {
+    const adminDb = getFirestore();
+    const userRef = doc(adminDb, 'mini_users', email);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      return res.status(409).json({ error: "このメールアドレスは既に登録されています" });
+    }
+
+    // パスワードをハッシュ化
+    const passwordHash = await bcryptjs.hash(password, 10);
+
+    // ユーザー情報を保存
+    await setDoc(userRef, {
+      email,
+      name,
+      password_hash: passwordHash,
+      email_verified: false,
+      created_at: new Date(),
+    });
+
+    // 確認メール送信（タイムスタンプ付きトークン）
+    const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
+    const timestamp = Date.now();
+    const token = Buffer.from(`${email}:${timestamp}`).toString('base64');
+    const verifyUrl = `${appUrl}/mini/verify-email?token=${token}&register=1`;
+
+    await sendResendEmail(
+      process.env.SMTP_TO || email,
+      "【ChoiCrew Mini】メールアドレス確認のお願い",
+      [
+        "ChoiCrew Mini の登録ありがとうございます。",
+        "",
+        "下のリンクをクリックしてメールアドレスを確認してください（5分以内）:",
+        verifyUrl,
+        "",
+        "※ このメールに心当たりがない場合は、このメールを削除してください。",
+      ].join("\n")
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ログイン
+app.post("/api/mini/login", async (req, res) => {
+  const { email, password } = req.body as { email?: string; password?: string };
+  if (!email || !password) return res.status(400).json({ error: "email and password required" });
+
+  try {
+    const adminDb = getFirestore();
+    const userRef = doc(adminDb, 'mini_users', email);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      return res.status(401).json({ error: "ユーザーが見つかりません" });
+    }
+
+    const userData = userSnap.data();
+
+    // パスワード確認
+    const isValid = await bcryptjs.compare(password, userData.password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: "パスワードが間違っています" });
+    }
+
+    if (!userData.email_verified) {
+      return res.status(403).json({ error: "メール確認が完了していません" });
+    }
+
+    // セッショントークン生成
+    const sessionToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
+
+    res.json({
+      ok: true,
+      user: {
+        email,
+        name: userData.name,
+        email_verified: userData.email_verified,
+      },
+      sessionToken,
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// パスワードリセットリクエスト
+app.post("/api/mini/request-password-reset", async (req, res) => {
+  const { email } = req.body as { email?: string };
+  if (!email) return res.status(400).json({ error: "email required" });
+
+  try {
+    const adminDb = getFirestore();
+    const userRef = doc(adminDb, 'mini_users', email);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      // セキュリティのため、ユーザーが存在しない場合も「送信しました」と返す
+      return res.json({ ok: true });
+    }
+
+    // パスワードリセット用トークン生成（5分有効）
+    const timestamp = Date.now();
+    const token = Buffer.from(`${email}:${timestamp}`).toString('base64');
+    const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
+    const resetUrl = `${appUrl}/mini/reset-password?token=${token}`;
+
+    await sendResendEmail(
+      process.env.SMTP_TO || email,
+      "【ChoiCrew Mini】パスワード再設定のお願い",
+      [
+        "パスワード再設定のご依頼をいただきました。",
+        "",
+        "下のリンクをクリックして新しいパスワードを設定してください（5分以内）:",
+        resetUrl,
+        "",
+        "※ このメールに心当たりがない場合は、このメールを削除してください。",
+      ].join("\n")
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Password reset request error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// パスワード再設定
+app.post("/api/mini/reset-password", async (req, res) => {
+  const { token, password } = req.body as { token?: string; password?: string };
+  if (!token || !password) return res.status(400).json({ error: "token and password required" });
+  if (password.length < 6) return res.status(400).json({ error: "password must be 6+ characters" });
+
+  try {
+    const adminDb = getFirestore();
+    const decoded = Buffer.from(token, 'base64').toString('utf-8');
+    const [email, timestamp] = decoded.split(':');
+
+    // トークンの有効期限チェック（5分）
+    const tokenTime = parseInt(timestamp, 10);
+    const now = Date.now();
+    const expiryTime = 5 * 60 * 1000; // 5分
+
+    if (isNaN(tokenTime) || now - tokenTime > expiryTime) {
+      return res.status(401).json({ error: "リセットリンクが期限切れです。新しいリンクをリクエストしてください。" });
+    }
+
+    // パスワードをハッシュ化
+    const passwordHash = await bcryptjs.hash(password, 10);
+
+    // パスワード更新
+    const userRef = doc(adminDb, 'mini_users', email);
+    await updateDoc(userRef, { password_hash: passwordHash });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Password reset error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// 既存ユーザーの移行
+app.post("/api/mini/migrate-existing-user", async (req, res) => {
+  const { email, name } = req.body as { email?: string; name?: string };
+  if (!email || !name) return res.status(400).json({ error: "email and name required" });
+
+  try {
+    const adminDb = getFirestore();
+    const userRef = doc(adminDb, 'mini_users', email);
+    const userSnap = await getDoc(userRef);
+
+    if (userSnap.exists()) {
+      return res.status(409).json({ error: "このメールアドレスは既に登録されています" });
+    }
+
+    // 仮パスワード生成（UUID風）
+    const tempPassword = Buffer.from(`temp-${email}-${Date.now()}`).toString('base64').slice(0, 12);
+    const passwordHash = await bcryptjs.hash(tempPassword, 10);
+
+    // mini_users に登録（email_verified=true で自動認証）
+    await setDoc(userRef, {
+      email,
+      name,
+      password_hash: passwordHash,
+      email_verified: true, // 既存ユーザーなのでスキップ
+      created_at: new Date(),
+      migrated_at: new Date(), // 移行フラグ
+    });
+
+    // パスワードリセットメール送信
+    const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
+    const timestamp = Date.now();
+    const token = Buffer.from(`${email}:${timestamp}`).toString('base64');
+    const resetUrl = `${appUrl}/mini/reset-password?token=${token}`;
+
+    await sendResendEmail(
+      process.env.SMTP_TO || email,
+      "【ChoiCrew Mini】ログインシステム移行のお知らせ",
+      [
+        `${name}さん、こんにちは。`,
+        "",
+        "ChoiCrew Mini がパスワード認証ログインに対応しました！",
+        "",
+        "下のリンクをクリックして新しいパスワードを設定してください（5分以内）:",
+        resetUrl,
+        "",
+        "設定後は、このメールアドレスとパスワードでログインできます。",
+        "",
+        "質問や問題がありましたら、お気軽にお問い合わせください。",
+        "",
+        "ChoiCrew Mini チーム",
+      ].join("\n")
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("User migration error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// 依頼ステータス変更通知メール
 app.post("/api/mini/notify-requester", async (req, res) => {
   const { to, requesterName, ownerName, status, slotDate, slotStart, slotEnd } = req.body as {
     to?: string; requesterName?: string; ownerName?: string;

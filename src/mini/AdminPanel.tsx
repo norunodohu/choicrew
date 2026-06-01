@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, onSnapshot, updateDoc, doc, Timestamp, setDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, updateDoc, doc, Timestamp, setDoc, getDocs } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -18,15 +18,27 @@ interface RequestEntry {
   user_group_id?: string;
 }
 
+interface UserInfo {
+  displayName: string;
+  notify_email?: string;
+  email_verified?: boolean;
+  shareCount: number;
+  shares: Array<{ id: string }>;
+}
+
 export default function AdminPanel() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'migrate'>('requests');
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [existingUsers, setExistingUsers] = useState<Array<{ email: string; name: string; migrated: boolean }>>([]);
+  const [migratingEmails, setMigratingEmails] = useState<Set<string>>(new Set());
 
-  // Firestore リスナー
+  // Firestore リスナー - 依頼
   useEffect(() => {
     if (!authenticated) return;
 
@@ -44,6 +56,84 @@ export default function AdminPanel() {
     return () => unsub();
   }, [authenticated]);
 
+  // Firestore リスナー - ユーザー
+  useEffect(() => {
+    if (!authenticated) return;
+
+    const loadUsers = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'mini_shares'));
+        const userMap: Record<string, UserInfo> = {};
+        
+        snap.forEach((doc) => {
+          const data = doc.data();
+          const displayName = data.displayName || data.name || 'Unknown';
+          
+          if (!userMap[displayName]) {
+            userMap[displayName] = {
+              displayName,
+              notify_email: data.notify_email,
+              email_verified: data.email_verified,
+              shareCount: 0,
+              shares: [],
+            };
+          }
+          
+          userMap[displayName].shareCount++;
+          userMap[displayName].shares.push({ id: doc.id });
+          // 最新のメール情報で上書き（複数の予定がある場合）
+          if (data.notify_email) {
+            userMap[displayName].notify_email = data.notify_email;
+            userMap[displayName].email_verified = data.email_verified;
+          }
+        });
+        
+        setUsers(Object.values(userMap).sort((a, b) => b.shareCount - a.shareCount));
+      } catch (err) {
+        console.error('ユーザー取得失敗:', err);
+      }
+    };
+
+    loadUsers();
+    const interval = setInterval(loadUsers, 5000);
+    return () => clearInterval(interval);
+  }, [authenticated]);
+
+  // 既存ユーザーを検出
+  useEffect(() => {
+    if (!authenticated) return;
+
+    const detectExistingUsers = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'mini_shares'));
+        const existingUsersMap: Record<string, { email: string; name: string }> = {};
+        
+        snap.forEach((doc) => {
+          const data = doc.data();
+          const email = data.notify_email;
+          const name = data.displayName || data.name || 'Unknown';
+          
+          if (email && name) {
+            existingUsersMap[email] = { email, name };
+          }
+        });
+        
+        // mini_users と比較して、未移行ユーザーのみ抽出
+        const toMigrate: typeof existingUsers = [];
+        for (const [email, { name }] of Object.entries(existingUsersMap)) {
+          // 実装の都合上、全て「未移行」と仮定（サーバーで存在確認）
+          toMigrate.push({ email, name, migrated: false });
+        }
+        
+        setExistingUsers(toMigrate);
+      } catch (err) {
+        console.error('既存ユーザー検出失敗:', err);
+      }
+    };
+
+    detectExistingUsers();
+  }, [authenticated]);
+
   const handleAuth = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === '1234') {
@@ -51,6 +141,53 @@ export default function AdminPanel() {
       setError('');
     } else {
       setError('パスワードが間違っています');
+    }
+  };
+
+  const handleVerifyEmail = async (user: UserInfo) => {
+    if (!user.notify_email) return;
+    
+    setLoading(true);
+    try {
+      await Promise.all(
+        user.shares.map(share =>
+          updateDoc(doc(db, 'mini_shares', share.id), { email_verified: true })
+        )
+      );
+      alert(`${user.displayName} さんのメール有効化が完了しました`);
+    } catch (err) {
+      setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ユーザーを移行
+  const handleMigrateUser = async (email: string, name: string) => {
+    setMigratingEmails(prev => new Set([...prev, email]));
+    try {
+      const res = await fetch('/api/mini/migrate-existing-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, name }),
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        // UI から削除
+        setExistingUsers(prev => prev.filter(u => u.email !== email));
+        alert(`${email} を移行しました。パスワードリセットメールを送信しました。`);
+      } else {
+        setError(`移行失敗 (${email}): ${data.error}`);
+      }
+    } catch (err) {
+      setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
+    } finally {
+      setMigratingEmails(prev => {
+        const next = new Set(prev);
+        next.delete(email);
+        return next;
+      });
     }
   };
 
@@ -168,7 +305,7 @@ export default function AdminPanel() {
     <div className="min-h-screen bg-slate-50 p-6">
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-slate-900">依頼管理</h1>
+          <h1 className="text-3xl font-bold text-slate-900">Admin Panel</h1>
           <button
             onClick={() => setAuthenticated(false)}
             className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition"
@@ -183,6 +320,42 @@ export default function AdminPanel() {
           </div>
         )}
 
+        {/* タブ */}
+        <div className="flex gap-2 mb-6 border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`px-4 py-3 font-semibold transition-colors ${
+              activeTab === 'requests'
+                ? 'text-teal-600 border-b-2 border-teal-600'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            依頼管理
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-3 font-semibold transition-colors ${
+              activeTab === 'users'
+                ? 'text-teal-600 border-b-2 border-teal-600'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            ユーザー管理
+          </button>
+          <button
+            onClick={() => setActiveTab('migrate')}
+            className={`px-4 py-3 font-semibold transition-colors ${
+              activeTab === 'migrate'
+                ? 'text-teal-600 border-b-2 border-teal-600'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            ユーザー移行 ({existingUsers.length})
+          </button>
+        </div>
+
+        {/* 依頼管理タブ */}
+        {activeTab === 'requests' && (
         <div className="bg-white rounded-xl shadow-md overflow-hidden">
           {/* ツールバー */}
           <div className="p-4 border-b border-slate-200 flex items-center gap-4">
@@ -298,12 +471,97 @@ export default function AdminPanel() {
               </tbody>
             </table>
           </div>
-        </div>
 
-        {/* 情報 */}
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
-          <strong>紐づけについて：</strong> 複数の依頼を選択して「紐づけ」をクリックすると、新しいグループIDが生成され、それらの依頼が同じユーザーグループとして扱われます。
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+            <strong>紐づけについて：</strong> 複数の依頼を選択して「紐づけ」をクリックすると、新しいグループIDが生成され、それらの依頼が同じユーザーグループとして扱われます。
+          </div>
         </div>
+        )}
+
+        {/* ユーザー管理タブ */}
+        {activeTab === 'users' && (
+        <div className="space-y-4">
+          {users.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">
+              ユーザーが見つかりません
+            </div>
+          ) : (
+            users.map((user, idx) => (
+              <div key={idx} className="bg-white rounded-xl shadow-md p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">{user.displayName}</h3>
+                    <p className="text-sm text-slate-600">予定数: {user.shareCount}</p>
+                  </div>
+                  {user.notify_email && !user.email_verified && (
+                    <button
+                      onClick={() => handleVerifyEmail(user)}
+                      disabled={loading}
+                      className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                    >
+                      {loading ? '処理中...' : 'メール有効化'}
+                    </button>
+                  )}
+                  {user.email_verified && (
+                    <span className="px-4 py-2 bg-green-100 text-green-700 font-medium rounded-lg">
+                      ✓ 有効化済み
+                    </span>
+                  )}
+                  {!user.notify_email && (
+                    <span className="px-4 py-2 bg-slate-100 text-slate-600 font-medium rounded-lg">
+                      メール未設定
+                    </span>
+                  )}
+                </div>
+                {user.notify_email && (
+                  <div className="text-sm text-slate-600">
+                    メール: <code className="bg-slate-100 px-2 py-1 rounded">{user.notify_email}</code>
+                    {!user.email_verified && <span className="ml-2 text-orange-600 font-medium">確認待ち</span>}
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+        )}
+
+        {/* ユーザー移行タブ */}
+        {activeTab === 'migrate' && (
+        <div className="space-y-4">
+          {existingUsers.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">
+              移行対象のユーザーがありません
+            </div>
+          ) : (
+            <>
+              <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 text-sm text-blue-700">
+                <strong>既存ユーザー移行:</strong> 以下のユーザーをログインシステムに移行します。移行後、各ユーザーにパスワード再設定メールが送信されます。
+              </div>
+              {existingUsers.map((user, idx) => (
+                <div key={idx} className="bg-white rounded-xl shadow-md p-5 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900">{user.name}</h3>
+                    <p className="text-sm text-slate-600">
+                      <code className="bg-slate-100 px-2 py-1 rounded">{user.email}</code>
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleMigrateUser(user.email, user.name)}
+                    disabled={migratingEmails.has(user.email)}
+                    className={`px-4 py-2 font-medium rounded-lg transition ${
+                      migratingEmails.has(user.email)
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                        : 'bg-teal-600 text-white hover:bg-teal-700'
+                    }`}
+                  >
+                    {migratingEmails.has(user.email) ? '移行中...' : '移行'}
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+        )}
       </div>
     </div>
   );

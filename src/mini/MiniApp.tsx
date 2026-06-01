@@ -126,6 +126,7 @@ interface ShareData {
   force_public?: boolean | null;
   owner_token?: string;
   notify_email?: string;
+  email_verified?: boolean;
 }
 
 interface RequestEntry {
@@ -299,20 +300,54 @@ function saveSentSlot(shareId: string, key: string, current: Set<string>) {
   return next;
 }
 
+// ============ ユーザー (ログイン管理) ============
+interface CurrentUser {
+  email: string;
+  name: string;
+  email_verified: boolean;
+}
+
+function loadCurrentUser(): CurrentUser | null {
+  try {
+    const s = localStorage.getItem('mini_current_user');
+    if (s) return JSON.parse(s);
+  } catch { /* */ }
+  return null;
+}
+
+function saveCurrentUser(user: CurrentUser) {
+  try { localStorage.setItem('mini_current_user', JSON.stringify(user)); } catch { /* */ }
+}
+
+function clearCurrentUser() {
+  try { localStorage.removeItem('mini_current_user'); } catch { /* */ }
+}
+
+// 後方互換性のため残す
 function loadRequesterName(): string {
-  try { return localStorage.getItem('choicrew_mini_requester') || ''; } catch { return ''; }
+  const user = loadCurrentUser();
+  return user?.name || '';
 }
 
 function saveRequesterName(name: string) {
-  try { localStorage.setItem('choicrew_mini_requester', name); } catch { /* */ }
+  const user = loadCurrentUser();
+  if (user) {
+    user.name = name;
+    saveCurrentUser(user);
+  }
 }
 
 function loadRequesterEmail(): string {
-  try { return localStorage.getItem('choicrew_mini_requester_email') || ''; } catch { return ''; }
+  const user = loadCurrentUser();
+  return user?.email || '';
 }
 
 function saveRequesterEmail(email: string) {
-  try { localStorage.setItem('choicrew_mini_requester_email', email); } catch { /* */ }
+  const user = loadCurrentUser();
+  if (user) {
+    user.email = email;
+    saveCurrentUser(user);
+  }
 }
 
 function loadDefaultSlotTime(): { start: string; end: string } {
@@ -601,6 +636,448 @@ function Spinner({ className = 'h-5 w-5' }: { className?: string }) {
 }
 
 /* ================================================================
+   LoginModal — ログイン (メール + パスワード)
+   ================================================================ */
+function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: () => void; onLogin: (user: CurrentUser) => void }) {
+  const [tab, setTab] = useState<'login' | 'register' | 'forgot'>('login');
+  const [step, setStep] = useState<'email' | 'password' | 'confirm' | 'forgot-email' | 'forgot-password' | 'forgot-confirm'>('email');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [resetToken, setResetToken] = useState('');
+
+  // ログイン処理
+  const handleLogin = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) { setError('メールアドレスとパスワードを入力してください'); return; }
+    
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/mini/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail, password }),
+      });
+      
+      const data = await res.json();
+      if (res.ok && data.user) {
+        localStorage.setItem('mini_session_token', data.sessionToken);
+        onLogin(data.user);
+        handleReset();
+      } else {
+        setError(data.error || 'ログインに失敗しました（メール/パスワードを確認してください）');
+      }
+    } catch (err) {
+      setError('ネットワークエラー');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 新規登録処理
+  const handleRegister = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) { setError('メールアドレスを入力してください'); return; }
+    if (!password) { setError('パスワードを入力してください'); return; }
+    if (!name.trim()) { setError('表示名を入力してください'); return; }
+    if (password !== passwordConfirm) { setError('パスワードが一致しません'); return; }
+    if (password.length < 6) { setError('パスワードは6文字以上です'); return; }
+    
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/mini/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: trimmedEmail,
+          password,
+          name: name.trim(),
+        }),
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        setStep('confirm');
+      } else {
+        setError(data.error || '登録に失敗しました（このメールは既に登録済みかもしれません）');
+      }
+    } catch (err) {
+      setError('ネットワークエラー');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // パスワードリセットリクエスト
+  const handleRequestPasswordReset = async () => {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) { setError('メールアドレスを入力してください'); return; }
+    
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/mini/request-password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail }),
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        setStep('forgot-confirm');
+      } else {
+        setError(data.error || 'リクエストに失敗しました');
+      }
+    } catch (err) {
+      setError('ネットワークエラー');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // パスワード再設定（URLからトークンを取得）
+  const handleResetPasswordFromUrl = async () => {
+    if (!resetToken || !password) { setError('パスワードを入力してください'); return; }
+    if (password !== passwordConfirm) { setError('パスワードが一致しません'); return; }
+    if (password.length < 6) { setError('パスワードは6文字以上です'); return; }
+
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/mini/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: resetToken, password }),
+      });
+      
+      const data = await res.json();
+      if (res.ok) {
+        setStep('forgot-confirm');
+      } else {
+        setError(data.error || 'パスワード再設定に失敗しました');
+      }
+    } catch (err) {
+      setError('ネットワークエラー');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReset = () => {
+    setEmail('');
+    setPassword('');
+    setPasswordConfirm('');
+    setName('');
+    setResetToken('');
+    setStep('email');
+    setError('');
+    setTab('login');
+    onClose();
+  };
+
+  const switchTab = (newTab: 'login' | 'register' | 'forgot') => {
+    setTab(newTab);
+    setStep(newTab === 'forgot' ? 'forgot-email' : 'email');
+    setEmail('');
+    setPassword('');
+    setPasswordConfirm('');
+    setName('');
+    setResetToken('');
+    setError('');
+  };
+
+  // URL パラメータからトークンを取得（パスワードリセット用）
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('token');
+    if (token && window.location.pathname === '/mini/reset-password' && isOpen) {
+      setTab('forgot');
+      setStep('forgot-password');
+      setResetToken(token);
+      // URL をクリーン
+      window.history.replaceState({}, '', '/mini/reset-password');
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] px-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4">
+        {/* タブ切り替え */}
+        {tab !== 'forgot' && (
+          <div className="flex gap-2 border-b border-slate-200 -mx-6 mb-4">
+            <button
+              onClick={() => switchTab('login')}
+              className={`flex-1 py-3 px-6 text-sm font-semibold transition ${
+                tab === 'login'
+                  ? 'border-b-2 border-teal-600 text-teal-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              ログイン
+            </button>
+            <button
+              onClick={() => switchTab('register')}
+              className={`flex-1 py-3 px-6 text-sm font-semibold transition ${
+                tab === 'register'
+                  ? 'border-b-2 border-teal-600 text-teal-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              新規登録
+            </button>
+          </div>
+        )}
+
+        {/* ログインタブ */}
+        {tab === 'login' && (
+          <>
+            <h2 className="text-2xl font-bold text-slate-900">ログイン</h2>
+            <p className="text-sm text-slate-600">登録したメールアドレスとパスワードを入力してください</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">メールアドレス</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !loading && email && password) handleLogin(); }}
+                  placeholder="you@example.com"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={loading}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">パスワード</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !loading && email && password) handleLogin(); }}
+                  placeholder="パスワード"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <button onClick={() => switchTab('forgot')} className="text-xs text-teal-600 hover:text-teal-700 font-medium">
+              パスワードを忘れた
+            </button>
+
+            {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</div>}
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={onClose} className="flex-1 py-3 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition">
+                キャンセル
+              </button>
+              <button onClick={handleLogin} disabled={loading || !email || !password} className="flex-1 py-3 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition disabled:opacity-50">
+                {loading ? 'ログイン中...' : 'ログイン'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* 新規登録タブ */}
+        {tab === 'register' && step === 'email' && (
+          <>
+            <h2 className="text-2xl font-bold text-slate-900">新規登録</h2>
+            <p className="text-sm text-slate-600">メールアドレス、パスワード、表示名を入力してください</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">メールアドレス</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={loading}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">パスワード</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="6文字以上"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">パスワード（確認）</label>
+                <input
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={e => setPasswordConfirm(e.target.value)}
+                  placeholder="パスワードを再入力"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={loading}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">表示名</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  placeholder="やまだ"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  maxLength={30}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</div>}
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={onClose} className="flex-1 py-3 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition">
+                キャンセル
+              </button>
+              <button onClick={handleRegister} disabled={loading || !email || !password || !passwordConfirm || !name} className="flex-1 py-3 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition disabled:opacity-50">
+                {loading ? '登録中...' : '登録'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* 確認コード送付済み */}
+        {tab === 'register' && step === 'confirm' && (
+          <>
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto">
+                <span className="text-2xl">✉️</span>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">登録確認をお願いします</h2>
+              <p className="text-sm text-slate-600 mb-2">{email} にメール確認リンクを送信しました。</p>
+              <p className="text-xs text-slate-500 bg-blue-50 p-2 rounded-lg">⏱️ リンクの有効期限は5分以内です。メール内のリンクをクリックすると自動的にログインされます。</p>
+            </div>
+
+            <button onClick={handleReset} className="w-full py-3 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition">
+              完了
+            </button>
+          </>
+        )}
+
+        {/* パスワード忘れた - メール入力 */}
+        {tab === 'forgot' && step === 'forgot-email' && (
+          <>
+            <h2 className="text-2xl font-bold text-slate-900">パスワード再設定</h2>
+            <p className="text-sm text-slate-600">登録したメールアドレスを入力してください</p>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">メールアドレス</label>
+              <input
+                type="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !loading && email) handleRequestPasswordReset(); }}
+                placeholder="you@example.com"
+                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                disabled={loading}
+                autoFocus
+              />
+            </div>
+
+            {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</div>}
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={() => switchTab('login')} className="flex-1 py-3 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition">
+                戻る
+              </button>
+              <button onClick={handleRequestPasswordReset} disabled={loading || !email} className="flex-1 py-3 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition disabled:opacity-50">
+                {loading ? '送信中...' : '送信'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* パスワード忘れた - パスワード再設定 */}
+        {tab === 'forgot' && step === 'forgot-password' && (
+          <>
+            <h2 className="text-2xl font-bold text-slate-900">新しいパスワードを設定</h2>
+            <p className="text-sm text-slate-600">新しいパスワードを入力してください</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">新しいパスワード</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="6文字以上"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={loading}
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">新しいパスワード（確認）</label>
+                <input
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={e => setPasswordConfirm(e.target.value)}
+                  placeholder="パスワードを再入力"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</div>}
+
+            <div className="flex gap-3 pt-2">
+              <button onClick={handleReset} className="flex-1 py-3 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition">
+                キャンセル
+              </button>
+              <button onClick={handleResetPasswordFromUrl} disabled={loading || !password || !passwordConfirm} className="flex-1 py-3 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition disabled:opacity-50">
+                {loading ? '設定中...' : '設定'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* パスワード忘れた - 完了画面 */}
+        {tab === 'forgot' && step === 'forgot-confirm' && (
+          <>
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mx-auto">
+                <span className="text-2xl">✉️</span>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-900">確認メールを送信しました</h2>
+              <p className="text-sm text-slate-600">{email} にパスワード再設定用のリンクを送信しました。</p>
+              <p className="text-xs text-slate-500 bg-blue-50 p-2 rounded-lg">⏱️ リンクの有効期限は5分以内です。メール内のリンクをクリックして新しいパスワードを設定してください。</p>
+            </div>
+
+            <button onClick={handleReset} className="w-full py-3 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition">
+              完了
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    UserSettingsModal — プロフィール設定
    ================================================================ */
 function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; share?: ShareData | null; setShare?: (share: ShareData) => void }) {
@@ -608,32 +1085,72 @@ function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; 
   const [email, setEmail] = useState(() => loadRequesterEmail() || share?.notify_email || '');
   const [slotExpireDays, setSlotExpireDays] = useState<7 | 14 | 21 | null>(loadSlotExpireDays);
   const [aiSupport, setAiSupport] = useState(loadAiSupport);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [emailConfirmed, setEmailConfirmed] = useState(share?.email_verified ?? false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const prevName = loadRequesterName();
     const prevEmail = loadRequesterEmail();
+    const newEmail = email.trim();
+    const isNewEmailSet = newEmail && newEmail !== prevEmail;
+    
     saveRequesterName(name.trim());
-    saveRequesterEmail(email.trim());
+    saveRequesterEmail(newEmail);
+    
     // 名前が変更された場合、所有する全予定の displayName も更新（バックグラウンド）
     if (name.trim() && name.trim() !== prevName) {
       loadOwnedShares().forEach(s => {
         updateDoc(doc(db, 'mini_shares', s.id), { displayName: name.trim() }).catch(() => {});
       });
-      // 現在表示中の予定がある場合は即座に更新
       if (share && setShare) {
         setShare({ ...share, displayName: name.trim() });
       }
     }
-    // メールが変更された場合、所有する全予定の notify_email も更新（バックグラウンド）
-    if (email.trim() && email.trim() !== prevEmail) {
-      loadOwnedShares().forEach(s => {
-        updateDoc(doc(db, 'mini_shares', s.id), { notify_email: email.trim() }).catch(() => {});
-      });
-      // 現在表示中の予定がある場合は即座に更新
-      if (share && setShare) {
-        setShare({ ...share, notify_email: email.trim() });
+    
+    // 新しいメールが設定された場合
+    if (isNewEmailSet) {
+      setEmailSending(true);
+      try {
+        // 確認メール送信
+        const ownedShares = loadOwnedShares();
+        const res = await fetch('/api/mini/email-confirm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            to: newEmail,
+            isNew: ownedShares.length === 0, // 新規ユーザーかどうか
+          }),
+        });
+        
+        if (res.ok) {
+          setEmailSent(true);
+          // 新規ユーザー（既存の所有予定なし）の場合は確認待ち状態で保存
+          if (ownedShares.length === 0) {
+            // 新規: email_verified: false で保存（別の予定作成時に有効になる予定）
+          } else {
+            // 既存: オーナー有効化まで待つ
+            ownedShares.forEach(s => {
+              updateDoc(doc(db, 'mini_shares', s.id), {
+                notify_email: newEmail,
+                email_verified: false,
+              }).catch(() => {});
+            });
+          }
+          return; // 確認待ちのため閉じない
+        }
+      } catch (err) {
+        console.error('メール送信失敗:', err);
+      } finally {
+        setEmailSending(false);
       }
+    } else if (newEmail && !isNewEmailSet) {
+      // メール変更なし → そのまま保存
+      loadOwnedShares().forEach(s => {
+        updateDoc(doc(db, 'mini_shares', s.id), { notify_email: newEmail }).catch(() => {});
+      });
     }
+    
     saveSlotExpireDays(slotExpireDays);
     saveAiSupport(aiSupport);
     onClose();
@@ -668,11 +1185,19 @@ function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; 
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white"
+            disabled={emailSent}
+            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400 bg-white disabled:bg-slate-50 disabled:text-slate-500"
             placeholder="you@example.com"
             maxLength={100}
           />
-          <p className="text-xs text-slate-400 mt-1.5">設定しておくと、承認・キャンセル時の通知先として自動で入力されます</p>
+          {emailSent ? (
+            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs font-medium text-blue-700">確認メールを送信しました</p>
+              <p className="text-xs text-blue-600 mt-1">メール内のリンクをクリックしてメールアドレスを確認してください</p>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400 mt-1.5">設定しておくと、承認・キャンセル時の通知先として自動で入力されます</p>
+          )}
         </div>
 
         <div>
@@ -710,11 +1235,20 @@ function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; 
 
         <div className="flex gap-3 pt-1">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition">
-            キャンセル
+            {emailSent ? '閉じる' : 'キャンセル'}
           </button>
-          <button onClick={handleSave} className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium hover:bg-teal-700 transition">
-            保存
-          </button>
+          {emailSent ? (
+            <button
+              onClick={() => { setEmailSent(false); setEmailSending(false); }}
+              className="flex-1 py-2.5 rounded-xl bg-slate-600 text-white font-medium hover:bg-slate-700 transition"
+            >
+              別のメールで再試行
+            </button>
+          ) : (
+            <button onClick={handleSave} disabled={emailSending} className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium hover:bg-teal-700 transition disabled:opacity-50">
+              {emailSending ? '送信中...' : '保存'}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -997,10 +1531,10 @@ const THEMES: Record<ThemeKey, {
    ================================================================ */
 
 
-function CreateView({ onCreated }: { onCreated: (id: string, name: string) => void }) {
+function CreateView({ onCreated, currentUser, onNeedLogin }: { onCreated: (id: string, name: string) => void; currentUser: CurrentUser | null; onNeedLogin: () => void }) {
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState(() => loadDraftData().title);
-  const [displayName, setDisplayName] = useState(() => loadRequesterName() || loadDraftData().displayName);
+  const [displayName, setDisplayName] = useState(() => currentUser?.name || loadDraftData().displayName);
   const [createMode, setCreateMode] = useState<'quick' | 'custom' | null>(null);
   const [slots, setSlots] = useState<TimeSlot[]>([]);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
@@ -1009,7 +1543,7 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
   const [saving, setSaving] = useState(false);
   const [confirmDeleteShareId, setConfirmDeleteShareId] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [profileName, setProfileName] = useState(() => loadRequesterName());
+  const [profileName, setProfileName] = useState(() => currentUser?.name || '');
   const [activeDay, setActiveDay] = useState<string | null>(null);
   const [extraWeeks, setExtraWeeks] = useState(0);
   const toast = useToast();
@@ -1632,16 +2166,18 @@ function CreateView({ onCreated }: { onCreated: (id: string, name: string) => vo
    RequestModal
    ================================================================ */
 
-function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSettings }: {
+function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSettings, currentUser, onNeedLogin }: {
   shareId: string;
   slot: { date: string; start: string; end: string };
   onClose: () => void;
   onSent: (requestId: string) => void;
   declinedTime?: { start: string; end: string } | null;
   onOpenSettings?: () => void;
+  currentUser?: CurrentUser | null;
+  onNeedLogin?: () => void;
 }) {
-  const [name, setName] = useState(loadRequesterName);
-  const email = loadRequesterEmail();
+  const [name, setName] = useState(currentUser?.name || loadRequesterName);
+  const email = currentUser?.email || loadRequesterEmail();
   const [requestStart, setRequestStart] = useState(normalizeTime(slot.start));
   const [requestEnd, setRequestEnd] = useState(normalizeTime(slot.end));
   const [message, setMessage] = useState('');
@@ -1672,6 +2208,13 @@ function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSett
   }, []);
 
   const handleSend = async () => {
+    // ログイン確認
+    if (!currentUser) {
+      onNeedLogin?.();
+      onClose();
+      return;
+    }
+    
     if (!name.trim()) return;
     const normalizedStart = normalizeTime(requestStart);
     const normalizedEnd = normalizeTime(requestEnd);
@@ -1889,7 +2432,7 @@ function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSett
    ShareView
    ================================================================ */
 
-function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; justCreated: boolean; ownerToken?: string | null }) {
+function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin }: { shareId: string; justCreated: boolean; ownerToken?: string | null; currentUser?: CurrentUser | null; onNeedLogin?: () => void }) {
   const [share, setShare] = useState<ShareData | null>(null);
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<RequestEntry | null>(null);
@@ -3563,6 +4106,8 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
           onSent={(requestId) => handleSent(requestSlot, requestId)}
           declinedTime={declinedSlotTime}
           onOpenSettings={() => { setRequestSlot(null); setDeclinedSlotTime(null); setShowUserSettings(true); }}
+          currentUser={currentUser}
+          onNeedLogin={onNeedLogin}
         />
       )}
 
@@ -3818,6 +4363,11 @@ export default function MiniApp() {
   const [ownerTokenFromUrl, setOwnerTokenFromUrl] = useState<string | null>(null);
   const [showBadgeModal, setShowBadgeModal] = useState(false);
   const [badgeCounts, setBadgeCounts] = useState({ approved: 0, pending: 0 });
+  
+  // ログイン状態管理
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -3837,7 +4387,79 @@ export default function MiniApp() {
   }, [shareId]);
 
   useEffect(() => {
+    // ログイン状態を復元
+    const user = loadCurrentUser();
+    const sessionToken = localStorage.getItem('mini_session_token');
+    
+    // セッショントークンとユーザー情報がある場合、ログイン状態を復元
+    if (sessionToken && user) {
+      setCurrentUser(user);
+    } else if (!user && !sessionToken) {
+      // 両方ない場合はログイン未了
+      setCurrentUser(null);
+    } else {
+      // 不整合（片方だけある場合）-> クリア
+      localStorage.removeItem('mini_session_token');
+      clearCurrentUser();
+      setCurrentUser(null);
+    }
+    
+    setIsInitialized(true);
+  }, []);
+
+  useEffect(() => {
     const path = window.location.pathname;
+    // メール確認リンク処理
+    if (path === '/mini/verify-email') {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      const isRegistration = params.has('register');
+      
+      if (token) {
+        (async () => {
+          try {
+            const queryStr = isRegistration ? '&register=1' : '';
+            const res = await fetch(`/api/mini/verify-email?token=${encodeURIComponent(token)}${queryStr}`);
+            const data = await res.json();
+            
+            if (res.ok && data.user) {
+              // ログイン状態を保存
+              saveCurrentUser(data.user);
+              setCurrentUser(data.user);
+              
+              // sessionToken があれば保存
+              if (data.sessionToken) {
+                localStorage.setItem('mini_session_token', data.sessionToken);
+              }
+              
+              // ホーム画面にリダイレクト
+              window.location.href = '/mini/';
+            } else {
+              console.error('Verification failed:', data.error);
+              window.location.href = '/mini/';
+            }
+          } catch (err) {
+            console.error('Verification error:', err);
+            window.location.href = '/mini/';
+          }
+        })();
+      }
+      return;
+    }
+
+    // パスワードリセットリンク処理
+    if (path === '/mini/reset-password') {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      if (token) {
+        // LoginModal を開いてパスワード再設定画面を表示
+        setShowLoginModal(true);
+        // query パラメータのセット
+        window.history.replaceState({}, '', '/mini/reset-password?token=' + encodeURIComponent(token));
+      }
+      return;
+    }
+    
     const match = path.match(/^\/mini\/s\/([A-Za-z0-9]+)/);
     if (match) {
       setShareId(match[1]);
@@ -3916,10 +4538,10 @@ export default function MiniApp() {
       content = <ShareViewSkeleton />;
       break;
     case 'create':
-      content = <CreateView onCreated={handleCreated} />;
+      content = <CreateView onCreated={handleCreated} currentUser={currentUser} onNeedLogin={() => setShowLoginModal(true)} />;
       break;
     case 'share':
-      content = <ShareView shareId={shareId!} justCreated={justCreated} ownerToken={ownerTokenFromUrl} />;
+      content = <ShareView shareId={shareId!} justCreated={justCreated} ownerToken={ownerTokenFromUrl} currentUser={currentUser} onNeedLogin={() => setShowLoginModal(true)} />;
       break;
     default:
       content = null;
@@ -3927,6 +4549,32 @@ export default function MiniApp() {
 
   return (
     <ErrorBoundary>
+      {/* ヘッダー */}
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-bold text-slate-900">ChoiCrew</h1>
+          <button
+            onClick={() => {
+              if (currentUser) {
+                // ログアウト処理
+                localStorage.removeItem('mini_current_user');
+                localStorage.removeItem('mini_session_token');
+                setCurrentUser(null);
+              } else {
+                setShowLoginModal(true);
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition"
+          >
+            <UserCircleIcon className="w-5 h-5 text-teal-600" />
+            <span className="text-sm font-medium text-slate-700">
+              {currentUser ? currentUser.name : 'ログイン'}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {isInitialized && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={(user) => { setCurrentUser(user); saveCurrentUser(user); setShowLoginModal(false); }} />}
       {content}
       <BadgeModal />
     </ErrorBoundary>
