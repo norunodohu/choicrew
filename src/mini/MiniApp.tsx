@@ -2647,7 +2647,13 @@ function ShareView({ shareId, justCreated, ownerToken }: { shareId: string; just
   return (
     <div className={`min-h-screen ${T.pageBg} print:bg-white relative`}>
       {toast.UI}
-      {showUserSettings && <UserSettingsModal onClose={() => { setShowUserSettings(false); setProfileName(loadRequesterName()); }} share={share} setShare={setShare} />}
+      {showUserSettings && (
+        <UserSettingsModal
+          onClose={() => { setShowUserSettings(false); setProfileName(loadRequesterName()); }}
+          share={isOwner ? share : undefined}
+          setShare={isOwner ? setShare : undefined}
+        />
+      )}
 
       {/* 公開設定モーダル */}
       {showVisibilityModal && isOwner && (() => {
