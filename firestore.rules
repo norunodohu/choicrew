@@ -141,6 +141,10 @@ service cloud.firestore {
                     ) || (
                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['bookingMode'])
                       && request.resource.data.bookingMode in ['multiple', 'exclusive']
+                    ) || (
+                      request.resource.data.diff(resource.data).affectedKeys().hasOnly(['creator_email'])
+                      && request.resource.data.creator_email is string
+                      && !resource.data.keys().hasAll(['creator_email'])
                     );
       // オーナーが削除できる（認証なしのためクライアント信頼）
       allow delete: if true;
