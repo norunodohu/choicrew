@@ -4482,9 +4482,12 @@ function LegacyUserPromptModal({ onLogin, onDismiss }: { onLogin: () => void; on
         <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
         <div className="text-center space-y-3 py-2">
           <div className="w-14 h-14 bg-teal-100 rounded-2xl flex items-center justify-center mx-auto text-3xl">🔐</div>
-          <h2 className="text-xl font-bold text-slate-800">アカウントを設定しましょう</h2>
+          <h2 className="text-xl font-bold text-slate-800">アカウントに引き継ぎましょう</h2>
           <p className="text-sm text-slate-500 leading-relaxed">
-            予定の作成・依頼の送受信には<br />ログインが必要になりました。<br />メールアドレスとパスワードを設定してください。
+            この端末に予定データが保存されていますが、<br />
+            <span className="font-semibold text-slate-700">ログアウトするとデータは消えてしまいます。</span><br /><br />
+            アカウントに紐づけておくと、<br />
+            別の端末やブラウザからもアクセスできます。
           </p>
         </div>
         <button
@@ -4723,8 +4726,18 @@ export default function MiniApp() {
             onClick={() => {
               if (currentUser) {
                 // ログアウト処理
+                if (!window.confirm('ログアウトしますか？\nこの端末のローカルデータはすべて削除されます。\n（次回ログインで予定は自動的に復元されます）')) return;
+                // セッション情報
                 localStorage.removeItem('mini_current_user');
                 localStorage.removeItem('mini_session_token');
+                // オーナー状態・送信済み記録をすべてクリア
+                Object.keys(localStorage)
+                  .filter(k =>
+                    k === 'mini_owned_shares' ||
+                    k.startsWith('mini_sent_ids_') ||
+                    k.startsWith('owner_token_')
+                  )
+                  .forEach(k => localStorage.removeItem(k));
                 setCurrentUser(null);
               } else {
                 setShowLoginModal(true);
