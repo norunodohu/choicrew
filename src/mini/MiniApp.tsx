@@ -126,6 +126,7 @@ interface ShareData {
   force_public?: boolean | null;
   owner_token?: string;
   notify_email?: string;
+  creator_email?: string;
   email_verified?: boolean;
 }
 
@@ -2580,7 +2581,11 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
   const [editingRequesterAliasValue, setEditingRequesterAliasValue] = useState('');
   const [fpOwnerPrompt, setFpOwnerPrompt] = useState(false);
   const [fpChecked, setFpChecked] = useState(false);
-  const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified;
+  const emailMatchesOwner = !!currentUser?.email && !!share &&
+    !!(share.creator_email || share.notify_email) &&
+    (currentUser.email.trim().toLowerCase() === (share.creator_email || '').trim().toLowerCase() ||
+     currentUser.email.trim().toLowerCase() === (share.notify_email || '').trim().toLowerCase());
+  const isOwner = justCreated || isOwnedShare(shareId) || tokenVerified || emailMatchesOwner;
   const toast = useToast();
 
   const url = makeShareUrl(shareId);
@@ -2594,6 +2599,19 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
     }
     setRequesterAliases(share.requester_aliases || {});
   }, [share]);
+
+  // メールアドレスが一致してオーナーと確認できた場合、owner_token を localStorage に保存
+  useEffect(() => {
+    if (!emailMatchesOwner || !share?.owner_token) return;
+    if (!isOwnedShare(shareId)) {
+      saveOwnerToken(shareId, share.owner_token);
+      const dateRange = computeDateRange(share.slots || []);
+      const lastDate = (share.slots || []).length > 0
+        ? [...share.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || ''
+        : '';
+      saveOwnedShare(shareId, share.title || share.name || '', dateRange, lastDate);
+    }
+  }, [emailMatchesOwner, share, shareId]);
 
   useEffect(() => {
     if (!editingRequesterName) {

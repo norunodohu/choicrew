@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, query, onSnapshot, updateDoc, doc, Timestamp, setDoc, getDocs } from 'firebase/firestore';
+import { collection, query, onSnapshot, updateDoc, doc, Timestamp, setDoc, getDocs, orderBy } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
@@ -26,17 +26,42 @@ interface UserInfo {
   shares: Array<{ id: string }>;
 }
 
+interface ShareItem {
+  id: string;
+  title: string;
+  displayName: string;
+  creator_email?: string;
+  notify_email?: string;
+  created_at?: Timestamp;
+}
+
+interface MiniUser {
+  email: string;
+  name: string;
+  created_at?: Timestamp;
+  email_verified?: boolean;
+  shareCount?: number;
+}
+
 export default function AdminPanel() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'migrate'>('requests');
+  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'migrate' | 'shares' | 'accounts'>('requests');
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [existingUsers, setExistingUsers] = useState<Array<{ email: string; name: string; migrated: boolean }>>([]);
   const [migratingEmails, setMigratingEmails] = useState<Set<string>>(new Set());
+  // 予定一覧
+  const [shares, setShares] = useState<ShareItem[]>([]);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [editingShareId, setEditingShareId] = useState<string | null>(null);
+  const [editingEmail, setEditingEmail] = useState('');
+  // アカウント一覧
+  const [miniUsers, setMiniUsers] = useState<MiniUser[]>([]);
+  const [miniUsersLoading, setMiniUsersLoading] = useState(false);
 
   // Firestore リスナー - 依頼
   useEffect(() => {
@@ -134,8 +159,90 @@ export default function AdminPanel() {
     detectExistingUsers();
   }, [authenticated]);
 
-  const handleAuth = (e: React.FormEvent) => {
-    e.preventDefault();
+  // 予定一覧を取得
+  useEffect(() => {
+    if (!authenticated) return;
+    const loadShares = async () => {
+      setSharesLoading(true);
+      try {
+        const snap = await getDocs(query(collection(db, 'mini_shares'), orderBy('created_at', 'desc')));
+        const items: ShareItem[] = [];
+        snap.forEach(d => {
+          const data = d.data();
+          items.push({
+            id: d.id,
+            title: data.title || data.name || '(無題)',
+            displayName: data.displayName || data.name || '',
+            creator_email: data.creator_email || '',
+            notify_email: data.notify_email || '',
+            created_at: data.created_at,
+          });
+        });
+        setShares(items);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setSharesLoading(false);
+      }
+    };
+    loadShares();
+  }, [authenticated]);
+
+  // アカウント一覧（mini_users）を取得
+  useEffect(() => {
+    if (!authenticated) return;
+    const loadMiniUsers = async () => {
+      setMiniUsersLoading(true);
+      try {
+        const [usersSnap, sharesSnap] = await Promise.all([
+          getDocs(query(collection(db, 'mini_users'), orderBy('created_at', 'desc'))),
+          getDocs(collection(db, 'mini_shares')),
+        ]);
+        // メール → シェア数のマップ
+        const shareCountMap: Record<string, number> = {};
+        sharesSnap.forEach(d => {
+          const email = (d.data().creator_email || d.data().notify_email || '').toLowerCase();
+          if (email) shareCountMap[email] = (shareCountMap[email] || 0) + 1;
+        });
+        const items: MiniUser[] = [];
+        usersSnap.forEach(d => {
+          const data = d.data();
+          items.push({
+            email: d.id,
+            name: data.name || '',
+            created_at: data.created_at,
+            email_verified: data.email_verified ?? false,
+            shareCount: shareCountMap[d.id.toLowerCase()] || 0,
+          });
+        });
+        setMiniUsers(items);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setMiniUsersLoading(false);
+      }
+    };
+    loadMiniUsers();
+  }, [authenticated]);
+
+  // 予定にメールアドレスを手動で設定
+  const handleAssignEmail = async (shareId: string) => {
+    const trimmed = editingEmail.trim().toLowerCase();
+    if (!trimmed) return;
+    try {
+      await updateDoc(doc(db, 'mini_shares', shareId), {
+        creator_email: trimmed,
+        notify_email: trimmed,
+      });
+      setShares(prev => prev.map(s => s.id === shareId ? { ...s, creator_email: trimmed, notify_email: trimmed } : s));
+      setEditingShareId(null);
+      setEditingEmail('');
+    } catch (err) {
+      setError(`更新失敗: ${err instanceof Error ? err.message : '不明'}`);
+    }
+  };
+
+  const handleAuth = (e: React.FormEvent) => {    e.preventDefault();
     if (password === '1234') {
       setAuthenticated(true);
       setError('');
@@ -352,6 +459,26 @@ export default function AdminPanel() {
           >
             ユーザー移行 ({existingUsers.length})
           </button>
+          <button
+            onClick={() => setActiveTab('shares')}
+            className={`px-4 py-3 font-semibold transition-colors ${
+              activeTab === 'shares'
+                ? 'text-teal-600 border-b-2 border-teal-600'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            予定一覧 ({shares.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('accounts')}
+            className={`px-4 py-3 font-semibold transition-colors ${
+              activeTab === 'accounts'
+                ? 'text-teal-600 border-b-2 border-teal-600'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            アカウント ({miniUsers.length})
+          </button>
         </div>
 
         {/* 依頼管理タブ */}
@@ -562,6 +689,114 @@ export default function AdminPanel() {
           )}
         </div>
         )}
+        {/* 予定一覧タブ */}
+        {activeTab === 'shares' && (
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          {sharesLoading ? (
+            <div className="p-8 text-center text-slate-500">読み込み中...</div>
+          ) : shares.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">予定がありません</div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-slate-100 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">ID</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">タイトル</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">紐づきメール</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shares.map(share => {
+                  const email = share.creator_email || share.notify_email || '';
+                  const hasEmail = !!email;
+                  return (
+                    <tr key={share.id} className={`border-b border-slate-100 hover:bg-slate-50 ${!hasEmail ? 'bg-red-50' : ''}`}>
+                      <td className="px-4 py-3 text-xs text-slate-400 font-mono">{share.id}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-slate-900">{share.title}</td>
+                      <td className="px-4 py-3 text-sm">
+                        {hasEmail ? (
+                          <span className="text-slate-700">{email}</span>
+                        ) : (
+                          <span className="text-red-500 font-medium">未設定</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        {editingShareId === share.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="email"
+                              value={editingEmail}
+                              onChange={e => setEditingEmail(e.target.value)}
+                              placeholder="email@example.com"
+                              className="border border-slate-300 rounded px-2 py-1 text-sm w-48 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              autoFocus
+                              onKeyDown={e => { if (e.key === 'Enter') handleAssignEmail(share.id); if (e.key === 'Escape') { setEditingShareId(null); setEditingEmail(''); } }}
+                            />
+                            <button onClick={() => handleAssignEmail(share.id)} className="px-3 py-1 bg-teal-600 text-white text-sm rounded hover:bg-teal-700 transition">保存</button>
+                            <button onClick={() => { setEditingShareId(null); setEditingEmail(''); }} className="px-3 py-1 bg-slate-200 text-slate-700 text-sm rounded hover:bg-slate-300 transition">キャンセル</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingShareId(share.id); setEditingEmail(email); }}
+                            className="px-3 py-1 bg-slate-100 text-slate-700 text-sm rounded hover:bg-slate-200 transition"
+                          >
+                            {hasEmail ? '変更' : '設定'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <div className="p-4 bg-amber-50 border-t border-amber-200 text-sm text-amber-700">
+            <strong>赤背景</strong>はメール未設定の予定です。設定するとオーナーがログイン時に自動認識されます。
+          </div>
+        </div>
+        )}
+
+        {/* アカウント一覧タブ */}
+        {activeTab === 'accounts' && (
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          {miniUsersLoading ? (
+            <div className="p-8 text-center text-slate-500">読み込み中...</div>
+          ) : miniUsers.length === 0 ? (
+            <div className="p-8 text-center text-slate-500">アカウントがありません</div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-slate-100 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">メールアドレス</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">表示名</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">メール確認</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">予定数</th>
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">登録日</th>
+                </tr>
+              </thead>
+              <tbody>
+                {miniUsers.map(user => (
+                  <tr key={user.email} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="px-4 py-3 text-sm font-medium text-slate-900">{user.email}</td>
+                    <td className="px-4 py-3 text-sm text-slate-700">{user.name || <span className="text-slate-400">—</span>}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {user.email_verified
+                        ? <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">確認済み</span>
+                        : <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">未確認</span>}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-slate-600">{user.shareCount}</td>
+                    <td className="px-4 py-3 text-sm text-slate-500">
+                      {user.created_at ? format(user.created_at.toDate(), 'yyyy/MM/dd HH:mm', { locale: ja }) : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        )}
+
       </div>
     </div>
   );
