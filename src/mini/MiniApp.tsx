@@ -1683,23 +1683,29 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
             const rawSlots: { date: string; start: string; end: string }[] = data.slots || [];
             const futureSlots = rawSlots.filter(s => s.date >= todayFetch).sort((a,b) => a.date.localeCompare(b.date));
             
-            // 承認済みリクエストを取得（requester_email も取得）
-            const reqSnap = await getDocs(query(collection(db, 'mini_requests'), where('share_id', '==', entry.id), where('status', '==', 'approved')));
-            const approvedSlotMap = new Map<string, string>(); // slotKey -> requester_email
-            reqSnap.docs.forEach(d => {
+            // 承認済みと保留中のリクエストを取得
+            const allReqSnap = await getDocs(query(collection(db, 'mini_requests'), where('share_id', '==', entry.id)));
+            const slotStatusMap = new Map<string, { status: string; email: string }>(); // slotKey -> { status, email }
+            allReqSnap.docs.forEach(d => {
               const r = d.data();
               const slotKey = `${r.slot_date}_${r.slot_start}_${r.slot_end}`;
-              approvedSlotMap.set(slotKey, r.requester_email || '');
+              const email = r.requester_email?.toLowerCase() || '';
+              const status = r.status || 'pending';
+              // 同じスロットに複数リクエストがある場合は最初のものを記録
+              if (!slotStatusMap.has(slotKey)) {
+                slotStatusMap.set(slotKey, { status, email });
+              }
             });
             
-            // スロットに承認情報を追加
+            // スロットに状態を追加
             const slotsWithStatus = futureSlots.map(s => {
               const slotKey = `${s.date}_${s.start}_${s.end}`;
-              const approvedBy = approvedSlotMap.get(slotKey);
+              const slotStatus = slotStatusMap.get(slotKey);
+              const isMyRequest = slotStatus && slotStatus.email === currentUser?.email?.toLowerCase();
               return {
                 ...s,
-                isApproved: !!approvedBy,
-                isMyApproved: approvedBy === currentUser?.email?.toLowerCase(),
+                requestStatus: slotStatus?.status || null, // null, 'pending', 'approved'
+                isMyRequest, // 自分が依頼したか
               };
             });
             
@@ -2354,10 +2360,10 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                             const isToday = idx === dayOfWeek;
                             const isPast = dateStr < todayStr;
                             
-                            // entry.slots から直接判定（実データを信頼する）
+                            // entry.slots から直接判定
                             const slotForDate = entry.slots?.find(s => s.date === dateStr);
-                            const isMyApproved = slotForDate && (slotForDate as any).isMyApproved;
-                            const hasOthersApproved = slotForDate && (slotForDate as any).isApproved && !(slotForDate as any).isMyApproved;
+                            const requestStatus = slotForDate ? (slotForDate as any).requestStatus : null; // null, 'pending', 'approved'
+                            const isMyRequest = slotForDate && (slotForDate as any).isMyRequest;
                             const hasSlot = !!slotForDate;
                             
                             return (
@@ -2367,13 +2373,21 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                 <div className="mt-1 h-5 flex items-center justify-center">
                                   {isPast ? (
                                     <span className="text-slate-200 text-xs">-</span>
-                                  ) : isMyApproved ? (
+                                  ) : isMyRequest && requestStatus === 'approved' ? (
+                                    // 自分が承認された
                                     <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center shadow-sm shadow-blue-200">
                                       <span className="text-white text-[10px] font-black">✓</span>
                                     </div>
-                                  ) : hasOthersApproved ? (
+                                  ) : isMyRequest && requestStatus === 'pending' ? (
+                                    // 自分が依頼中（待機中）
+                                    <div className="w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center shadow-sm shadow-yellow-200">
+                                      <span className="text-white text-[10px] font-black">◆</span>
+                                    </div>
+                                  ) : requestStatus === 'approved' ? (
+                                    // 他人が承認した
                                     <span className="text-red-400 text-lg font-bold">✕</span>
                                   ) : hasSlot ? (
+                                    // 空き
                                     <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center shadow-sm shadow-teal-200">
                                       <span className="text-white text-[10px] font-black">◯</span>
                                     </div>
