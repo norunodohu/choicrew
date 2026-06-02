@@ -771,6 +771,97 @@ app.post("/api/mini/migrate-existing-user", async (req, res) => {
   }
 });
 
+// ===== Admin: アカウント管理 =====
+const ADMIN_SECRET = process.env.ADMIN_SECRET || "choicrew-admin-1234";
+
+function checkAdminSecret(req: any, res: any): boolean {
+  const secret = req.headers['x-admin-secret'] || req.body?.adminSecret;
+  if (secret !== ADMIN_SECRET) {
+    res.status(403).json({ error: "Forbidden" });
+    return false;
+  }
+  return true;
+}
+
+// アカウント一覧取得
+app.get("/api/mini/admin/users", async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  try {
+    const adminDb = getFirestore();
+    const snap = await adminDb.collection('mini_users').get();
+    const users = snap.docs.map(d => {
+      const data = d.data();
+      return { email: d.id, name: data.name, email_verified: data.email_verified, created_at: data.created_at };
+    });
+    res.json({ users });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// アカウント更新（表示名・メール・email_verified）
+app.post("/api/mini/admin/update-user", async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { email, newEmail, name, email_verified } = req.body as {
+    email?: string; newEmail?: string; name?: string; email_verified?: boolean;
+  };
+  if (!email) return res.status(400).json({ error: "email required" });
+  try {
+    const adminDb = getFirestore();
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const snap = await userRef.get();
+    if (!snap.exists) return res.status(404).json({ error: "ユーザーが見つかりません" });
+
+    if (newEmail && newEmail !== email) {
+      // メールアドレス変更：古いドキュメントを削除して新しいIDで作り直す
+      const data = snap.data()!;
+      await adminDb.collection('mini_users').doc(newEmail).set({
+        ...data,
+        email: newEmail,
+        ...(name !== undefined ? { name } : {}),
+        ...(email_verified !== undefined ? { email_verified } : {}),
+        updated_at: new Date(),
+      });
+      await userRef.delete();
+      // mini_shares の creator_email / notify_email も更新
+      const sharesSnap = await adminDb.collection('mini_shares')
+        .where('creator_email', '==', email).get();
+      const sharesSnap2 = await adminDb.collection('mini_shares')
+        .where('notify_email', '==', email).get();
+      const batch = adminDb.batch();
+      sharesSnap.docs.forEach(d => batch.update(d.ref, { creator_email: newEmail }));
+      sharesSnap2.docs.forEach(d => {
+        if (!sharesSnap.docs.find(x => x.id === d.id)) {
+          batch.update(d.ref, { notify_email: newEmail });
+        }
+      });
+      await batch.commit();
+    } else {
+      const updates: Record<string, any> = { updated_at: new Date() };
+      if (name !== undefined) updates.name = name;
+      if (email_verified !== undefined) updates.email_verified = email_verified;
+      await userRef.update(updates);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// アカウント削除
+app.post("/api/mini/admin/delete-user", async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { email } = req.body as { email?: string };
+  if (!email) return res.status(400).json({ error: "email required" });
+  try {
+    const adminDb = getFirestore();
+    await adminDb.collection('mini_users').doc(email).delete();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // 依頼ステータス変更通知メール
 app.post("/api/mini/notify-requester", async (req, res) => {
   const { to, requesterName, ownerName, status, slotDate, slotStart, slotEnd } = req.body as {

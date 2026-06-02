@@ -43,6 +43,138 @@ interface MiniUser {
   shareCount?: number;
 }
 
+const ADMIN_SECRET = 'choicrew-admin-1234';
+
+function AccountCard({
+  user,
+  onUpdated,
+  onDeleted,
+}: {
+  user: MiniUser;
+  onUpdated: (oldEmail: string, updated: Partial<MiniUser>) => void;
+  onDeleted: (email: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(user.name);
+  const [editEmail, setEditEmail] = useState(user.email);
+  const [editVerified, setEditVerified] = useState(user.email_verified ?? false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handleSave = async () => {
+    setSaving(true);
+    setErr('');
+    try {
+      const res = await fetch('/api/mini/admin/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+        body: JSON.stringify({
+          email: user.email,
+          newEmail: editEmail.trim() !== user.email ? editEmail.trim() : undefined,
+          name: editName.trim(),
+          email_verified: editVerified,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || '更新失敗'); return; }
+      onUpdated(user.email, { email: editEmail.trim(), name: editName.trim(), email_verified: editVerified });
+      setEditing(false);
+    } catch (e) {
+      setErr('ネットワークエラー');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`${user.email} を削除しますか？この操作は取り消せません。`)) return;
+    try {
+      const res = await fetch('/api/mini/admin/delete-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || '削除失敗'); return; }
+      onDeleted(user.email);
+    } catch {
+      alert('ネットワークエラー');
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+      {editing ? (
+        <div className="space-y-3">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-500 mb-1">表示名</label>
+              <input
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-slate-500 mb-1">メールアドレス</label>
+              <input
+                type="email"
+                value={editEmail}
+                onChange={e => setEditEmail(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={editVerified}
+              onChange={e => setEditVerified(e.target.checked)}
+              className="w-4 h-4 text-teal-600"
+            />
+            メール確認済みにする
+          </label>
+          {err && <p className="text-sm text-red-600">{err}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-teal-600 text-white text-sm font-semibold rounded-lg hover:bg-teal-700 transition disabled:opacity-50">
+              {saving ? '保存中...' : '保存'}
+            </button>
+            <button onClick={() => { setEditing(false); setErr(''); setEditName(user.name); setEditEmail(user.email); setEditVerified(user.email_verified ?? false); }} className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-200 transition">
+              キャンセル
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-slate-900 text-sm">{user.name || <span className="text-slate-400">（名前なし）</span>}</span>
+              {user.email_verified
+                ? <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">確認済み</span>
+                : <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">未確認</span>}
+              <span className="text-xs text-slate-400">予定 {user.shareCount}件</span>
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">{user.email}</div>
+            {user.created_at && (
+              <div className="text-xs text-slate-400 mt-0.5">
+                登録: {format(user.created_at.toDate(), 'yyyy/MM/dd HH:mm', { locale: ja })}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button onClick={() => setEditing(true)} className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg hover:bg-slate-200 transition">
+              編集
+            </button>
+            <button onClick={handleDelete} className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 transition">
+              削除
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
@@ -130,26 +262,27 @@ export default function AdminPanel() {
 
     const detectExistingUsers = async () => {
       try {
-        const snap = await getDocs(collection(db, 'mini_shares'));
+        const [sharesSnap, accountsSnap] = await Promise.all([
+          getDocs(collection(db, 'mini_shares')),
+          getDocs(collection(db, 'mini_users')),
+        ]);
+
+        // 既にアカウントが存在するメールアドレスのセット
+        const registeredEmails = new Set<string>();
+        accountsSnap.forEach(d => registeredEmails.add(d.id.toLowerCase()));
+
         const existingUsersMap: Record<string, { email: string; name: string }> = {};
-        
-        snap.forEach((doc) => {
+        sharesSnap.forEach((doc) => {
           const data = doc.data();
           const email = data.notify_email;
           const name = data.displayName || data.name || 'Unknown';
-          
-          if (email && name) {
+          if (email && name && !registeredEmails.has(email.toLowerCase())) {
             existingUsersMap[email] = { email, name };
           }
         });
         
-        // mini_users と比較して、未移行ユーザーのみ抽出
-        const toMigrate: typeof existingUsers = [];
-        for (const [email, { name }] of Object.entries(existingUsersMap)) {
-          // 実装の都合上、全て「未移行」と仮定（サーバーで存在確認）
-          toMigrate.push({ email, name, migrated: false });
-        }
-        
+        // mini_users に存在しないメールアドレスのみ移行対象として表示
+        const toMigrate = Object.values(existingUsersMap).map(({ email, name }) => ({ email, name, migrated: false }));
         setExistingUsers(toMigrate);
       } catch (err) {
         console.error('既存ユーザー検出失敗:', err);
@@ -759,40 +892,24 @@ export default function AdminPanel() {
 
         {/* アカウント一覧タブ */}
         {activeTab === 'accounts' && (
-        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+        <div className="space-y-3">
           {miniUsersLoading ? (
-            <div className="p-8 text-center text-slate-500">読み込み中...</div>
+            <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">読み込み中...</div>
           ) : miniUsers.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">アカウントがありません</div>
+            <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">アカウントがありません</div>
           ) : (
-            <table className="w-full">
-              <thead className="bg-slate-100 border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">メールアドレス</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">表示名</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">メール確認</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">予定数</th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">登録日</th>
-                </tr>
-              </thead>
-              <tbody>
-                {miniUsers.map(user => (
-                  <tr key={user.email} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-4 py-3 text-sm font-medium text-slate-900">{user.email}</td>
-                    <td className="px-4 py-3 text-sm text-slate-700">{user.name || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-4 py-3 text-sm">
-                      {user.email_verified
-                        ? <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">確認済み</span>
-                        : <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">未確認</span>}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">{user.shareCount}</td>
-                    <td className="px-4 py-3 text-sm text-slate-500">
-                      {user.created_at ? format(user.created_at.toDate(), 'yyyy/MM/dd HH:mm', { locale: ja }) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            miniUsers.map(user => (
+              <AccountCard
+                key={user.email}
+                user={user}
+                onUpdated={(oldEmail, updated) => {
+                  setMiniUsers(prev => prev.map(u =>
+                    u.email === oldEmail ? { ...u, ...updated, email: updated.email ?? u.email } : u
+                  ).filter(u => u.email !== '__deleted__' + oldEmail));
+                }}
+                onDeleted={(email) => setMiniUsers(prev => prev.filter(u => u.email !== email))}
+              />
+            ))
           )}
         </div>
         )}
