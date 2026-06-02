@@ -1821,7 +1821,23 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
 
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const activeShares = ownedShares.filter(e => e.name && (!e.lastDate || e.lastDate >= todayStr));
-  const activeVisitedShares = visitedShares.filter(e => e.name && (!e.lastDate || e.lastDate >= todayStr));
+  const activeVisitedShares = visitedShares.filter(e => {
+    if (!e.name) return false;
+    // dateRange をパースして終了日付でチェック
+    if (e.dateRange) {
+      try {
+        const [, endStr] = e.dateRange.split('-');
+        const [eMonth, eDay] = endStr.trim().split('/').map(Number);
+        const year = new Date().getFullYear();
+        const endDate = new Date(year, eMonth - 1, eDay);
+        const endDateStr = format(endDate, 'yyyy-MM-dd');
+        return endDateStr >= todayStr;
+      } catch {
+        return !e.lastDate || e.lastDate >= todayStr;
+      }
+    }
+    return !e.lastDate || e.lastDate >= todayStr;
+  });
 
   const steps = createMode === 'custom' ? [1, 2, 3, 4] : [1, 2];
   const StepIndicator = () => (
@@ -2221,20 +2237,19 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                 <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">チェックしている予定</h2>
                 <div className="space-y-3">
                   {activeVisitedShares.slice(0, 20).map(entry => {
-                    // 今週の日付を計算（月〜日）
+                    // 今週の日付を計算（日〜土）
                     const today = new Date();
                     const dayOfWeek = today.getDay();
-                    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-                    const thisMonday = new Date(today);
-                    thisMonday.setDate(today.getDate() + mondayOffset);
+                    const thisSunday = new Date(today);
+                    thisSunday.setDate(today.getDate() - dayOfWeek);
                     
                     const weekDays = Array.from({ length: 7 }, (_, i) => {
-                      const d = new Date(thisMonday);
-                      d.setDate(thisMonday.getDate() + i);
+                      const d = new Date(thisSunday);
+                      d.setDate(thisSunday.getDate() + i);
                       return d;
                     });
                     
-                    const dayLabels = ['月', '火', '水', '木', '金', '土', '日'];
+                    const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
                     
                     return (
                       <a
