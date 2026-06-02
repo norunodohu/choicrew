@@ -2310,23 +2310,17 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                   {isPast ? (
                                     <span className="text-slate-200 text-xs">-</span>
                                   ) : isMyRequest && requestStatus === 'approved' ? (
-                                    // 自分が承認された
-                                    <div className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center shadow-sm shadow-blue-200">
-                                      <span className="text-white text-[10px] font-black">✓</span>
-                                    </div>
+                                    // 自分が承認された → 赤✓
+                                    <span className="text-red-500 text-sm font-black">✓</span>
                                   ) : isMyRequest && requestStatus === 'pending' ? (
-                                    // 自分が依頼中（待機中）
-                                    <div className="w-4 h-4 rounded-full bg-yellow-500 flex items-center justify-center shadow-sm shadow-yellow-200">
-                                      <span className="text-white text-[10px] font-black">◆</span>
-                                    </div>
+                                    // 自分が依頼中 → -
+                                    <span className="text-slate-300 text-xs">-</span>
                                   ) : requestStatus === 'approved' ? (
-                                    // 他人が承認した
-                                    <span className="text-red-400 text-lg font-bold">✕</span>
+                                    // 他人が承認 → 黒✕
+                                    <span className="text-slate-800 text-sm font-black">✕</span>
                                   ) : hasSlot ? (
-                                    // 空き
-                                    <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center shadow-sm shadow-teal-200">
-                                      <span className="text-white text-[10px] font-black">◯</span>
-                                    </div>
+                                    // 空き → 黒◯
+                                    <span className="text-slate-800 text-sm font-black">◯</span>
                                   ) : (
                                     <span className="text-slate-200 text-xs">-</span>
                                   )}
