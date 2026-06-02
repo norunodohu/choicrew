@@ -2171,27 +2171,30 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
               </section>
             )}
 
-            {/* 参加した予定（他人の） */}
+            {/* チェックしている予定（他人の） */}
             {!loadingVisited && activeVisitedShares.length > 0 && (
               <section>
-                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 px-1">参加した予定</h2>
-                <div className="space-y-2.5">
-                  {activeVisitedShares.slice(0, 10).map(entry => (
+                <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">チェックしている予定</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {activeVisitedShares.slice(0, 12).map(entry => (
                     <a
                       key={entry.id}
                       href={`/mini/s/${entry.id}`}
-                      className="flex items-center gap-3 bg-white border border-slate-200 hover:border-slate-300 hover:shadow-md rounded-2xl px-4 py-3.5 transition min-w-0 group"
+                      className="group flex flex-col bg-white border border-slate-200 hover:border-teal-400 hover:shadow-md rounded-xl p-4 transition min-w-0"
                     >
-                      <div className="w-2.5 h-2.5 rounded-full bg-slate-300 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-slate-700 group-hover:text-slate-900 transition truncate">{entry.name}</p>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          {entry.creatorName && <span>{entry.creatorName}さん</span>}
-                          {entry.creatorName && entry.dateRange && <span className="mx-1">·</span>}
-                          {entry.dateRange && <span>{entry.dateRange}</span>}
-                        </p>
+                      <div className="flex-1 min-w-0 mb-2">
+                        <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition line-clamp-2 mb-1.5">{entry.name}</p>
+                        {entry.dateRange && (
+                          <p className="text-xs text-slate-500 font-medium">📅 {entry.dateRange}</p>
+                        )}
+                        {entry.creatorName && (
+                          <p className="text-xs text-slate-400 mt-1">by {entry.creatorName}</p>
+                        )}
                       </div>
-                      <span className="text-slate-300 group-hover:text-slate-500 transition shrink-0">→</span>
+                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                        <span className="text-xs text-slate-400">チェック中</span>
+                        <span className="text-slate-300 group-hover:text-teal-500 transition">→</span>
+                      </div>
                     </a>
                   ))}
                 </div>
