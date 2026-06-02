@@ -2111,6 +2111,50 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
           /* ── スケジュール一覧 ── */
           <div className="animate-[fadeIn_0.2s_ease-out] space-y-6">
 
+            {/* ウィジェット: 統計サマリー */}
+            {!loadingOwned && !loadingVisited && (
+              <section className="space-y-3">
+                {(() => {
+                  const totalRequests = activeShares.reduce((sum, s) => sum + (((s.stats?.approvedCount) ?? 0) + ((s.stats?.pendingCount) ?? 0)), 0);
+                  const totalApproved = activeShares.reduce((sum, s) => sum + ((s.stats?.approvedCount) ?? 0), 0);
+                  const totalPending = activeShares.reduce((sum, s) => sum + ((s.stats?.pendingCount) ?? 0), 0);
+                  const totalAvailable = activeShares.reduce((sum, s) => sum + ((s.stats?.availableSlots) ?? 0), 0);
+                  
+                  return (
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {/* 作成した予定 */}
+                      <div className="bg-gradient-to-br from-teal-500 to-teal-600 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition">
+                        <div className="text-xs font-medium opacity-90 mb-2">作成予定</div>
+                        <div className="text-3xl font-bold mb-1">{activeShares.length}</div>
+                        <div className="text-xs opacity-75">アクティブ</div>
+                      </div>
+                      
+                      {/* 受け取った依頼 */}
+                      <div className="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition">
+                        <div className="text-xs font-medium opacity-90 mb-2">依頼</div>
+                        <div className="text-3xl font-bold mb-1">{totalRequests}</div>
+                        <div className="text-xs opacity-75">{totalApproved}件承認</div>
+                      </div>
+                      
+                      {/* 空きスロット */}
+                      <div className={`rounded-2xl p-4 shadow-md hover:shadow-lg transition text-white bg-gradient-to-br ${totalAvailable > 0 ? 'from-amber-500 to-amber-600' : 'from-slate-300 to-slate-400'}`}>
+                        <div className="text-xs font-medium opacity-90 mb-2">空き枠</div>
+                        <div className="text-3xl font-bold mb-1">{totalAvailable}</div>
+                        <div className="text-xs opacity-75">確保中</div>
+                      </div>
+                      
+                      {/* チェック中の予定 */}
+                      <div className="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-2xl p-4 shadow-md hover:shadow-lg transition">
+                        <div className="text-xs font-medium opacity-90 mb-2">チェック中</div>
+                        <div className="text-3xl font-bold mb-1">{activeVisitedShares.length}</div>
+                        <div className="text-xs opacity-75">予定</div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </section>
+            )}
+
             {/* 自分の予定 */}
             {loadingOwned ? (
               <div className="space-y-3">
