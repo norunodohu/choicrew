@@ -169,6 +169,7 @@ interface VisitedShareEntry {
   visited_at: number;
   dateRange?: string;
   lastDate?: string;
+  shareForcePublic?: boolean;
   slots?: Array<{ date: string; start: string; end: string }>;
 }
 
@@ -1680,7 +1681,8 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
           const snap = await getDoc(doc(db, 'mini_shares', entry.id));
           if (snap.exists()) {
             const data = snap.data();
-            const rawSlots: { date: string; start: string; end: string }[] = data.slots || [];
+            const shareForcePublic: boolean = data.force_public === true;
+            const rawSlots: { date: string; start: string; end: string; force_public?: boolean }[] = data.slots || [];
             const futureSlots = rawSlots.filter(s => s.date >= todayFetch).sort((a,b) => a.date.localeCompare(b.date));
             
             // 承認済みと保留中のリクエストを取得（日付単位でマッチング）
@@ -1720,6 +1722,7 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                 visited_at: entry.visited_at,
                 dateRange: computeDateRange(slotsWithStatus),
                 lastDate: slotsWithStatus[slotsWithStatus.length - 1].date,
+                shareForcePublic,
                 slots: slotsWithStatus as any,
               });
             } else {
@@ -2261,6 +2264,12 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                     const todayStr = format(new Date(), 'yyyy-MM-dd');
                     const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
 
+                    // 公開期間の計算（共有詳細ページと同じロジック）
+                    const viewerExpireDays = loadSlotExpireDays();
+                    const expireDateStr = viewerExpireDays === null
+                      ? format(addDays(new Date(), 365), 'yyyy-MM-dd')
+                      : format(addDays(new Date(), viewerExpireDays - 1), 'yyyy-MM-dd');
+
                     // スロット最終日の土曜まで表示
                     const lastSlotDate = entry.lastDate ? parseISO(entry.lastDate) : null;
                     const endSaturday = lastSlotDate ? (() => {
@@ -2308,7 +2317,12 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                 const slotForDate = entry.slots?.find(s => s.date === dateStr);
                                 const requestStatus = slotForDate ? (slotForDate as any).requestStatus : null;
                                 const isMyRequest = slotForDate && (slotForDate as any).isMyRequest;
-                                const hasSlot = !!slotForDate;
+                                // 公開ウィンドウ内かどうか（非公開スロットはグレー）
+                                const isPublic = !slotForDate ? false
+                                  : entry.shareForcePublic === true || (slotForDate as any).force_public === true
+                                  ? true
+                                  : dateStr <= expireDateStr;
+                                const hasSlot = !!slotForDate && isPublic;
 
                                 return (
                                   <div key={idx} className={`flex flex-col items-center py-2 flex-1 min-w-0 ${idx > 0 ? 'border-l border-slate-100' : ''} ${isToday ? 'bg-slate-50' : ''}`}>
