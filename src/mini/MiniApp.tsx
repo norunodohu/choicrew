@@ -2349,24 +2349,10 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                             const isToday = idx === dayOfWeek;
                             const isPast = dateStr < todayStr;
                             
-                            // dateRange をパース (例: "6/15-6/20")
-                            let isInRange = false;
-                            if (entry.dateRange) {
-                              try {
-                                const [startStr, endStr] = entry.dateRange.split('-');
-                                const [sMonth, sDay] = startStr.trim().split('/').map(Number);
-                                const [eMonth, eDay] = endStr.trim().split('/').map(Number);
-                                const year = new Date().getFullYear();
-                                
-                                const startDate = new Date(year, sMonth - 1, sDay);
-                                const endDate = new Date(year, eMonth - 1, eDay);
-                                
-                                isInRange = date >= startDate && date <= endDate;
-                              } catch {}
-                            }
-                            
-                            const hasSlot = entry.slots?.some(s => s.date === dateStr);
-                            const hasApprovedSlot = entry.slots?.some(s => s.date === dateStr && (s as any).isApproved);
+                            // entry.slots から直接判定（実データを信頼する）
+                            const slotForDate = entry.slots?.find(s => s.date === dateStr);
+                            const hasApprovedSlot = slotForDate && (slotForDate as any).isApproved;
+                            const hasSlot = !!slotForDate;
                             
                             return (
                               <div key={idx} className={`flex flex-col items-center gap-1 flex-1 min-w-0 ${isPast ? 'opacity-50' : ''}`}>
@@ -2377,7 +2363,7 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                     <span className="text-slate-200 text-xs">-</span>
                                   ) : hasApprovedSlot ? (
                                     <span className="text-red-400 text-lg font-bold">✕</span>
-                                  ) : isInRange && hasSlot ? (
+                                  ) : hasSlot ? (
                                     <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center shadow-sm shadow-teal-200">
                                       <span className="text-white text-[10px] font-black">◯</span>
                                     </div>
