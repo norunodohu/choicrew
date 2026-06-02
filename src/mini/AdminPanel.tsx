@@ -183,11 +183,10 @@ export default function AdminPanel() {
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'requests' | 'users' | 'migrate' | 'shares' | 'accounts'>('requests');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'requests' | 'migrate' | 'shares' | 'accounts'>('dashboard');
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
-  const [users, setUsers] = useState<UserInfo[]>([]);
   const [existingUsers, setExistingUsers] = useState<Array<{ email: string; name: string; migrated: boolean }>>([]);
   const [migratingEmails, setMigratingEmails] = useState<Set<string>>(new Set());
   // 予定一覧
@@ -217,48 +216,7 @@ export default function AdminPanel() {
     return () => unsub();
   }, [authenticated]);
 
-  // Firestore リスナー - ユーザー
-  useEffect(() => {
-    if (!authenticated) return;
 
-    const loadUsers = async () => {
-      try {
-        const snap = await getDocs(collection(db, 'mini_shares'));
-        const userMap: Record<string, UserInfo> = {};
-        
-        snap.forEach((doc) => {
-          const data = doc.data();
-          const displayName = data.displayName || data.name || 'Unknown';
-          
-          if (!userMap[displayName]) {
-            userMap[displayName] = {
-              displayName,
-              notify_email: data.notify_email,
-              email_verified: data.email_verified,
-              shareCount: 0,
-              shares: [],
-            };
-          }
-          
-          userMap[displayName].shareCount++;
-          userMap[displayName].shares.push({ id: doc.id });
-          // 最新のメール情報で上書き（複数の予定がある場合）
-          if (data.notify_email) {
-            userMap[displayName].notify_email = data.notify_email;
-            userMap[displayName].email_verified = data.email_verified;
-          }
-        });
-        
-        setUsers(Object.values(userMap).sort((a, b) => b.shareCount - a.shareCount));
-      } catch (err) {
-        console.error('ユーザー取得失敗:', err);
-      }
-    };
-
-    loadUsers();
-    const interval = setInterval(loadUsers, 5000);
-    return () => clearInterval(interval);
-  }, [authenticated]);
 
   // 既存ユーザーを検出
   useEffect(() => {
@@ -406,17 +364,20 @@ export default function AdminPanel() {
     }
   };
 
-  const handleVerifyEmail = async (user: UserInfo) => {
-    if (!user.notify_email) return;
+  const handleVerifyEmail = async (user: MiniUser) => {
+    if (!user.email) return;
     
     setLoading(true);
     try {
-      await Promise.all(
-        user.shares.map(share =>
-          updateDoc(doc(db, 'mini_shares', share.id), { email_verified: true })
-        )
-      );
-      alert(`${user.displayName} さんのメール有効化が完了しました`);
+      const res = await fetch('/api/mini/admin/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'メール有効化失敗'); return; }
+      setMiniUsers(prev => prev.map(u => u.email === user.email ? { ...u, email_verified: true } : u));
+      alert(`${user.name || user.email} のメールを有効化しました`);
     } catch (err) {
       setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
     } finally {
@@ -598,6 +559,16 @@ export default function AdminPanel() {
         {/* タブ */}
         <div className="flex gap-1 mb-8 border-b border-slate-200 overflow-x-auto">
           <button
+            onClick={() => setActiveTab('dashboard')}
+            className={`px-4 py-3 font-semibold transition-colors whitespace-nowrap ${
+              activeTab === 'dashboard'
+                ? 'text-teal-600 border-b-2 border-teal-600'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            📊 ダッシュボード
+          </button>
+          <button
             onClick={() => setActiveTab('requests')}
             className={`px-4 py-3 font-semibold transition-colors whitespace-nowrap ${
               activeTab === 'requests'
@@ -606,26 +577,6 @@ export default function AdminPanel() {
             }`}
           >
             📋 依頼管理
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-4 py-3 font-semibold transition-colors whitespace-nowrap ${
-              activeTab === 'users'
-                ? 'text-teal-600 border-b-2 border-teal-600'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            👥 ユーザー管理
-          </button>
-          <button
-            onClick={() => setActiveTab('migrate')}
-            className={`px-4 py-3 font-semibold transition-colors whitespace-nowrap ${
-              activeTab === 'migrate'
-                ? 'text-teal-600 border-b-2 border-teal-600'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            🔄 ユーザー移行 ({existingUsers.length})
           </button>
           <button
             onClick={() => setActiveTab('shares')}
@@ -647,7 +598,145 @@ export default function AdminPanel() {
           >
             🔑 アカウント ({miniUsers.length})
           </button>
+          <button
+            onClick={() => setActiveTab('migrate')}
+            className={`px-4 py-3 font-semibold transition-colors whitespace-nowrap ${
+              activeTab === 'migrate'
+                ? 'text-teal-600 border-b-2 border-teal-600'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            🔄 ユーザー移行 ({existingUsers.length})
+          </button>
         </div>
+
+        {/* ダッシュボードタブ */}
+        {activeTab === 'dashboard' && (
+        <div className="space-y-6">
+          {/* 統計カード */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6 border border-blue-200">
+              <div className="text-sm text-blue-600 font-semibold mb-2">👥 総ユーザー</div>
+              <div className="text-3xl font-bold text-blue-900">{miniUsers.length}</div>
+              <div className="text-xs text-blue-600 mt-2">
+                ✅ 有効化済み: {miniUsers.filter(u => u.email_verified).length}
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 border border-green-200">
+              <div className="text-sm text-green-600 font-semibold mb-2">📅 予定</div>
+              <div className="text-3xl font-bold text-green-900">{shares.length}</div>
+              <div className="text-xs text-green-600 mt-2">
+                📧 オーナー設定済み: {shares.filter(s => s.creator_email || s.notify_email).length}
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-6 border border-amber-200">
+              <div className="text-sm text-amber-600 font-semibold mb-2">⏳ 依頼</div>
+              <div className="text-3xl font-bold text-amber-900">{requests.length}</div>
+              <div className="text-xs text-amber-600 mt-2">
+                ⚪ 未処理: {requests.filter(r => r.status === 'pending').length}
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-lg p-6 border border-purple-200">
+              <div className="text-sm text-purple-600 font-semibold mb-2">🔄 移行待ち</div>
+              <div className="text-3xl font-bold text-purple-900">{existingUsers.length}</div>
+              <div className="text-xs text-purple-600 mt-2">レガシーユーザー</div>
+            </div>
+          </div>
+
+          {/* 警告・アラート */}
+          <div className="space-y-3">
+            {/* オーナー未設定予定 */}
+            {shares.filter(s => !s.creator_email && !s.notify_email).length > 0 && (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                <div className="flex gap-3">
+                  <span className="text-2xl">⚠️</span>
+                  <div>
+                    <div className="font-semibold text-red-900">オーナー未設定の予定</div>
+                    <div className="text-sm text-red-700 mt-1">
+                      {shares.filter(s => !s.creator_email && !s.notify_email).length} 件の予定がオーナーメールアドレスなしです。
+                      <a href="#shares" onClick={() => setActiveTab('shares')} className="font-bold underline ml-1">予定一覧で設定</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 未有効化ユーザー */}
+            {miniUsers.filter(u => !u.email_verified).length > 0 && (
+              <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded">
+                <div className="flex gap-3">
+                  <span className="text-2xl">⏳</span>
+                  <div>
+                    <div className="font-semibold text-amber-900">メール未確認ユーザー</div>
+                    <div className="text-sm text-amber-700 mt-1">
+                      {miniUsers.filter(u => !u.email_verified).length} 人のユーザーがメール確認を完了していません。
+                      <a href="#accounts" onClick={() => setActiveTab('accounts')} className="font-bold underline ml-1">アカウント一覧で確認</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 移行待ちユーザー */}
+            {existingUsers.length > 0 && (
+              <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded">
+                <div className="flex gap-3">
+                  <span className="text-2xl">🔄</span>
+                  <div>
+                    <div className="font-semibold text-purple-900">ユーザー移行が待機中</div>
+                    <div className="text-sm text-purple-700 mt-1">
+                      {existingUsers.length} 人のレガシーユーザーが新しいシステムに移行待ちです。
+                      <a href="#migrate" onClick={() => setActiveTab('migrate')} className="font-bold underline ml-1">ユーザー移行で実行</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 最近のアクティビティ */}
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 mb-4">📊 最近の依頼（最新10件）</h3>
+            <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+              {requests.slice(0, 10).length === 0 ? (
+                <div className="p-8 text-center text-slate-500">依頼がありません</div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-100 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-semibold text-slate-700">依頼者</th>
+                      <th className="px-4 py-2 text-left font-semibold text-slate-700">日時</th>
+                      <th className="px-4 py-2 text-left font-semibold text-slate-700">ステータス</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {requests.slice(0, 10).map(req => (
+                      <tr key={req.id} className="border-b border-slate-100 hover:bg-slate-50">
+                        <td className="px-4 py-2 text-slate-900">{req.requester_name}</td>
+                        <td className="px-4 py-2 text-slate-600 text-xs">
+                          {format(req.created_at.toDate(), 'MM/dd HH:mm', { locale: ja })}
+                        </td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                            req.status === 'approved' ? 'bg-green-100 text-green-700' :
+                            req.status === 'declined' ? 'bg-red-100 text-red-700' :
+                            'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {req.status === 'approved' ? '承認' : req.status === 'declined' ? '辞退' : '保留中'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+        )}
 
         {/* 依頼管理タブ */}
         {activeTab === 'requests' && (
@@ -779,120 +868,52 @@ export default function AdminPanel() {
         {/* ユーザー管理タブ */}
         {activeTab === 'users' && (
         <div className="space-y-6">
-          {users.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">
-              ユーザーが見つかりません
-            </div>
-          ) : (
-            <>
-              {/* 有効化済みユーザー */}
-              {users.filter(u => u.email_verified).length > 0 && (
-                <section>
-                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">
-                    ✅ 有効化済み ({users.filter(u => u.email_verified).length})
-                  </h2>
-                  <div className="space-y-3">
-                    {users.filter(u => u.email_verified).map((user, idx) => (
-                      <div key={idx} className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 hover:shadow-md transition">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-base font-bold text-slate-900">{user.displayName}</h3>
-                              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold">有効化済み</span>
-                            </div>
-                            {user.notify_email && (
-                              <div className="text-xs text-slate-500 mt-1">
-                                <code className="bg-slate-100 px-2 py-0.5 rounded">{user.notify_email}</code>
-                              </div>
-                            )}
-                            <div className="text-xs text-slate-400 mt-1">予定: {user.shareCount}件</div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* 確認待ち・未設定ユーザー */}
-              {users.filter(u => !u.email_verified).length > 0 && (
-                <section>
-                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">
-                    ⚠️  メール未確認・未設定 ({users.filter(u => !u.email_verified).length})
-                  </h2>
-                  <div className="space-y-3">
-                    {users.filter(u => !u.email_verified).map((user, idx) => (
-                      <div key={idx} className="bg-white rounded-lg shadow-sm border border-amber-200 p-4 hover:shadow-md transition">
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h3 className="text-base font-bold text-slate-900">{user.displayName}</h3>
-                              {!user.notify_email ? (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-semibold">未設定</span>
-                              ) : (
-                                <span className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full text-xs font-semibold">確認待ち</span>
-                              )}
-                            </div>
-                            {user.notify_email && (
-                              <div className="text-xs text-slate-500 mt-1">
-                                <code className="bg-slate-100 px-2 py-0.5 rounded">{user.notify_email}</code>
-                              </div>
-                            )}
-                            <div className="text-xs text-slate-400 mt-1">予定: {user.shareCount}件</div>
-                          </div>
-                          <div className="flex gap-2 shrink-0">
-                            {user.notify_email && !user.email_verified && (
-                              <button
-                                onClick={() => handleVerifyEmail(user)}
-                                disabled={loading}
-                                className="px-3 py-1.5 bg-blue-600 text-white text-xs font-semibold rounded-lg hover:bg-blue-700 transition disabled:opacity-50 whitespace-nowrap"
-                              >
-                                {loading ? '処理中...' : '有効化'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              )}
-            </>
-          )}
+          {/* このタブは削除されました */}
         </div>
         )}
 
         {/* ユーザー移行タブ */}
         {activeTab === 'migrate' && (
         <div className="space-y-4">
+          <div className="bg-purple-50 border-l-4 border-purple-500 p-4 rounded-lg">
+            <div className="flex gap-3">
+              <span className="text-2xl">🔄</span>
+              <div>
+                <div className="font-bold text-purple-900">レガシーユーザーシステム移行</div>
+                <div className="text-sm text-purple-700 mt-1">
+                  旧システムから登録されたユーザーを新しいシステムに移行します。
+                </div>
+              </div>
+            </div>
+          </div>
+
           {existingUsers.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">
               移行対象のユーザーがありません
             </div>
           ) : (
             <>
-              <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 text-sm text-blue-700">
-                <strong>既存ユーザー移行:</strong> 以下のユーザーをログインシステムに移行します。移行後、各ユーザーにパスワード再設定メールが送信されます。
-              </div>
               {existingUsers.map((user, idx) => (
-                <div key={idx} className="bg-white rounded-xl shadow-md p-5 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-900">{user.name}</h3>
-                    <p className="text-sm text-slate-600">
-                      <code className="bg-slate-100 px-2 py-1 rounded">{user.email}</code>
-                    </p>
+                <div key={idx} className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 hover:shadow-md transition">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-base font-bold text-slate-900">{user.name}</h3>
+                      <p className="text-xs text-slate-600 mt-1">
+                        <code className="bg-slate-100 px-2 py-0.5 rounded">{user.email}</code>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleMigrateUser(user.email, user.name)}
+                      disabled={migratingEmails.has(user.email)}
+                      className={`px-4 py-2 font-medium rounded-lg transition whitespace-nowrap ${
+                        migratingEmails.has(user.email)
+                          ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                          : 'bg-teal-600 text-white hover:bg-teal-700'
+                      }`}
+                    >
+                      {migratingEmails.has(user.email) ? '移行中...' : '移行'}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleMigrateUser(user.email, user.name)}
-                    disabled={migratingEmails.has(user.email)}
-                    className={`px-4 py-2 font-medium rounded-lg transition ${
-                      migratingEmails.has(user.email)
-                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                        : 'bg-teal-600 text-white hover:bg-teal-700'
-                    }`}
-                  >
-                    {migratingEmails.has(user.email) ? '移行中...' : '移行'}
-                  </button>
                 </div>
               ))}
             </>
@@ -901,69 +922,70 @@ export default function AdminPanel() {
         )}
         {/* 予定一覧タブ */}
         {activeTab === 'shares' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {sharesLoading ? (
             <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">読み込み中...</div>
           ) : shares.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">予定がありません</div>
           ) : (
             <>
-              <div className="grid gap-3">
-                {shares.map(share => {
-                  const email = share.creator_email || share.notify_email || '';
-                  const hasEmail = !!email;
-                  return (
-                    <div 
-                      key={share.id} 
-                      className={`bg-white rounded-lg border shadow-sm hover:shadow-md transition p-4 ${!hasEmail ? 'border-red-200' : 'border-slate-200'}`}
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0 flex-1">
-                          {/* タイトルと予定数 */}
-                          <div className="flex items-center gap-2 flex-wrap mb-2">
-                            <a
-                              href={`/share/${share.id}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-base font-bold text-teal-600 hover:text-teal-700 underline"
-                            >
-                              {share.title}
-                            </a>
+              {/* オーナー設定済み */}
+              {shares.filter(s => s.creator_email || s.notify_email).length > 0 && (
+                <section>
+                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">
+                    ✅ オーナー設定済み ({shares.filter(s => s.creator_email || s.notify_email).length})
+                  </h2>
+                  <div className="grid gap-3">
+                    {shares.filter(s => s.creator_email || s.notify_email).map(share => {
+                      const email = share.creator_email || share.notify_email || '';
+                      return (
+                        <div 
+                          key={share.id} 
+                          className="bg-white rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition p-4"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <a
+                                href={`/share/${share.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-base font-bold text-teal-600 hover:text-teal-700 underline"
+                              >
+                                {share.title}
+                              </a>
+                              <div className="text-xs text-slate-500 mt-1">
+                                📧 <code className="bg-slate-100 px-2 py-0.5 rounded">{email}</code>
+                              </div>
+                              <div className="text-xs text-slate-400 mt-1">
+                                🕐 {share.created_at 
+                                  ? format(share.created_at.toDate(), 'yyyy/MM/dd HH:mm', { locale: ja })
+                                  : '-'
+                                }
+                              </div>
+                            </div>
+                            <div className="flex gap-2 shrink-0">
+                              <button
+                                onClick={() => { setEditingShareId(share.id); setEditingEmail(email); }}
+                                className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded hover:bg-slate-200 transition whitespace-nowrap"
+                              >
+                                変更
+                              </button>
+                              <button
+                                onClick={() => handleDeleteShare(share.id, share.title)}
+                                className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-medium rounded hover:bg-red-200 transition whitespace-nowrap"
+                              >
+                                削除
+                              </button>
+                            </div>
                           </div>
-
-                          {/* メール情報 */}
-                          <div className="text-sm mb-2">
-                            {hasEmail ? (
-                              <span className="text-slate-600">
-                                📧 <code className="bg-slate-100 px-2 py-0.5 rounded text-xs">{email}</code>
-                              </span>
-                            ) : (
-                              <span className="text-red-600 font-medium">⚠️ メールアドレス未設定</span>
-                            )}
-                          </div>
-
-                          {/* 日付情報 */}
-                          <div className="flex gap-4 text-xs text-slate-500">
-                            <span>
-                              🕐 作成: {share.created_at 
-                                ? format(share.created_at.toDate(), 'yyyy/MM/dd HH:mm', { locale: ja })
-                                : '-'
-                              }
-                            </span>
-                            <span className="text-slate-400">ID: {share.id.slice(0, 8)}...</span>
-                          </div>
-                        </div>
-
-                        {/* 操作ボタン */}
-                        <div className="flex gap-2 shrink-0">
-                          {editingShareId === share.id ? (
-                            <div className="flex items-center gap-2">
+                          {editingShareId === share.id && (
+                            <div className="mt-3 pt-3 border-t border-slate-200 flex gap-2">
                               <input
                                 type="email"
                                 value={editingEmail}
                                 onChange={e => setEditingEmail(e.target.value)}
                                 placeholder="email@example.com"
-                                className="border border-slate-300 rounded px-2 py-1 text-xs w-40 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="border border-slate-300 rounded px-2 py-1 text-xs flex-1 focus:outline-none focus:ring-2 focus:ring-teal-500"
                                 autoFocus
                                 onKeyDown={e => { if (e.key === 'Enter') handleAssignEmail(share.id); if (e.key === 'Escape') { setEditingShareId(null); setEditingEmail(''); } }}
                               />
@@ -980,32 +1002,98 @@ export default function AdminPanel() {
                                 ✕
                               </button>
                             </div>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => { setEditingShareId(share.id); setEditingEmail(email); }}
-                                className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-medium rounded hover:bg-slate-200 transition whitespace-nowrap"
-                              >
-                                {hasEmail ? '変更' : '設定'}
-                              </button>
-                              <button
-                                onClick={() => handleDeleteShare(share.id, share.title)}
-                                className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-medium rounded hover:bg-red-200 transition whitespace-nowrap"
-                              >
-                                削除
-                              </button>
-                            </>
                           )}
                         </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
+              {/* オーナー未設定 */}
+              {shares.filter(s => !s.creator_email && !s.notify_email).length > 0 && (
+                <section>
+                  <h2 className="text-sm font-bold text-red-600 uppercase tracking-wide mb-3">
+                    ⚠️ オーナー未設定 ({shares.filter(s => !s.creator_email && !s.notify_email).length})
+                  </h2>
+                  <div className="grid gap-3">
+                    {shares.filter(s => !s.creator_email && !s.notify_email).map(share => (
+                      <div 
+                        key={share.id} 
+                        className="bg-red-50 rounded-lg border border-red-200 shadow-sm hover:shadow-md transition p-4"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <a
+                              href={`/share/${share.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-base font-bold text-red-600 hover:text-red-700 underline"
+                            >
+                              {share.title}
+                            </a>
+                            <div className="text-xs text-red-600 font-medium mt-1">
+                              📧 メールアドレス未設定
+                            </div>
+                            <div className="text-xs text-red-500 mt-1">
+                              🕐 {share.created_at 
+                                ? format(share.created_at.toDate(), 'yyyy/MM/dd HH:mm', { locale: ja })
+                                : '-'
+                              }
+                            </div>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            {editingShareId === share.id ? (
+                              <div className="flex gap-2">
+                                <input
+                                  type="email"
+                                  value={editingEmail}
+                                  onChange={e => setEditingEmail(e.target.value)}
+                                  placeholder="email@example.com"
+                                  className="border border-slate-300 rounded px-2 py-1 text-xs w-32 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                  autoFocus
+                                  onKeyDown={e => { if (e.key === 'Enter') handleAssignEmail(share.id); if (e.key === 'Escape') { setEditingShareId(null); setEditingEmail(''); } }}
+                                />
+                                <button 
+                                  onClick={() => handleAssignEmail(share.id)} 
+                                  className="px-2 py-1 bg-teal-600 text-white text-xs rounded hover:bg-teal-700 transition whitespace-nowrap"
+                                >
+                                  保存
+                                </button>
+                                <button 
+                                  onClick={() => { setEditingShareId(null); setEditingEmail(''); }} 
+                                  className="px-2 py-1 bg-slate-200 text-slate-700 text-xs rounded hover:bg-slate-300 transition"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => { setEditingShareId(share.id); setEditingEmail(''); }}
+                                  className="px-3 py-1.5 bg-teal-600 text-white text-xs font-medium rounded hover:bg-teal-700 transition whitespace-nowrap"
+                                >
+                                  設定
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteShare(share.id, share.title)}
+                                  className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-medium rounded hover:bg-red-200 transition whitespace-nowrap"
+                                >
+                                  削除
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    ))}
+                  </div>
+                </section>
+              )}
             </>
           )}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700 mt-6">
-            <strong>💡 予定管理について：</strong> タイトルをクリックすると予定ページが開きます。メールアドレスを設定すると、オーナーが自動認識されます。不要な予定は削除してください。
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+            <strong>💡 予定管理について：</strong> オーナー未設定の予定は利用者が自動認識されません。すべての予定にオーナーメールアドレスを設定してください。
           </div>
         </div>
         )}
@@ -1019,10 +1107,14 @@ export default function AdminPanel() {
             <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">アカウントがありません</div>
           ) : (
             <>
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                <strong>💡 アカウント管理について：</strong> ここは登録済みユーザーアカウントの管理です。編集・削除ができます。
+              </div>
+
               {/* 有効化済み */}
               {miniUsers.filter(u => u.email_verified).length > 0 && (
                 <section>
-                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">
+                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">
                     ✅ 有効化済み ({miniUsers.filter(u => u.email_verified).length})
                   </h2>
                   <div className="space-y-2">
@@ -1039,10 +1131,11 @@ export default function AdminPanel() {
                   </div>
                 </section>
               )}
+              
               {/* 未確認 */}
               {miniUsers.filter(u => !u.email_verified).length > 0 && (
                 <section>
-                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">
+                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-3">
                     ⏳ メール未確認 ({miniUsers.filter(u => !u.email_verified).length})
                   </h2>
                   <div className="space-y-2">
