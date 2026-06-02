@@ -2303,77 +2303,91 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                       <a
                         key={entry.id}
                         href={`/mini/s/${entry.id}`}
-                        className="group flex flex-col bg-white border border-slate-200 hover:border-teal-300 hover:shadow-md rounded-2xl overflow-hidden transition"
+                        className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg border border-slate-100 hover:border-teal-200 transition-all"
                       >
-                        {/* カラーヘッダー：タイトル＋作成者名 */}
-                        <div className="bg-teal-600 group-hover:bg-teal-700 transition px-4 py-3 flex items-center justify-between gap-2">
-                          <p className="text-sm font-bold text-white line-clamp-1">{entry.name}</p>
-                          {entry.creatorName && (
-                            <p className="text-xs text-teal-100 shrink-0 font-medium">{entry.creatorName}</p>
-                          )}
+                        {/* プロフィールヘッダー */}
+                        <div className="relative bg-gradient-to-br from-teal-500 to-teal-600 px-4 pt-4 pb-6">
+                          <div className="flex items-center gap-3">
+                            {/* アバター */}
+                            <div className="w-12 h-12 rounded-full bg-white/20 border-2 border-white/50 flex items-center justify-center shrink-0">
+                              <svg className="w-7 h-7 text-white/80" viewBox="0 0 24 24" fill="currentColor">
+                                <circle cx="12" cy="8" r="4"/>
+                                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+                              </svg>
+                            </div>
+                            {/* 名前＋タイトル */}
+                            <div className="min-w-0">
+                              {entry.creatorName && (
+                                <p className="text-white font-bold text-sm leading-tight">{entry.creatorName}</p>
+                              )}
+                              <p className="text-teal-100 text-xs mt-0.5 line-clamp-1">{entry.name}</p>
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="px-3 py-3 flex flex-col gap-3">
-                          {/* 週カレンダー */}
-                          <div className="border border-slate-100 rounded-xl overflow-hidden">
-                            {/* 曜日ヘッダー */}
-                            <div className="flex bg-slate-50 border-b border-slate-100">
-                              {dayLabels.map((label, idx) => (
-                                <div key={idx} className={`flex-1 text-center py-1.5 ${idx > 0 ? 'border-l border-slate-100' : ''}`}>
-                                  <span className={`text-[10px] font-bold ${idx === 0 ? 'text-red-400' : idx === 6 ? 'text-blue-400' : 'text-slate-400'}`}>{label}</span>
-                                </div>
-                              ))}
-                            </div>
-                            {/* データ行 */}
-                            {weeks.map((week, wi) => (
-                              <div key={wi} className={`flex ${wi > 0 ? 'border-t border-slate-100' : ''}`}>
-                                {week.map((date, idx) => {
-                                  const dateStr = format(date, 'yyyy-MM-dd');
-                                  const isPast = dateStr < todayStr;
-                                  const isToday = dateStr === todayStr;
-                                  const slotForDate = entry.slots?.find(s => s.date === dateStr);
-                                  const requestStatus = slotForDate ? (slotForDate as any).requestStatus : null;
-                                  const isMyRequest = slotForDate && (slotForDate as any).isMyRequest;
-                                  const isPublic = !slotForDate ? false
-                                    : entry.shareForcePublic === true || (slotForDate as any).force_public === true
-                                    ? true
-                                    : dateStr <= expireDateStr;
-                                  const hasSlot = !!slotForDate && isPublic;
-                                  const isSun = date.getDay() === 0;
-                                  const isSat = date.getDay() === 6;
-
-                                  return (
-                                    <div key={idx} className={`flex flex-col items-center py-1.5 flex-1 min-w-0 ${idx > 0 ? 'border-l border-slate-100' : ''} ${isToday ? 'bg-teal-50' : ''}`}>
-                                      <span className={`text-[9px] ${isPast ? 'text-slate-200' : !hasSlot ? 'text-slate-300' : isSun ? 'text-red-400' : isSat ? 'text-blue-400' : 'text-slate-500'}`}>{format(date, 'M/d')}</span>
-                                      <div className="mt-0.5 h-4 flex items-center justify-center">
-                                        {isPast || !hasSlot ? (
-                                          <span className="text-slate-200 text-[10px]">-</span>
-                                        ) : isMyRequest && requestStatus === 'approved' ? (
-                                          <span className="text-red-500 text-xs font-black">✓</span>
-                                        ) : requestStatus === 'approved' ? (
-                                          <span className="text-slate-600 text-xs font-black">✕</span>
-                                        ) : (
-                                          <span className="text-teal-500 text-xs font-black">◯</span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                        {/* カレンダー＋依頼エリア（カードにかぶせる） */}
+                        <div className="-mt-3 mx-3 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+                          {/* 曜日ヘッダー */}
+                          <div className="flex bg-slate-50/80 border-b border-slate-100">
+                            {dayLabels.map((label, idx) => (
+                              <div key={idx} className={`flex-1 text-center py-1.5 ${idx > 0 ? 'border-l border-slate-100' : ''}`}>
+                                <span className={`text-[10px] font-bold ${idx === 0 ? 'text-rose-400' : idx === 6 ? 'text-sky-400' : 'text-slate-400'}`}>{label}</span>
                               </div>
                             ))}
                           </div>
+                          {/* データ行 */}
+                          {weeks.map((week, wi) => (
+                            <div key={wi} className={`flex ${wi > 0 ? 'border-t border-slate-100' : ''}`}>
+                              {week.map((date, idx) => {
+                                const dateStr = format(date, 'yyyy-MM-dd');
+                                const isPast = dateStr < todayStr;
+                                const isToday = dateStr === todayStr;
+                                const slotForDate = entry.slots?.find(s => s.date === dateStr);
+                                const requestStatus = slotForDate ? (slotForDate as any).requestStatus : null;
+                                const isMyRequest = slotForDate && (slotForDate as any).isMyRequest;
+                                const isPublic = !slotForDate ? false
+                                  : entry.shareForcePublic === true || (slotForDate as any).force_public === true
+                                  ? true
+                                  : dateStr <= expireDateStr;
+                                const hasSlot = !!slotForDate && isPublic;
+                                const isSun = date.getDay() === 0;
+                                const isSat = date.getDay() === 6;
 
-                          {/* 依頼一覧 */}
-                          {myRequests.length > 0 && (
-                            <div className="border border-slate-100 rounded-xl overflow-hidden">
+                                return (
+                                  <div key={idx} className={`flex flex-col items-center py-1.5 flex-1 min-w-0 ${idx > 0 ? 'border-l border-slate-100' : ''} ${isToday ? 'bg-teal-50' : ''}`}>
+                                    <span className={`text-[9px] ${isPast ? 'text-slate-200' : !hasSlot ? 'text-slate-300' : isSun ? 'text-rose-400' : isSat ? 'text-sky-400' : 'text-slate-500'}`}>{format(date, 'M/d')}</span>
+                                    <div className="mt-0.5 h-4 flex items-center justify-center">
+                                      {isPast || !hasSlot ? (
+                                        <span className="text-slate-200 text-[10px]">-</span>
+                                      ) : isMyRequest && requestStatus === 'approved' ? (
+                                        <span className="text-rose-500 text-xs font-black">✓</span>
+                                      ) : requestStatus === 'approved' ? (
+                                        <span className="text-slate-400 text-xs font-black">✕</span>
+                                      ) : (
+                                        <span className="text-teal-400 text-xs font-bold">○</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* 依頼一覧 */}
+                        <div className="mx-3 mb-3">
+                          {myRequests.length === 0 ? (
+                            <p className="text-center text-xs text-slate-300 py-1">依頼なし</p>
+                          ) : (
+                            <div className="space-y-1.5">
                               {myRequests.map((s, i) => {
                                 const dateLabel = format(parseISO(s.date), 'M/d(eee)', { locale: ja });
                                 const timeLabel = `${s.start}–${s.end}`;
                                 const status = (s as any).requestStatus;
                                 return (
-                                  <div key={i} className={`flex items-center justify-between px-3 py-2 text-xs ${i > 0 ? 'border-t border-slate-100' : ''}`}>
-                                    <span className="text-slate-600 font-medium">{dateLabel} {timeLabel}</span>
-                                    <span className={`font-bold px-2 py-0.5 rounded-full text-[10px] ${status === 'approved' ? 'bg-red-50 text-red-500' : 'bg-slate-100 text-slate-400'}`}>
+                                  <div key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
+                                    <span className="text-xs text-slate-600 font-medium">{dateLabel} {timeLabel}</span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${status === 'approved' ? 'bg-rose-100 text-rose-500' : 'bg-slate-200 text-slate-400'}`}>
                                       {status === 'approved' ? '承認' : '未承認'}
                                     </span>
                                   </div>
