@@ -78,7 +78,14 @@ function AccountCard({
         }),
       });
       const data = await res.json();
-      if (!res.ok) { setErr(data.error || '更新失敗'); return; }
+      if (!res.ok) { 
+        let errorMsg = data.error || '更新失敗';
+        if (errorMsg.includes('already-exists')) {
+          errorMsg = 'このメールアドレスは既に登録されています。';
+        }
+        setErr(errorMsg); 
+        return; 
+      }
       onUpdated(user.email, { email: editEmail.trim(), name: editName.trim(), email_verified: editVerified });
       setEditing(false);
     } catch (e) {
@@ -98,11 +105,14 @@ function AccountCard({
         body: JSON.stringify({ email: user.email }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || '削除失敗'); return; }
-      alert(`削除しました。${data.deletedShares ? `（予定 ${data.deletedShares} 件も削除）` : ''}`);
+      if (!res.ok) { 
+        alert(`❌ 削除失敗: ${data.error || '不明'}`); 
+        return; 
+      }
+      alert(`✅ 削除しました。${data.deletedShares ? `（予定 ${data.deletedShares} 件も削除）` : ''}`);
       onDeleted(user.email);
     } catch {
-      alert('ネットワークエラー');
+      alert('❌ ネットワークエラーが発生しました');
     }
   };
 
@@ -327,6 +337,8 @@ export default function AdminPanel() {
   const handleAssignEmail = async (shareId: string) => {
     const trimmed = editingEmail.trim().toLowerCase();
     if (!trimmed) return;
+    setLoading(true);
+    setError('');
     try {
       await updateDoc(doc(db, 'mini_shares', shareId), {
         creator_email: trimmed,
@@ -335,8 +347,15 @@ export default function AdminPanel() {
       setShares(prev => prev.map(s => s.id === shareId ? { ...s, creator_email: trimmed, notify_email: trimmed } : s));
       setEditingShareId(null);
       setEditingEmail('');
+      alert(`✅ メールアドレスを設定しました`);
     } catch (err) {
-      setError(`更新失敗: ${err instanceof Error ? err.message : '不明'}`);
+      let errorMsg = `更新失敗: ${err instanceof Error ? err.message : '不明'}`;
+      if (errorMsg.includes('permission')) {
+        errorMsg = 'この予定の更新権限がありません。';
+      }
+      setError(errorMsg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -344,6 +363,7 @@ export default function AdminPanel() {
   const handleDeleteShare = async (shareId: string, title: string) => {
     if (!window.confirm(`「${title}」を削除しますか？\nこの操作は取り消せません。`)) return;
     setLoading(true);
+    setError('');
     try {
       const res = await fetch('/api/mini/admin/delete-share', {
         method: 'POST',
@@ -351,9 +371,16 @@ export default function AdminPanel() {
         body: JSON.stringify({ shareId }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || '削除失敗'); return; }
+      if (!res.ok) { 
+        let errorMsg = data.error || '削除失敗';
+        if (errorMsg.includes('permission')) {
+          errorMsg = 'この予定を削除する権限がありません。';
+        }
+        setError(errorMsg); 
+        return; 
+      }
       setShares(prev => prev.filter(s => s.id !== shareId));
-      alert(`予定を削除しました（依頼 ${data.deletedRequests} 件も削除）`);
+      alert(`✅ 予定「${title}」を削除しました（依頼 ${data.deletedRequests} 件も削除）`);
     } catch (err) {
       setError(`削除失敗: ${err instanceof Error ? err.message : '不明'}`);
     } finally {
@@ -374,6 +401,7 @@ export default function AdminPanel() {
     if (!user.email) return;
     
     setLoading(true);
+    setError('');
     try {
       const res = await fetch('/api/mini/admin/verify-email', {
         method: 'POST',
@@ -381,9 +409,19 @@ export default function AdminPanel() {
         body: JSON.stringify({ email: user.email }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'メール有効化失敗'); return; }
+      if (!res.ok) { 
+        // エラーメッセージを日本語化
+        let errorMsg = data.error || 'メール有効化失敗';
+        if (errorMsg.includes('already-in-use') || errorMsg.includes('invalid-email')) {
+          errorMsg = 'このメールアドレスは既に別のアカウントで登録されています。';
+        } else if (errorMsg.includes('user-not-found')) {
+          errorMsg = 'ユーザーが見つかりません。';
+        }
+        setError(errorMsg); 
+        return; 
+      }
       setMiniUsers(prev => prev.map(u => u.email === user.email ? { ...u, email_verified: true } : u));
-      alert(`${user.name || user.email} のメールを有効化しました`);
+      alert(`✅ ${user.name || user.email} のメールを有効化しました`);
     } catch (err) {
       setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
     } finally {
@@ -394,6 +432,7 @@ export default function AdminPanel() {
   // ユーザーを移行
   const handleMigrateUser = async (email: string, name: string) => {
     setMigratingEmails(prev => new Set([...prev, email]));
+    setError('');
     try {
       const res = await fetch('/api/mini/migrate-existing-user', {
         method: 'POST',
@@ -405,9 +444,13 @@ export default function AdminPanel() {
       if (res.ok) {
         // UI から削除
         setExistingUsers(prev => prev.filter(u => u.email !== email));
-        alert(`${email} を移行しました。パスワードリセットメールを送信しました。`);
+        alert(`✅ ${email} を移行しました。パスワードリセットメールを送信しました。`);
       } else {
-        setError(`移行失敗 (${email}): ${data.error}`);
+        let errorMsg = data.error || '移行失敗';
+        if (errorMsg.includes('already-exists')) {
+          errorMsg = `${email} は既に新システムに登録されています。`;
+        }
+        setError(`移行失敗 (${email}): ${errorMsg}`);
       }
     } catch (err) {
       setError(`エラー: ${err instanceof Error ? err.message : '不明'}`);
