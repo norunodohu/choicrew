@@ -1681,20 +1681,33 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
           if (snap.exists()) {
             const data = snap.data();
             const rawSlots: { date: string; start: string; end: string }[] = data.slots || [];
-            console.log(`[fetchVisitedShares] ${entry.id}: rawSlots=`, rawSlots.map(s => s.date));
             const futureSlots = rawSlots.filter(s => s.date >= todayFetch).sort((a,b) => a.date.localeCompare(b.date));
-            console.log(`[fetchVisitedShares] ${entry.id}: todayFetch=${todayFetch}, futureSlots=`, futureSlots.map(s => s.date));
+            
+            // 承認済みリクエストを取得
+            const reqSnap = await getDocs(query(collection(db, 'mini_requests'), where('share_id', '==', entry.id), where('status', '==', 'approved')));
+            const approvedSlotKeys = new Set(
+              reqSnap.docs.map(d => {
+                const r = d.data();
+                return `${r.slot_date}_${r.slot_start}_${r.slot_end}`;
+              })
+            );
+            
+            // スロットに承認状態を追加
+            const slotsWithStatus = futureSlots.map(s => ({
+              ...s,
+              isApproved: approvedSlotKeys.has(`${s.date}_${s.start}_${s.end}`)
+            }));
             
             // 未来のスロットがない場合は自動削除
-            if (futureSlots.length > 0) {
+            if (slotsWithStatus.length > 0) {
               results.push({
                 id: entry.id,
                 name: data.title || data.name || '',
                 creatorName: data.displayName || data.name || '',
                 visited_at: entry.visited_at,
-                dateRange: computeDateRange(futureSlots),
-                lastDate: futureSlots[futureSlots.length - 1].date,
-                slots: futureSlots,
+                dateRange: computeDateRange(slotsWithStatus),
+                lastDate: slotsWithStatus[slotsWithStatus.length - 1].date,
+                slots: slotsWithStatus as any,
               });
             } else {
               removeFromVisited(entry.id);
@@ -2353,6 +2366,7 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                             }
                             
                             const hasSlot = entry.slots?.some(s => s.date === dateStr);
+                            const hasApprovedSlot = entry.slots?.some(s => s.date === dateStr && (s as any).isApproved);
                             
                             return (
                               <div key={idx} className={`flex flex-col items-center gap-1 flex-1 min-w-0 ${isPast ? 'opacity-50' : ''}`}>
@@ -2361,6 +2375,8 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                 <div className="mt-1 h-5 flex items-center justify-center">
                                   {isPast ? (
                                     <span className="text-slate-200 text-xs">-</span>
+                                  ) : hasApprovedSlot ? (
+                                    <span className="text-red-400 text-lg font-bold">✕</span>
                                   ) : isInRange && hasSlot ? (
                                     <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center shadow-sm shadow-teal-200">
                                       <span className="text-white text-[10px] font-black">◯</span>
