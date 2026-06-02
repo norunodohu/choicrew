@@ -2699,6 +2699,92 @@ function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSett
 }
 
 /* ================================================================
+   SelfOrderModal
+   ================================================================ */
+
+function SelfOrderModal({ slot, defaultName, onClose, onSubmit }: {
+  slot: { date: string; start: string; end: string };
+  defaultName: string;
+  onClose: () => void;
+  onSubmit: (name: string, start: string, end: string) => void;
+}) {
+  const [name, setName] = useState(defaultName);
+  const [start, setStart] = useState(slot.start);
+  const [end, setEnd] = useState(slot.end);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    await onSubmit(name, start, end);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <p className="text-xs text-slate-400 font-medium uppercase tracking-wider mb-0.5">Self Order</p>
+            <p className="text-base font-bold text-slate-800">
+              {format(parseISO(slot.date), 'M/d(eee)', { locale: ja })}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-300 hover:text-slate-500 text-xl px-1">✕</button>
+        </div>
+
+        <div className="space-y-4">
+          {/* 依頼者名 */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1.5">依頼者名</label>
+            <input
+              type="text"
+              value={name}
+              onChange={e => setName(e.target.value)}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+              placeholder="名前を入力"
+            />
+          </div>
+
+          {/* 時間調整 */}
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 mb-1.5">時間</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="time"
+                value={start}
+                onChange={e => setStart(e.target.value)}
+                className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+              />
+              <span className="text-slate-300 font-bold">–</span>
+              <input
+                type="time"
+                value={end}
+                onChange={e => setEnd(e.target.value)}
+                className="flex-1 border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-800 focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-2 mt-6">
+          <button onClick={onClose} className="flex-1 border border-slate-200 text-slate-500 rounded-xl py-2.5 text-sm font-medium hover:bg-slate-50 transition">
+            キャンセル
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !name.trim()}
+            className="flex-1 bg-teal-600 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-teal-700 transition disabled:opacity-50"
+          >
+            {saving ? '登録中...' : '予約する'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    ShareView
    ================================================================ */
 
@@ -2773,6 +2859,7 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
   const [requesterAliases, setRequesterAliases] = useState<Record<string, string>>({});
   const [editingRequesterName, setEditingRequesterName] = useState<{ id: string; name: string } | null>(null);
   const [editingRequesterAliasValue, setEditingRequesterAliasValue] = useState('');
+  const [selfOrderSlot, setSelfOrderSlot] = useState<{ date: string; start: string; end: string } | null>(null);
 
   const emailMatchesOwner = !!currentUser?.email && !!share &&
     !!(share.creator_email || share.notify_email) &&
@@ -3322,6 +3409,44 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
         }).catch(() => {});
       }
       toast.show('承認を取り消しました', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('エラーが発生しました', 'error');
+    }
+  };
+
+  // Self Order: オーナーが自分で予約を作成（即承認）
+  const handleSelfOrder = async (slot: { date: string; start: string; end: string }, requesterName: string, start: string, end: string) => {
+    try {
+      const normalStart = normalizeTime(start);
+      const normalEnd = normalizeTime(end);
+      await addDoc(collection(db, 'mini_requests'), {
+        share_id: shareId,
+        slot_date: slot.date,
+        slot_start: slot.start,
+        slot_end: slot.end,
+        requested_start: normalStart,
+        requested_end: normalEnd,
+        requester_name: requesterName.trim(),
+        requester_email: '',
+        message: '',
+        status: 'approved',
+        self_order: true,
+        created_at: Timestamp.fromDate(new Date()),
+        email_notified_at: null,
+      });
+      // スロットの時間を承認時間に更新
+      if (normalStart !== slot.start || normalEnd !== slot.end) {
+        await updateDoc(doc(db, 'mini_shares', shareId), {
+          slots: replaceShareSlot(share?.slots || [], slot, { start: normalStart, end: normalEnd }),
+        });
+        setShare(prev => prev ? {
+          ...prev,
+          slots: replaceShareSlot(prev.slots || [], slot, { start: normalStart, end: normalEnd }),
+        } : prev);
+      }
+      setSelfOrderSlot(null);
+      toast.show('Self Order を登録しました', 'success');
     } catch (err) {
       console.error(err);
       toast.show('エラーが発生しました', 'error');
@@ -3961,6 +4086,12 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
                                       : `${reqs.length}件`}
                                   </span>
                                 )}
+                                <button
+                                  onClick={e => { e.stopPropagation(); setSelfOrderSlot(slot); }}
+                                  className="text-[10px] font-semibold text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-full hover:bg-slate-100 hover:text-slate-600 transition"
+                                >
+                                  Self Order
+                                </button>
                                 {slot.date > expireDateStr && !share?.force_public && !slot.force_public && (
                                   <button
                                     onClick={e => { e.stopPropagation(); setSlotVisibilityNewExpire(localExpireDays); setSlotVisibilityModal(slot); }}
@@ -4239,6 +4370,16 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
             </div>
           </div>
         </div>
+      )}
+
+      {/* Self Order モーダル */}
+      {selfOrderSlot && (
+        <SelfOrderModal
+          slot={selfOrderSlot}
+          defaultName={share?.displayName || share?.name || loadRequesterName()}
+          onClose={() => setSelfOrderSlot(null)}
+          onSubmit={(name, start, end) => handleSelfOrder(selfOrderSlot, name, start, end)}
+        />
       )}
 
       {/* 依頼詳細モーダル */}
