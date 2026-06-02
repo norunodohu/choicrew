@@ -548,56 +548,7 @@ function loadOwnerToken(shareId: string): string | null {
   try { return localStorage.getItem(`mini_owner_token_${shareId}`); } catch { return null; }
 }
 
-/* ── デバイスフィンガープリント ── */
-function getDeviceFingerprintRaw(): string {
-  const parts = [
-    screen.width,
-    screen.height,
-    window.devicePixelRatio,
-    // hardwareConcurrency は Brave 等で偽装されるため除外
-    // navigator.platform はブラウザ間で微妙に異なるため除外
-    navigator.maxTouchPoints || 0,
-    navigator.language || '',
-    Intl.DateTimeFormat().resolvedOptions().timeZone || '',
-    screen.colorDepth || 0,
-    screen.availWidth || 0,
-    screen.availHeight || 0,
-  ];
-  return parts.join('|');
-}
 
-function getDeviceFingerprint(): string {
-  const raw = getDeviceFingerprintRaw();
-  // シンプルなハッシュ（djb2）
-  let hash = 5381;
-  for (let i = 0; i < raw.length; i++) {
-    hash = ((hash << 5) + hash + raw.charCodeAt(i)) >>> 0;
-  }
-  return hash.toString(36);
-}
-
-async function registerOwnerFingerprint(shareId: string) {
-  try {
-    await fetch('/api/mini/register-fp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shareId, fingerprint: getDeviceFingerprint() }),
-    });
-  } catch { /* 通知失敗は無視suru */ }
-}
-
-async function checkOwnerFingerprint(shareId: string): Promise<boolean> {
-  try {
-    const res = await fetch('/api/mini/check-fp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ shareId, fingerprint: getDeviceFingerprint() }),
-    });
-    if (!res.ok) return false;
-    const data = await res.json();
-    return !!data.match;
-  } catch { return false; }
-}
 
 function isNotOwnerDismissed(shareId: string): boolean {
   try { return localStorage.getItem(`mini_not_owner_${shareId}`) === '1'; } catch { return false; }
@@ -1172,7 +1123,7 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
 /* ================================================================
    UserSettingsModal — プロフィール設定
    ================================================================ */
-function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; share?: ShareData | null; setShare?: (share: ShareData) => void }) {
+function UserSettingsModal({ onClose, share, setShare, currentUser, onLogout }: { onClose: () => void; share?: ShareData | null; setShare?: (share: ShareData) => void; currentUser?: CurrentUser | null; onLogout?: () => void }) {
   const [name, setName] = useState(() => loadRequesterName() || share?.displayName || '');
   const [email, setEmail] = useState(() => loadRequesterEmail() || share?.notify_email || '');
   const [slotExpireDays, setSlotExpireDays] = useState<7 | 14 | 21 | null>(loadSlotExpireDays);
@@ -1256,6 +1207,27 @@ function UserSettingsModal({ onClose, share, setShare }: { onClose: () => void; 
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4 animate-[slideUp_0.2s_ease-out]">
         <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
         <h3 className="text-lg font-bold text-slate-800">プロフィール設定</h3>
+
+        {/* アカウント情報 */}
+        {currentUser && (
+          <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">{currentUser.name}</p>
+              <p className="text-xs text-slate-500">{currentUser.email}</p>
+            </div>
+            <button
+              onClick={() => { onLogout?.(); onClose(); }}
+              className="text-xs text-red-500 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition"
+            >
+              ログアウト
+            </button>
+          </div>
+        )}
+        {!currentUser && (
+          <div className="bg-slate-50 rounded-xl p-4 text-center">
+            <p className="text-xs text-slate-500 mb-2">ログインするとデータを引き継げます</p>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-slate-600 mb-1">表示名</label>
@@ -1623,7 +1595,7 @@ const THEMES: Record<ThemeKey, {
    ================================================================ */
 
 
-function CreateView({ onCreated, currentUser, onNeedLogin }: { onCreated: (id: string, name: string) => void; currentUser: CurrentUser | null; onNeedLogin: () => void }) {
+function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreated: (id: string, name: string) => void; currentUser: CurrentUser | null; onNeedLogin: () => void; onLogout: () => void }) {
   const [step, setStep] = useState(1);
   const [title, setTitle] = useState(() => loadDraftData().title);
   const [displayName, setDisplayName] = useState(() => currentUser?.name || loadDraftData().displayName);
@@ -1782,8 +1754,6 @@ function CreateView({ onCreated, currentUser, onNeedLogin }: { onCreated: (id: s
       const dateRange = computeDateRange(slotData);
       const lastDate = [...slotData].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '';
       saveOwnedShare(id, title.trim(), dateRange, lastDate);
-      // FP+IP登録（第2層オーナー認証用）
-      registerOwnerFingerprint(id);
       onCreated(id, title.trim());
     } catch (err) {
       console.error('Failed to create share:', err);
@@ -1878,13 +1848,13 @@ function CreateView({ onCreated, currentUser, onNeedLogin }: { onCreated: (id: s
   return (
     <div className="min-h-screen bg-slate-50">
       {toast.UI}
-      {showSettings && <UserSettingsModal onClose={() => { setShowSettings(false); setProfileName(loadRequesterName()); }} />}
+      {showSettings && <UserSettingsModal onClose={() => { setShowSettings(false); setProfileName(loadRequesterName()); }} currentUser={currentUser} onLogout={onLogout} />}
 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-slate-50/90 backdrop-blur-sm border-b border-slate-100">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between">
-          <button onClick={() => setShowSettings(true)} className={`w-8 h-8 flex items-center justify-center rounded-full transition z-40 ${profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : 'text-teal-600 hover:text-teal-700 hover:bg-teal-50'}`}>
-            {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
+          <button onClick={() => { if (currentUser) setShowSettings(true); else onNeedLogin(); }} className={`w-8 h-8 flex items-center justify-center rounded-full transition z-40 ${currentUser ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : 'text-teal-600 hover:text-teal-700 hover:bg-teal-50'}`}>
+            {currentUser ? currentUser.name.trim().charAt(0).toUpperCase() : profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
           <div className="w-9 h-9" />
@@ -2531,7 +2501,7 @@ function RequestModal({ shareId, slot, onClose, onSent, declinedTime, onOpenSett
    ShareView
    ================================================================ */
 
-function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin }: { shareId: string; justCreated: boolean; ownerToken?: string | null; currentUser?: CurrentUser | null; onNeedLogin?: () => void }) {
+function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin, onLogout }: { shareId: string; justCreated: boolean; ownerToken?: string | null; currentUser?: CurrentUser | null; onNeedLogin?: () => void; onLogout?: () => void }) {
   const [share, setShare] = useState<ShareData | null>(null);
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<RequestEntry | null>(null);
@@ -2602,8 +2572,7 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
   const [requesterAliases, setRequesterAliases] = useState<Record<string, string>>({});
   const [editingRequesterName, setEditingRequesterName] = useState<{ id: string; name: string } | null>(null);
   const [editingRequesterAliasValue, setEditingRequesterAliasValue] = useState('');
-  const [fpOwnerPrompt, setFpOwnerPrompt] = useState(false);
-  const [fpChecked, setFpChecked] = useState(false);
+
   const emailMatchesOwner = !!currentUser?.email && !!share &&
     !!(share.creator_email || share.notify_email) &&
     (currentUser.email.trim().toLowerCase() === (share.creator_email || '').trim().toLowerCase() ||
@@ -2928,21 +2897,6 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
     });
     return () => unsub();
   }, [shareId]);
-
-  // FP+IP: オーナーなら登録（既存シェアの移行含む）、非オーナーなら照合
-  useEffect(() => {
-    if (loading) return;
-    if (isOwner) {
-      // オーナーがブラウザで開いた → FP+IPを登録/更新
-      registerOwnerFingerprint(shareId);
-    } else if (!fpChecked && !isNotOwnerDismissed(shareId)) {
-      // 非オーナー → FP+IP照合
-      setFpChecked(true);
-      checkOwnerFingerprint(shareId).then(match => {
-        if (match) setFpOwnerPrompt(true);
-      });
-    }
-  }, [loading, isOwner, shareId, fpChecked]);
 
   // FCM Web Push: オーナーのみ、許可済みならトークンを取得
   useEffect(() => {
@@ -3311,6 +3265,8 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
           onClose={() => { setShowUserSettings(false); setProfileName(loadRequesterName()); }}
           share={isOwner ? share : undefined}
           setShare={isOwner ? setShare : undefined}
+          currentUser={currentUser}
+          onLogout={onLogout}
         />
       )}
 
@@ -3415,8 +3371,8 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
       {/* Sticky top bar */}
       <header className="sticky top-0 z-50 bg-white backdrop-blur-sm border-b border-slate-100 print:hidden">
         <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-center relative">
-          <button onClick={() => setShowUserSettings(true)} className={`absolute left-4 w-8 h-8 flex items-center justify-center rounded-full transition ${profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50'}`}>
-            {profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
+          <button onClick={() => { if (currentUser) setShowUserSettings(true); else onNeedLogin?.(); }} className={`absolute left-4 w-8 h-8 flex items-center justify-center rounded-full transition ${currentUser ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : profileName ? 'bg-teal-500 hover:bg-teal-600 text-white text-xs font-bold' : 'text-slate-400 hover:text-teal-600 hover:bg-teal-50'}`}>
+            {currentUser ? currentUser.name.trim().charAt(0).toUpperCase() : profileName ? profileName.trim().charAt(0).toUpperCase() : <UserCircleIcon className="w-5 h-5" />}
           </button>
           <a href="/mini/" className="hover:opacity-70 transition"><Logo size="sm" /></a>
           {isOwner && (
@@ -3931,39 +3887,6 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
           </div>
         )}
 
-        {/* FP+IP一致: オーナー確認モーダル（第2層） */}
-        {fpOwnerPrompt && !isOwner && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 animate-[fadeIn_0.2s_ease-out] print:hidden">
-            <div className="bg-white rounded-2xl p-6 mx-6 max-w-sm w-full shadow-xl">
-              <p className="font-semibold text-slate-800 text-base mb-2">この予定の管理者ですか？</p>
-              <p className="text-sm text-slate-500 mb-5">別のブラウザで作成した予定と同じ端末からのアクセスを検知しました</p>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    const dateRange = share ? computeDateRange(share.slots) : '';
-                    const lastDate = share ? [...share.slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '';
-                    saveOwnedShare(shareId, share?.title || share?.name || '', dateRange, lastDate);
-                    setFpOwnerPrompt(false);
-                    setTokenVerified(true);
-                    toast.show('管理者として復帰しました', 'success');
-                  }}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-500 text-white text-sm font-semibold hover:bg-blue-600 transition"
-                >
-                  はい、管理者です
-                </button>
-                <button
-                  onClick={() => {
-                    setNotOwnerDismissed(shareId);
-                    setFpOwnerPrompt(false);
-                  }}
-                  className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-500 text-sm font-medium hover:bg-slate-50 transition"
-                >
-                  いいえ
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Footer CTA (visitor) */}
         {!isOwner && (
@@ -4702,15 +4625,26 @@ export default function MiniApp() {
   );
 
   let content: React.ReactNode;
+
+  const handleLogout = () => {
+    if (!window.confirm('ログアウトしますか？')) return;
+    localStorage.removeItem('mini_current_user');
+    localStorage.removeItem('mini_session_token');
+    Object.keys(localStorage)
+      .filter(k => k === 'mini_owned_shares' || k.startsWith('mini_sent_ids_') || k.startsWith('owner_token_'))
+      .forEach(k => localStorage.removeItem(k));
+    setCurrentUser(null);
+  };
+
   switch (view) {
     case 'loading':
       content = <ShareViewSkeleton />;
       break;
     case 'create':
-      content = <CreateView onCreated={handleCreated} currentUser={currentUser} onNeedLogin={() => setShowLoginModal(true)} />;
+      content = <CreateView onCreated={handleCreated} currentUser={currentUser} onNeedLogin={() => setShowLoginModal(true)} onLogout={handleLogout} />;
       break;
     case 'share':
-      content = <ShareView shareId={shareId!} justCreated={justCreated} ownerToken={ownerTokenFromUrl} currentUser={currentUser} onNeedLogin={() => setShowLoginModal(true)} />;
+      content = <ShareView shareId={shareId!} justCreated={justCreated} ownerToken={ownerTokenFromUrl} currentUser={currentUser} onNeedLogin={() => setShowLoginModal(true)} onLogout={handleLogout} />;
       break;
     default:
       content = null;
@@ -4719,39 +4653,6 @@ export default function MiniApp() {
   return (
     <ErrorBoundary>
       {/* ヘッダー */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold text-slate-900">ChoiCrew</h1>
-          <button
-            onClick={() => {
-              if (currentUser) {
-                // ログアウト処理
-                if (!window.confirm('ログアウトしますか？\nこの端末のローカルデータはすべて削除されます。\n（次回ログインで予定は自動的に復元されます）')) return;
-                // セッション情報
-                localStorage.removeItem('mini_current_user');
-                localStorage.removeItem('mini_session_token');
-                // オーナー状態・送信済み記録をすべてクリア
-                Object.keys(localStorage)
-                  .filter(k =>
-                    k === 'mini_owned_shares' ||
-                    k.startsWith('mini_sent_ids_') ||
-                    k.startsWith('owner_token_')
-                  )
-                  .forEach(k => localStorage.removeItem(k));
-                setCurrentUser(null);
-              } else {
-                setShowLoginModal(true);
-              }
-            }}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 transition"
-          >
-            <UserCircleIcon className="w-5 h-5 text-teal-600" />
-            <span className="text-sm font-medium text-slate-700">
-              {currentUser ? currentUser.name : 'ログイン'}
-            </span>
-          </button>
-        </div>
-      </div>
 
       {isInitialized && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={(user) => {
         setCurrentUser(user);
