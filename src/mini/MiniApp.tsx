@@ -2303,41 +2303,41 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                       <a
                         key={entry.id}
                         href={`/mini/s/${entry.id}`}
-                        className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-lg border border-slate-100 hover:border-teal-200 transition-all"
+                        className="group flex flex-col bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-md border border-slate-100 hover:border-slate-200 transition-all"
                       >
-                        {/* プロフィールヘッダー */}
-                        <div className="relative bg-gradient-to-br from-teal-500 to-teal-600 px-4 pt-4 pb-6">
-                          <div className="flex items-center gap-3">
-                            {/* アバター */}
-                            <div className="w-12 h-12 rounded-full bg-white/20 border-2 border-white/50 flex items-center justify-center shrink-0">
-                              <svg className="w-7 h-7 text-white/80" viewBox="0 0 24 24" fill="currentColor">
-                                <circle cx="12" cy="8" r="4"/>
-                                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-                              </svg>
-                            </div>
-                            {/* 名前＋タイトル */}
-                            <div className="min-w-0">
-                              {entry.creatorName && (
-                                <p className="text-white font-bold text-sm leading-tight">{entry.creatorName}</p>
-                              )}
-                              <p className="text-teal-100 text-xs mt-0.5 line-clamp-1">{entry.name}</p>
-                            </div>
+                        {/* プロフィール行 */}
+                        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+                          {/* アバター */}
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                            <svg className="w-6 h-6 text-slate-400" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="12" cy="8" r="3.5"/>
+                              <path d="M4.5 20c0-3.6 3.4-6.5 7.5-6.5s7.5 2.9 7.5 6.5"/>
+                            </svg>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            {entry.creatorName && (
+                              <p className="text-[13px] font-semibold text-slate-700 leading-tight tracking-tight">{entry.creatorName}</p>
+                            )}
+                            <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{entry.name}</p>
                           </div>
                         </div>
 
-                        {/* カレンダー＋依頼エリア（カードにかぶせる） */}
-                        <div className="-mt-3 mx-3 bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden mb-3">
+                        {/* 区切り線 */}
+                        <div className="h-px bg-slate-100 mx-4" />
+
+                        {/* カレンダー */}
+                        <div className="px-4 py-3">
                           {/* 曜日ヘッダー */}
-                          <div className="flex bg-slate-50/80 border-b border-slate-100">
+                          <div className="flex mb-1">
                             {dayLabels.map((label, idx) => (
-                              <div key={idx} className={`flex-1 text-center py-1.5 ${idx > 0 ? 'border-l border-slate-100' : ''}`}>
-                                <span className={`text-[10px] font-bold ${idx === 0 ? 'text-rose-400' : idx === 6 ? 'text-sky-400' : 'text-slate-400'}`}>{label}</span>
+                              <div key={idx} className="flex-1 text-center">
+                                <span className={`text-[10px] font-medium ${idx === 0 ? 'text-rose-400' : idx === 6 ? 'text-sky-400' : 'text-slate-300'}`}>{label}</span>
                               </div>
                             ))}
                           </div>
                           {/* データ行 */}
                           {weeks.map((week, wi) => (
-                            <div key={wi} className={`flex ${wi > 0 ? 'border-t border-slate-100' : ''}`}>
+                            <div key={wi} className="flex">
                               {week.map((date, idx) => {
                                 const dateStr = format(date, 'yyyy-MM-dd');
                                 const isPast = dateStr < todayStr;
@@ -2354,17 +2354,17 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                 const isSat = date.getDay() === 6;
 
                                 return (
-                                  <div key={idx} className={`flex flex-col items-center py-1.5 flex-1 min-w-0 ${idx > 0 ? 'border-l border-slate-100' : ''} ${isToday ? 'bg-teal-50' : ''}`}>
-                                    <span className={`text-[9px] ${isPast ? 'text-slate-200' : !hasSlot ? 'text-slate-300' : isSun ? 'text-rose-400' : isSat ? 'text-sky-400' : 'text-slate-500'}`}>{format(date, 'M/d')}</span>
+                                  <div key={idx} className={`flex flex-col items-center py-1 flex-1 min-w-0 rounded-lg ${isToday ? 'bg-slate-50' : ''}`}>
+                                    <span className={`text-[9px] ${isPast ? 'text-slate-200' : !hasSlot ? 'text-slate-200' : isSun ? 'text-rose-300' : isSat ? 'text-sky-300' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
                                     <div className="mt-0.5 h-4 flex items-center justify-center">
                                       {isPast || !hasSlot ? (
-                                        <span className="text-slate-200 text-[10px]">-</span>
+                                        <span className="text-slate-200 text-[9px]">·</span>
                                       ) : isMyRequest && requestStatus === 'approved' ? (
-                                        <span className="text-rose-500 text-xs font-black">✓</span>
+                                        <span className="text-rose-400 text-[11px] font-bold">✓</span>
                                       ) : requestStatus === 'approved' ? (
-                                        <span className="text-slate-400 text-xs font-black">✕</span>
+                                        <span className="text-slate-300 text-[11px] font-bold">✕</span>
                                       ) : (
-                                        <span className="text-teal-400 text-xs font-bold">○</span>
+                                        <span className="text-teal-400 text-[11px] font-bold">○</span>
                                       )}
                                     </div>
                                   </div>
@@ -2375,19 +2375,20 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                         </div>
 
                         {/* 依頼一覧 */}
-                        <div className="mx-3 mb-3">
+                        <div className="h-px bg-slate-100 mx-4" />
+                        <div className="px-4 py-3">
                           {myRequests.length === 0 ? (
-                            <p className="text-center text-xs text-slate-300 py-1">依頼なし</p>
+                            <p className="text-[11px] text-slate-300 text-center tracking-wide">依頼なし</p>
                           ) : (
-                            <div className="space-y-1.5">
+                            <div className="space-y-2">
                               {myRequests.map((s, i) => {
                                 const dateLabel = format(parseISO(s.date), 'M/d(eee)', { locale: ja });
                                 const timeLabel = `${s.start}–${s.end}`;
                                 const status = (s as any).requestStatus;
                                 return (
-                                  <div key={i} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-2">
-                                    <span className="text-xs text-slate-600 font-medium">{dateLabel} {timeLabel}</span>
-                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${status === 'approved' ? 'bg-rose-100 text-rose-500' : 'bg-slate-200 text-slate-400'}`}>
+                                  <div key={i} className="flex items-center justify-between">
+                                    <span className="text-[11px] text-slate-500">{dateLabel} {timeLabel}</span>
+                                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full tracking-wide ${status === 'approved' ? 'bg-rose-50 text-rose-400' : 'bg-slate-100 text-slate-400'}`}>
                                       {status === 'approved' ? '承認' : '未承認'}
                                     </span>
                                   </div>
