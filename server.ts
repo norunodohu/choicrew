@@ -81,7 +81,7 @@ app.post("/api/notify", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("FCM send error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -440,7 +440,7 @@ app.post("/api/mini/email-confirm", async (req, res) => {
       res.json({ ok: true });
     } catch (err) {
       console.error("Email confirm error:", err);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: localizeErrorMessage(err) });
     }
   } else {
     // 既存ユーザー：確認メール送信（トークンなし）
@@ -461,7 +461,7 @@ app.post("/api/mini/email-confirm", async (req, res) => {
       res.json({ ok: true });
     } catch (err) {
       console.error("Email confirm error:", err);
-      res.status(500).json({ error: String(err) });
+      res.status(500).json({ error: localizeErrorMessage(err) });
     }
   }
 });
@@ -524,7 +524,7 @@ app.get("/api/mini/verify-email", async (req, res) => {
     }
   } catch (err) {
     console.error("Email verify error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -554,7 +554,7 @@ app.post("/api/mini/send-login-email", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("Login email error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -571,7 +571,7 @@ app.post("/api/mini/check-email", async (req, res) => {
     res.json({ isNew: !userSnap.exists });
   } catch (err) {
     console.error("Check email error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -831,7 +831,7 @@ app.get("/api/mini/admin/users", async (req, res) => {
     });
     res.json({ users });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -880,7 +880,7 @@ app.post("/api/mini/admin/update-user", async (req, res) => {
     }
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -916,7 +916,7 @@ app.post("/api/mini/admin/delete-user", async (req, res) => {
 
     res.json({ ok: true, deletedShares: shareIds.size });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -938,7 +938,7 @@ app.post("/api/mini/admin/verify-email", async (req, res) => {
     
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -966,7 +966,7 @@ app.post("/api/mini/admin/delete-share", async (req, res) => {
     await batch.commit();
     res.json({ ok: true, deletedRequests: reqsSnap.size });
   } catch (err) {
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -1020,7 +1020,7 @@ app.post("/api/mini/notify-requester", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("notify-requester error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -1075,7 +1075,7 @@ app.get("/api/mini/cleanup", async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (err) {
     console.error("cleanup error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
