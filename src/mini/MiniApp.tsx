@@ -1634,8 +1634,11 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
             const slots: { date: string }[] = data.slots || [];
             const futureSlots = slots.filter(s => s.date >= todayFetch).sort((a, b) => a.date.localeCompare(b.date));
             
-            // 未来のスロットがない場合はスキップ（過去の予定は見なくていい）
-            if (futureSlots.length === 0) continue;
+            // 未来のスロットがない場合は自動削除（過去の予定は見なくていい）
+            if (futureSlots.length === 0) {
+              removeOwnedShare(entry.id);
+              continue;
+            }
 
             const availableSlots = futureSlots.length;
             const pendingCount = reqSnap.docs.filter(d => { const r = d.data(); return !r.status || r.status === 'pending'; }).length;
@@ -1678,9 +1681,11 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
           if (snap.exists()) {
             const data = snap.data();
             const rawSlots: { date: string; start: string; end: string }[] = data.slots || [];
+            console.log(`[fetchVisitedShares] ${entry.id}: rawSlots=`, rawSlots.map(s => s.date));
             const futureSlots = rawSlots.filter(s => s.date >= todayFetch).sort((a,b) => a.date.localeCompare(b.date));
+            console.log(`[fetchVisitedShares] ${entry.id}: todayFetch=${todayFetch}, futureSlots=`, futureSlots.map(s => s.date));
             
-            // 未来のスロットがない場合はリストに表示しない
+            // 未来のスロットがない場合は自動削除
             if (futureSlots.length > 0) {
               results.push({
                 id: entry.id,
@@ -1691,6 +1696,8 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                 lastDate: futureSlots[futureSlots.length - 1].date,
                 slots: futureSlots,
               });
+            } else {
+              removeFromVisited(entry.id);
             }
           }
         } catch { /* */ }
@@ -1700,6 +1707,13 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
       setLoadingVisited(false);
     };
     fetchVisitedShares();
+    
+    // メイン画面にフォーカスしたときに再取得
+    const handleFocus = () => {
+      fetchVisitedShares();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   const removeOwnedShare = (id: string) => {
@@ -1711,6 +1725,17 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
       }
     } catch { /* */ }
     setOwnedShares(prev => prev.filter(e => e.id !== id));
+  };
+
+  const removeFromVisited = (id: string) => {
+    try {
+      const raw = localStorage.getItem('mini_visited_shares');
+      if (raw) {
+        const entries = JSON.parse(raw) as any[];
+        localStorage.setItem('mini_visited_shares', JSON.stringify(entries.filter(e => e.id !== id)));
+      }
+    } catch { /* */ }
+    setVisitedShares(prev => prev.filter(e => e.id !== id));
   };
 
   const slotsFor = (date: string) => slots.filter(s => s.date === date);
@@ -2254,8 +2279,8 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                     thisSunday.setDate(today.getDate() - dayOfWeek);
                     
                     const weekDays = Array.from({ length: 7 }, (_, i) => {
-                      const d = new Date(thisSunday);
-                      d.setDate(thisSunday.getDate() + i);
+                      const d = new Date(today);
+                      d.setDate(today.getDate() + i);
                       return d;
                     });
                     
@@ -2267,80 +2292,73 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                         href={`/mini/s/${entry.id}`}
                         className="group flex flex-col bg-white border border-slate-200 hover:border-teal-400 hover:shadow-md rounded-xl p-4 transition"
                       >
-                        <div className="mb-3">
+                        <div className="mb-3 px-1">
                           <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition line-clamp-2 mb-1.5">{entry.name}</p>
-                          {entry.creatorName && (
-                            <p className="text-xs text-slate-400">by {entry.creatorName}</p>
-                          )}
-                          {entry.dateRange && (
-                            <p className="text-xs text-slate-500 font-medium mt-1.5">📅 {entry.dateRange}</p>
-                          )}
+                          <div className="flex items-center gap-3">
+                            {entry.creatorName && (
+                              <p className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium truncate max-w-[120px]">
+                                {entry.creatorName}
+                              </p>
+                            )}
+                            {entry.dateRange && (
+                              <p className="text-[10px] text-slate-400 font-medium">📅 {entry.dateRange}</p>
+                            )}
+                          </div>
                         </div>
                         
                         {/* 次の3つのスロットを表示 */}
                         {entry.slots && entry.slots.length > 0 && (
-                          <div className="bg-teal-50 rounded-lg p-3 mb-3 space-y-1.5">
+                          <div className="bg-gradient-to-r from-teal-50 to-white border border-teal-100/50 rounded-xl p-3 mb-3 space-y-2">
                             {entry.slots.slice(0, 3).map((slot, idx) => {
                               const slotDate = parseISO(slot.date);
                               const dateStr = format(slotDate, 'M/d(eee)', { locale: ja });
                               const timeStr = `${slot.start}-${slot.end}`;
                               return (
-                                <div key={idx} className="text-xs font-medium">
+                                <div key={idx} className="flex items-center justify-between text-[11px] font-bold">
                                   <span className="text-teal-700">{dateStr}</span>
-                                  <span className="text-teal-500 ml-1">{timeStr}</span>
+                                  <span className="text-teal-600 bg-white px-2 py-0.5 rounded-full border border-teal-100 shadow-sm">{timeStr}</span>
                                 </div>
                               );
                             })}
                             {entry.slots.length > 3 && (
-                              <div className="text-xs text-teal-600 pt-1 border-t border-teal-200">
-                                他 {entry.slots.length - 3} 件
+                              <div className="text-[10px] text-teal-400/80 text-center pt-1 border-t border-teal-100/50 italic">
+                                + other {entry.slots.length - 3} slots
                               </div>
                             )}
                           </div>
                         )}
                         
-                        {/* 今週のスロット表示 */}
-                        <div className="bg-slate-50 rounded-lg p-3 flex items-center justify-between gap-2">
+                        {/* 1週間（今日から7日間）のスロット表示 */}
+                        <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-1">
                           {weekDays.map((date, idx) => {
                             const dateStr = format(date, 'yyyy-MM-dd');
-                            const todayStr = format(new Date(), 'yyyy-MM-dd');
-                            const isPast = dateStr < todayStr;
-                            
-                            // dateRange をパース (例: "6/15-6/20")
-                            let isInRange = false;
-                            if (entry.dateRange) {
-                              try {
-                                const [startStr, endStr] = entry.dateRange.split('-');
-                                const [sMonth, sDay] = startStr.trim().split('/').map(Number);
-                                const [eMonth, eDay] = endStr.trim().split('/').map(Number);
-                                const year = new Date().getFullYear();
-                                
-                                const startDate = new Date(year, sMonth - 1, sDay);
-                                const endDate = new Date(year, eMonth - 1, eDay);
-                                
-                                isInRange = date >= startDate && date <= endDate;
-                              } catch {}
+                            const isToday = idx === 0;
+                            const hasSlot = entry.slots?.some(s => s.date === dateStr);
+                            if (idx === 0) {
+                              console.log(`[widget] ${entry.id} today=${dateStr}, entry.slots=`, entry.slots?.map(s => s.date), 'hasSlot=', hasSlot);
                             }
                             
                             return (
-                              <div key={idx} className="flex flex-col items-center gap-0.5 flex-1">
-                                <span className={`text-xs font-medium ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>{dayLabels[idx]}</span>
-                                <span className={`text-[10px] ${isPast ? 'text-slate-300' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
-                                {isPast ? (
-                                  <span className="text-slate-200 text-lg">-</span>
-                                ) : isInRange ? (
-                                  <span className="text-teal-500 text-lg">◯</span>
-                                ) : (
-                                  <span className="text-slate-200 text-xs">-</span>
-                                )}
+                              <div key={idx} className="flex flex-col items-center gap-1 flex-1 min-w-0">
+                                <span className={`text-[10px] font-bold ${isToday ? 'text-teal-600' : 'text-slate-400'}`}>{dayLabels[date.getDay()]}</span>
+                                <span className={`text-[9px] ${isToday ? 'text-teal-500/70' : 'text-slate-300'}`}>{format(date, 'M/d')}</span>
+                                <div className="mt-1 h-5 flex items-center justify-center">
+                                  {hasSlot ? (
+                                    <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center shadow-sm shadow-teal-200">
+                                      <span className="text-white text-[10px] font-black">◯</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-200 text-xs">-</span>
+                                  )}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                         
-                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
-                          <span className="text-xs text-slate-400">チェック中</span>
-                          <span className="text-slate-300 group-hover:text-teal-500 transition">→</span>
+                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100/50">
+                          <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Detail</span>
+                          <span className="text-slate-300 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all">→</span>
                         </div>
                       </a>
                     );
@@ -3959,17 +3977,17 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
                               <span className="text-sm text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-lg">
                                 閲覧のみ
                               </span>
-                            ) : (isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending')) || (isExclusive && hasApproved) ? null : (
+                            ) : (isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(key)?.status === 'pending')) || (isExclusive && hasApproved) ? null : (
                               <button
                                 onClick={() => {
                                   if (!currentUser) { onNeedLogin?.(); return; }
                                   setRequestSlot(slot);
                                 }}
                                 className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
-                                disabled={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending')}
-                                title={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending') ? '希望者がいます' : ''}
+                                disabled={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(key)?.status === 'pending')}
+                                title={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(key)?.status === 'pending') ? '希望者がいます' : ''}
                               >
-                                {isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending') ? '希望者あり' : '依頼する'}
+                                {isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(key)?.status === 'pending') ? '希望者あり' : '依頼する'}
                               </button>
                             )}
                           </div>
