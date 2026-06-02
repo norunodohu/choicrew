@@ -1632,15 +1632,20 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
           if (snap.exists()) {
             const data = snap.data();
             const slots: { date: string }[] = data.slots || [];
-            const availableSlots = slots.filter(s => s.date >= todayFetch).length;
+            const futureSlots = slots.filter(s => s.date >= todayFetch).sort((a, b) => a.date.localeCompare(b.date));
+            
+            // 未来のスロットがない場合はスキップ（過去の予定は見なくていい）
+            if (futureSlots.length === 0) continue;
+
+            const availableSlots = futureSlots.length;
             const pendingCount = reqSnap.docs.filter(d => { const r = d.data(); return !r.status || r.status === 'pending'; }).length;
             const approvedCount = reqSnap.docs.filter(d => d.data().status === 'approved').length;
             results.push({
               id: entry.id,
               name: data.title || data.name || '',
               created_at: entry.created_at,
-              dateRange: computeDateRange(slots as { date: string }[]),
-              lastDate: slots.length > 0 ? [...slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '',
+              dateRange: computeDateRange(futureSlots as { date: string }[]),
+              lastDate: futureSlots.length > 0 ? futureSlots[futureSlots.length - 1].date : '',
               stats: { availableSlots, pendingCount, approvedCount },
             });
             // マイグレーション：ログイン済みかつ creator_email 未設定のシェアに付与
@@ -1672,16 +1677,19 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
           const snap = await getDoc(doc(db, 'mini_shares', entry.id));
           if (snap.exists()) {
             const data = snap.data();
-            const slots: { date: string; start: string; end: string }[] = data.slots || [];
-            if (slots.some(s => s.date >= todayFetch)) {
+            const rawSlots: { date: string; start: string; end: string }[] = data.slots || [];
+            const futureSlots = rawSlots.filter(s => s.date >= todayFetch).sort((a,b) => a.date.localeCompare(b.date));
+            
+            // 未来のスロットがない場合はリストに表示しない
+            if (futureSlots.length > 0) {
               results.push({
                 id: entry.id,
                 name: data.title || data.name || '',
                 creatorName: data.displayName || data.name || '',
                 visited_at: entry.visited_at,
-                dateRange: computeDateRange(slots),
-                lastDate: [...slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '',
-                slots: slots,
+                dateRange: computeDateRange(futureSlots),
+                lastDate: futureSlots[futureSlots.length - 1].date,
+                slots: futureSlots,
               });
             }
           }
