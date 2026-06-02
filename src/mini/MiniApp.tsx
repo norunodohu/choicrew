@@ -3706,6 +3706,7 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
                             ) : myReqStatus?.status === 'declined' ? (
                               <button
                                 onClick={() => {
+                                  if (!currentUser) { onNeedLogin?.(); return; }
                                   const declinedReq = requests.find(r => r.id === myReqStatus.id);
                                   setDeclinedSlotTime({
                                     start: normalizeTime(declinedReq?.requested_start || declinedReq?.slot_start || slot.start),
@@ -3742,7 +3743,10 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
                               </span>
                             ) : (isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending')) || (isExclusive && hasApproved) ? null : (
                               <button
-                                onClick={() => setRequestSlot(slot)}
+                                onClick={() => {
+                                  if (!currentUser) { onNeedLogin?.(); return; }
+                                  setRequestSlot(slot);
+                                }}
                                 className={`${T.accentBtn} text-sm font-medium rounded-xl px-5 py-2.5 transition-all shadow-sm`}
                                 disabled={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending')}
                                 title={isExclusive && (reqs.some(r => r.status === 'pending') || myRequestStatuses.get(slotKey)?.status === 'pending') ? '希望者がいます' : ''}
@@ -4353,6 +4357,38 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
 }
 
 /* ================================================================
+   LegacyUserPromptModal — 既存ユーザー向けアカウント設定促進
+   ================================================================ */
+function LegacyUserPromptModal({ onLogin, onDismiss }: { onLogin: () => void; onDismiss: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[90] px-4">
+      <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 animate-[slideUp_0.25s_ease-out]">
+        <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
+        <div className="text-center space-y-3 py-2">
+          <div className="w-14 h-14 bg-teal-100 rounded-2xl flex items-center justify-center mx-auto text-3xl">🔐</div>
+          <h2 className="text-xl font-bold text-slate-800">アカウントを設定しましょう</h2>
+          <p className="text-sm text-slate-500 leading-relaxed">
+            予定の作成・依頼の送受信には<br />ログインが必要になりました。<br />メールアドレスとパスワードを設定してください。
+          </p>
+        </div>
+        <button
+          onClick={onLogin}
+          className="w-full py-3.5 rounded-xl bg-teal-600 text-white font-bold text-base hover:bg-teal-700 transition shadow-sm"
+        >
+          ログイン・新規登録
+        </button>
+        <button
+          onClick={onDismiss}
+          className="w-full py-2 text-sm text-slate-400 hover:text-slate-600 transition"
+        >
+          後で
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================
    MiniApp (Router)
    ================================================================ */
 
@@ -4368,6 +4404,7 @@ export default function MiniApp() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showLegacyPrompt, setShowLegacyPrompt] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -4402,6 +4439,16 @@ export default function MiniApp() {
       localStorage.removeItem('mini_session_token');
       clearCurrentUser();
       setCurrentUser(null);
+    }
+
+    // 未ログインで既存データがある場合 → アカウント設定促進ポップアップ
+    const isLoggedIn = !!(sessionToken && user);
+    if (!isLoggedIn) {
+      const hasLegacyData = loadOwnedShares().length > 0 || loadDraftData().displayName !== '';
+      const dismissed = sessionStorage.getItem('mini_legacy_prompt_dismissed');
+      if (hasLegacyData && !dismissed) {
+        setShowLegacyPrompt(true);
+      }
     }
     
     setIsInitialized(true);
@@ -4574,7 +4621,16 @@ export default function MiniApp() {
         </div>
       </div>
 
-      {isInitialized && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={(user) => { setCurrentUser(user); saveCurrentUser(user); setShowLoginModal(false); }} />}
+      {isInitialized && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={(user) => { setCurrentUser(user); saveCurrentUser(user); setShowLoginModal(false); setShowLegacyPrompt(false); }} />}
+      {isInitialized && showLegacyPrompt && !currentUser && (
+        <LegacyUserPromptModal
+          onLogin={() => { setShowLegacyPrompt(false); setShowLoginModal(true); }}
+          onDismiss={() => {
+            setShowLegacyPrompt(false);
+            sessionStorage.setItem('mini_legacy_prompt_dismissed', '1');
+          }}
+        />
+      )}
       {content}
       <BadgeModal />
     </ErrorBoundary>
