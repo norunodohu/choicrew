@@ -87,7 +87,8 @@ function AccountCard({
   };
 
   const handleDelete = async () => {
-    if (!window.confirm(`${user.email} を削除しますか？この操作は取り消せません。`)) return;
+    const shareInfo = user.shareCount ? `予定 ${user.shareCount} 件とその依頼もすべて削除されます。` : '';
+    if (!window.confirm(`${user.email} を削除しますか？\n${shareInfo}\nこの操作は取り消せません。`)) return;
     try {
       const res = await fetch('/api/mini/admin/delete-user', {
         method: 'POST',
@@ -96,6 +97,7 @@ function AccountCard({
       });
       const data = await res.json();
       if (!res.ok) { alert(data.error || '削除失敗'); return; }
+      alert(`削除しました。${data.deletedShares ? `（予定 ${data.deletedShares} 件も削除）` : ''}`);
       onDeleted(user.email);
     } catch {
       alert('ネットワークエラー');
@@ -892,24 +894,54 @@ export default function AdminPanel() {
 
         {/* アカウント一覧タブ */}
         {activeTab === 'accounts' && (
-        <div className="space-y-3">
+        <div className="space-y-6">
           {miniUsersLoading ? (
             <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">読み込み中...</div>
           ) : miniUsers.length === 0 ? (
             <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">アカウントがありません</div>
           ) : (
-            miniUsers.map(user => (
-              <AccountCard
-                key={user.email}
-                user={user}
-                onUpdated={(oldEmail, updated) => {
-                  setMiniUsers(prev => prev.map(u =>
-                    u.email === oldEmail ? { ...u, ...updated, email: updated.email ?? u.email } : u
-                  ).filter(u => u.email !== '__deleted__' + oldEmail));
-                }}
-                onDeleted={(email) => setMiniUsers(prev => prev.filter(u => u.email !== email))}
-              />
-            ))
+            <>
+              {/* 有効化済み */}
+              {miniUsers.filter(u => u.email_verified).length > 0 && (
+                <section>
+                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">
+                    ✅ 有効化済み ({miniUsers.filter(u => u.email_verified).length})
+                  </h2>
+                  <div className="space-y-2">
+                    {miniUsers.filter(u => u.email_verified).map(user => (
+                      <AccountCard
+                        key={user.email}
+                        user={user}
+                        onUpdated={(oldEmail, updated) =>
+                          setMiniUsers(prev => prev.map(u => u.email === oldEmail ? { ...u, ...updated, email: updated.email ?? u.email } : u))
+                        }
+                        onDeleted={(email) => setMiniUsers(prev => prev.filter(u => u.email !== email))}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+              {/* 未確認 */}
+              {miniUsers.filter(u => !u.email_verified).length > 0 && (
+                <section>
+                  <h2 className="text-sm font-bold text-slate-500 uppercase tracking-wide mb-2">
+                    ⏳ メール未確認 ({miniUsers.filter(u => !u.email_verified).length})
+                  </h2>
+                  <div className="space-y-2">
+                    {miniUsers.filter(u => !u.email_verified).map(user => (
+                      <AccountCard
+                        key={user.email}
+                        user={user}
+                        onUpdated={(oldEmail, updated) =>
+                          setMiniUsers(prev => prev.map(u => u.email === oldEmail ? { ...u, ...updated, email: updated.email ?? u.email } : u))
+                        }
+                        onDeleted={(email) => setMiniUsers(prev => prev.filter(u => u.email !== email))}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
           )}
         </div>
         )}

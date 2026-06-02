@@ -855,8 +855,30 @@ app.post("/api/mini/admin/delete-user", async (req, res) => {
   if (!email) return res.status(400).json({ error: "email required" });
   try {
     const adminDb = getFirestore();
+
+    // そのユーザーが作成した予定を取得（creator_email または notify_email で検索）
+    const [byCreator, byNotify] = await Promise.all([
+      adminDb.collection('mini_shares').where('creator_email', '==', email).get(),
+      adminDb.collection('mini_shares').where('notify_email', '==', email).get(),
+    ]);
+    const shareIds = new Set<string>();
+    byCreator.docs.forEach(d => shareIds.add(d.id));
+    byNotify.docs.forEach(d => shareIds.add(d.id));
+
+    // 予定に紐づく依頼を削除し、予定も削除
+    for (const shareId of shareIds) {
+      const reqsSnap = await adminDb.collection('mini_requests')
+        .where('share_id', '==', shareId).get();
+      const batch = adminDb.batch();
+      reqsSnap.docs.forEach(d => batch.delete(d.ref));
+      batch.delete(adminDb.collection('mini_shares').doc(shareId));
+      await batch.commit();
+    }
+
+    // アカウント削除
     await adminDb.collection('mini_users').doc(email).delete();
-    res.json({ ok: true });
+
+    res.json({ ok: true, deletedShares: shareIds.size });
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }

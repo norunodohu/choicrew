@@ -716,6 +716,7 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [emailAlreadyRegistered, setEmailAlreadyRegistered] = useState(false);
   const [resetToken, setResetToken] = useState('');
 
   // ログイン処理
@@ -772,8 +773,12 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
       const data = await res.json();
       if (res.ok) {
         setStep('confirm');
+      } else if (res.status === 409) {
+        setEmailAlreadyRegistered(true);
+        setError('このメールアドレスは既に登録されています。');
       } else {
-        setError(data.error || '登録に失敗しました（このメールは既に登録済みかもしれません）');
+        setEmailAlreadyRegistered(false);
+        setError(data.error || '登録に失敗しました');
       }
     } catch (err) {
       setError('ネットワークエラー');
@@ -845,6 +850,7 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
     setResetToken('');
     setStep('email');
     setError('');
+    setEmailAlreadyRegistered(false);
     setTab('login');
     onClose();
   };
@@ -858,6 +864,7 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
     setName('');
     setResetToken('');
     setError('');
+    setEmailAlreadyRegistered(false);
   };
 
   // URL パラメータからトークンを取得（パスワードリセット用）
@@ -1014,7 +1021,23 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
               </div>
             </div>
 
-            {error && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</div>}
+            {error && (
+              <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+                {error}
+                {emailAlreadyRegistered && (
+                  <div className="mt-2">
+                    パスワードをお忘れの場合は{' '}
+                    <button
+                      className="underline text-teal-700 font-semibold"
+                      onClick={() => switchTab('forgot')}
+                    >
+                      パスワードを再発行
+                    </button>
+                    できます。
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 rounded-lg border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition">
