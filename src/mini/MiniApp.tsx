@@ -2333,28 +2333,6 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                           </div>
                         </div>
                         
-                        {/* 次の3つのスロットを表示 */}
-                        {entry.slots && entry.slots.length > 0 && (
-                          <div className="bg-gradient-to-r from-teal-50 to-white border border-teal-100/50 rounded-xl p-3 mb-3 space-y-2">
-                            {entry.slots.slice(0, 3).map((slot, idx) => {
-                              const slotDate = parseISO(slot.date);
-                              const dateStr = format(slotDate, 'M/d(eee)', { locale: ja });
-                              const timeStr = `${slot.start}-${slot.end}`;
-                              return (
-                                <div key={idx} className="flex items-center justify-between text-[11px] font-bold">
-                                  <span className="text-teal-700">{dateStr}</span>
-                                  <span className="text-teal-600 bg-white px-2 py-0.5 rounded-full border border-teal-100 shadow-sm">{timeStr}</span>
-                                </div>
-                              );
-                            })}
-                            {entry.slots.length > 3 && (
-                              <div className="text-[10px] text-teal-400/80 text-center pt-1 border-t border-teal-100/50 italic">
-                                + other {entry.slots.length - 3} slots
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        
                         {/* 1週間（日曜始まり）のスロット表示 */}
                         <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-1">
                           {weekDays.map((date, idx) => {
