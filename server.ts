@@ -884,6 +884,56 @@ app.post("/api/mini/admin/delete-user", async (req, res) => {
   }
 });
 
+// メール有効化（管理者用）
+app.post("/api/mini/admin/verify-email", async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { email } = req.body as { email?: string };
+  if (!email) return res.status(400).json({ error: "email required" });
+  try {
+    const adminDb = getFirestore();
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const snap = await userRef.get();
+    if (!snap.exists) return res.status(404).json({ error: "ユーザーが見つかりません" });
+    
+    await userRef.update({
+      email_verified: true,
+      verified_at: new Date(),
+    });
+    
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// 予定削除（管理者用）
+app.post("/api/mini/admin/delete-share", async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { shareId } = req.body as { shareId?: string };
+  if (!shareId) return res.status(400).json({ error: "shareId required" });
+  try {
+    const adminDb = getFirestore();
+
+    // 予定に紐づく依頼を全て削除
+    const reqsSnap = await adminDb.collection('mini_requests')
+      .where('share_id', '==', shareId).get();
+    
+    const batch = adminDb.batch();
+    reqsSnap.docs.forEach(d => batch.delete(d.ref));
+    
+    // 予定を削除フラグ処理（soft delete）
+    batch.update(adminDb.collection('mini_shares').doc(shareId), {
+      deleted: true,
+      deleted_at: new Date(),
+    });
+    
+    await batch.commit();
+    res.json({ ok: true, deletedRequests: reqsSnap.size });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // 依頼ステータス変更通知メール
 app.post("/api/mini/notify-requester", async (req, res) => {
   const { to, requesterName, ownerName, status, slotDate, slotStart, slotEnd } = req.body as {
