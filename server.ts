@@ -300,6 +300,42 @@ app.post("/api/auth/google/firebase-token", async (req, res) => {
 });
 
 /* ================================================================
+   エラーメッセージ日本語化関数
+   ================================================================ */
+function localizeErrorMessage(err: unknown): string {
+  const errStr = String(err);
+  
+  // Firebase Auth エラーコードを抽出
+  if (errStr.includes('auth/invalid-email')) {
+    return 'このメールアドレスの形式が正しくありません。';
+  }
+  if (errStr.includes('auth/weak-password')) {
+    return 'パスワードが弱すぎます。6文字以上で構成してください。';
+  }
+  if (errStr.includes('auth/email-already-exists')) {
+    return 'このメールアドレスは既に登録されています。';
+  }
+  if (errStr.includes('auth/user-not-found')) {
+    return 'このメールアドレスでアカウントが見つかりません。';
+  }
+  if (errStr.includes('auth/invalid-password') || errStr.includes('auth/wrong-password')) {
+    return 'パスワードが正しくありません。';
+  }
+  if (errStr.includes('auth/user-disabled')) {
+    return 'このアカウントは無効化されています。';
+  }
+  if (errStr.includes('PERMISSION_DENIED')) {
+    return '権限がありません。';
+  }
+  if (errStr.includes('NOT_FOUND')) {
+    return 'データが見つかりません。';
+  }
+  
+  // その他のエラーはそのまま返す
+  return errStr;
+}
+
+/* ================================================================
    メール通知 for Mini share pages
    ================================================================ */
 async function sendResendEmail(to: string, subject: string, text: string): Promise<void> {
@@ -588,7 +624,7 @@ app.post("/api/mini/register", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("Register error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -632,7 +668,7 @@ app.post("/api/mini/login", async (req, res) => {
     });
   } catch (err) {
     console.error("Login error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -673,7 +709,7 @@ app.post("/api/mini/request-password-reset", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("Password reset request error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -707,7 +743,7 @@ app.post("/api/mini/reset-password", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("Password reset error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -767,7 +803,7 @@ app.post("/api/mini/migrate-existing-user", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("User migration error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -1070,7 +1106,7 @@ app.post("/api/mini/register-fp", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error("register-fp error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
@@ -1094,7 +1130,7 @@ app.post("/api/mini/check-fp", async (req, res) => {
     res.json({ match });
   } catch (err) {
     console.error("check-fp error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
