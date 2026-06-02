@@ -1683,29 +1683,31 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
             const rawSlots: { date: string; start: string; end: string }[] = data.slots || [];
             const futureSlots = rawSlots.filter(s => s.date >= todayFetch).sort((a,b) => a.date.localeCompare(b.date));
             
-            // 承認済みと保留中のリクエストを取得
+            // 承認済みと保留中のリクエストを取得（日付単位でマッチング）
             const allReqSnap = await getDocs(query(collection(db, 'mini_requests'), where('share_id', '==', entry.id)));
-            const slotStatusMap = new Map<string, { status: string; email: string }>(); // slotKey -> { status, email }
+            // slot_date をキーにしたマップ（1日に複数スロットある場合は最優先のstatusを保持）
+            const dateStatusMap = new Map<string, { status: string; email: string }>();
             allReqSnap.docs.forEach(d => {
               const r = d.data();
-              const slotKey = `${r.slot_date}_${r.slot_start}_${r.slot_end}`;
-              const email = r.requester_email?.toLowerCase() || '';
-              const status = r.status || 'pending';
-              // 同じスロットに複数リクエストがある場合は最初のものを記録
-              if (!slotStatusMap.has(slotKey)) {
-                slotStatusMap.set(slotKey, { status, email });
+              const date = r.slot_date as string;
+              if (!date) return;
+              const email = (r.requester_email as string)?.toLowerCase() || '';
+              const status = (r.status as string) || 'pending';
+              // approved > pending の優先順で保持
+              const existing = dateStatusMap.get(date);
+              if (!existing || (status === 'approved' && existing.status !== 'approved')) {
+                dateStatusMap.set(date, { status, email });
               }
             });
             
             // スロットに状態を追加
             const slotsWithStatus = futureSlots.map(s => {
-              const slotKey = `${s.date}_${s.start}_${s.end}`;
-              const slotStatus = slotStatusMap.get(slotKey);
-              const isMyRequest = slotStatus && slotStatus.email === currentUser?.email?.toLowerCase();
+              const slotStatus = dateStatusMap.get(s.date);
+              const isMyRequest = !!(slotStatus && slotStatus.email === currentUser?.email?.toLowerCase());
               return {
                 ...s,
-                requestStatus: slotStatus?.status || null, // null, 'pending', 'approved'
-                isMyRequest, // 自分が依頼したか
+                requestStatus: slotStatus?.status || null,
+                isMyRequest,
               };
             });
             
