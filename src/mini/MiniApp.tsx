@@ -2315,8 +2315,9 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                             }
                             
                             return (
-                              <div key={idx} className="flex flex-col items-center gap-1 flex-1">
+                              <div key={idx} className="flex flex-col items-center gap-0.5 flex-1">
                                 <span className={`text-xs font-medium ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>{dayLabels[idx]}</span>
+                                <span className={`text-[10px] ${isPast ? 'text-slate-300' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
                                 {isPast ? (
                                   <span className="text-slate-200 text-lg">-</span>
                                 ) : isInRange ? (
