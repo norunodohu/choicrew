@@ -52,7 +52,7 @@ import {
   query, where, Timestamp, getDocs, deleteField,
 } from 'firebase/firestore';
 import { getToken } from 'firebase/messaging';
-import { format, addDays } from 'date-fns';
+import { format, addDays, parseISO } from 'date-fns';
 import { ja } from 'date-fns/locale';
 
 /* ================================================================
@@ -169,6 +169,7 @@ interface VisitedShareEntry {
   visited_at: number;
   dateRange?: string;
   lastDate?: string;
+  slots?: Array<{ date: string; start: string; end: string }>;
 }
 
 /* ================================================================
@@ -1671,7 +1672,7 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
           const snap = await getDoc(doc(db, 'mini_shares', entry.id));
           if (snap.exists()) {
             const data = snap.data();
-            const slots: { date: string }[] = data.slots || [];
+            const slots: { date: string; start: string; end: string }[] = data.slots || [];
             if (slots.some(s => s.date >= todayFetch)) {
               results.push({
                 id: entry.id,
@@ -1680,6 +1681,7 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                 visited_at: entry.visited_at,
                 dateRange: computeDateRange(slots),
                 lastDate: [...slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '',
+                slots: slots,
               });
             }
           }
@@ -2266,6 +2268,28 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                             <p className="text-xs text-slate-500 font-medium mt-1.5">📅 {entry.dateRange}</p>
                           )}
                         </div>
+                        
+                        {/* 次の3つのスロットを表示 */}
+                        {entry.slots && entry.slots.length > 0 && (
+                          <div className="bg-teal-50 rounded-lg p-3 mb-3 space-y-1.5">
+                            {entry.slots.slice(0, 3).map((slot, idx) => {
+                              const slotDate = parseISO(slot.date);
+                              const dateStr = format(slotDate, 'M/d(eee)', { locale: ja });
+                              const timeStr = `${slot.start}-${slot.end}`;
+                              return (
+                                <div key={idx} className="text-xs font-medium">
+                                  <span className="text-teal-700">{dateStr}</span>
+                                  <span className="text-teal-500 ml-1">{timeStr}</span>
+                                </div>
+                              );
+                            })}
+                            {entry.slots.length > 3 && (
+                              <div className="text-xs text-teal-600 pt-1 border-t border-teal-200">
+                                他 {entry.slots.length - 3} 件
+                              </div>
+                            )}
+                          </div>
+                        )}
                         
                         {/* 今週のスロット表示 */}
                         <div className="bg-slate-50 rounded-lg p-3 flex items-center justify-between gap-2">
