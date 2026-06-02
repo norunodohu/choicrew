@@ -737,15 +737,9 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
         setError('❌ このメールアドレスは既に登録されています。');
       } else {
         setEmailAlreadyRegistered(false);
-        let errorMsg = data.error || '登録に失敗しました';
-        if (errorMsg.includes('email-already-exists') || errorMsg.includes('already-in-use')) {
-          errorMsg = '❌ このメールアドレスは既に登録されています。';
-        } else if (errorMsg.includes('weak-password')) {
-          errorMsg = '❌ パスワードが弱すぎます（6文字以上で構成してください）。';
-        } else if (errorMsg.includes('invalid-email')) {
-          errorMsg = '❌ メールアドレスが正しくありません。';
-        }
-        setError(errorMsg);
+        // バックエンドから返ってきたメッセージはすでに日本語化されている
+        const errorMsg = data.error || '登録に失敗しました';
+        setError(errorMsg.startsWith('❌') ? errorMsg : `❌ ${errorMsg}`);
       }
     } catch (err) {
       setError('❌ ネットワークエラー');
@@ -772,11 +766,9 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
       if (res.ok) {
         setStep('forgot-confirm');
       } else {
-        let errorMsg = data.error || 'リクエストに失敗しました';
-        if (errorMsg.includes('user-not-found') || errorMsg.includes('invalid-email')) {
-          errorMsg = '❌ このメールアドレスで登録されたアカウントが見つかりません。';
-        }
-        setError(errorMsg);
+        // バックエンドから返ってきたメッセージはすでに日本語化されている
+        const errorMsg = data.error || 'リクエストに失敗しました';
+        setError(errorMsg.startsWith('❌') ? errorMsg : `❌ ${errorMsg}`);
       }
     } catch (err) {
       setError('❌ ネットワークエラー');
@@ -804,13 +796,9 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
       if (res.ok) {
         setStep('forgot-confirm');
       } else {
-        let errorMsg = data.error || 'パスワード再設定に失敗しました';
-        if (errorMsg.includes('invalid-token') || errorMsg.includes('expired')) {
-          errorMsg = '❌ リセットリンクが無効または期限切れです。もう一度パスワードリセットをリクエストしてください。';
-        } else if (errorMsg.includes('weak-password')) {
-          errorMsg = '❌ パスワードが弱すぎます（6文字以上で構成してください）。';
-        }
-        setError(errorMsg);
+        // バックエンドから返ってきたメッセージはすでに日本語化されている
+        const errorMsg = data.error || 'パスワード再設定に失敗しました';
+        setError(errorMsg.startsWith('❌') ? errorMsg : `❌ ${errorMsg}`);
       }
     } catch (err) {
       setError('❌ ネットワークエラー');
@@ -1232,31 +1220,20 @@ function UserSettingsModal({ onClose, share, setShare, currentUser, onLogout }: 
     >
       <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-md p-6 space-y-4 animate-[slideUp_0.2s_ease-out]">
         <div className="w-10 h-1 rounded-full bg-slate-200 mx-auto -mt-1 mb-2 sm:hidden" />
-        <h3 className="text-lg font-bold text-slate-800">プロフィール設定</h3>
-
-        {/* アカウント情報 */}
-        {currentUser && (
-          <div className="bg-slate-50 rounded-xl p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">{currentUser.name}</p>
-              <p className="text-xs text-slate-500">{currentUser.email}</p>
-            </div>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-800">設定</h3>
+          {currentUser && (
             <button
               onClick={() => { onLogout?.(); onClose(); }}
-              className="text-xs text-red-500 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg border border-red-200 hover:bg-red-50 transition"
+              className="text-xs text-red-500 hover:text-red-600 font-medium px-3 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition"
             >
               ログアウト
             </button>
-          </div>
-        )}
-        {!currentUser && (
-          <div className="bg-slate-50 rounded-xl p-4 text-center">
-            <p className="text-xs text-slate-500 mb-2">ログインするとデータを引き継げます</p>
-          </div>
-        )}
+          )}
+        </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">表示名</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">表示名</label>
           <input
             type="text"
             value={name}
@@ -1266,11 +1243,10 @@ function UserSettingsModal({ onClose, share, setShare, currentUser, onLogout }: 
             maxLength={30}
             autoFocus
           />
-          <p className="text-xs text-slate-400 mt-1.5">依頼フォームや予定作成時のデフォルト名として使われます</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1">メールアドレス</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">メールアドレス</label>
           <input
             type="email"
             value={email}
@@ -1280,18 +1256,15 @@ function UserSettingsModal({ onClose, share, setShare, currentUser, onLogout }: 
             placeholder="you@example.com"
             maxLength={100}
           />
-          {emailSent ? (
-            <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-xs font-medium text-blue-700">確認メールを送信しました</p>
-              <p className="text-xs text-blue-600 mt-1">メール内のリンクをクリックしてメールアドレスを確認してください</p>
+          {emailSent && (
+            <div className="mt-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-700">✓ 確認メールを送信しました</p>
             </div>
-          ) : (
-            <p className="text-xs text-slate-400 mt-1.5">設定しておくと、承認・キャンセル時の通知先として自動で入力されます</p>
           )}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-600 mb-1.5">予定公開期間</label>
+          <label className="block text-sm font-medium text-slate-700 mb-2">公開期間</label>
           <select
             value={slotExpireDays === null ? 'null' : String(slotExpireDays)}
             onChange={e => setSlotExpireDays(e.target.value === 'null' ? null : Number(e.target.value) as 7 | 14 | 21)}
@@ -1302,14 +1275,10 @@ function UserSettingsModal({ onClose, share, setShare, currentUser, onLogout }: 
             <option value="21">3週間</option>
             <option value="null">全期間</option>
           </select>
-          <p className="text-xs text-slate-400 mt-1.5">公開した予定がこの期間公開されます</p>
         </div>
 
-        <div className="flex items-center justify-between py-1">
-          <div>
-            <p className="text-sm font-medium text-slate-700">AIサポート<span className="ml-1 text-xs text-slate-400 font-normal">（ベータ）</span></p>
-            <p className="text-xs text-slate-400">時間追加時に翌日/翌週への追加提案を表示</p>
-          </div>
+        <div className="flex items-center justify-between py-2">
+          <p className="text-sm font-medium text-slate-700">AI候補表示</p>
           <button
             type="button"
             onClick={() => setAiSupport(v => !v)}
@@ -1323,20 +1292,20 @@ function UserSettingsModal({ onClose, share, setShare, currentUser, onLogout }: 
           </button>
         </div>
 
-        <div className="flex gap-3 pt-1">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition">
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 font-medium transition">
             {emailSent ? '閉じる' : 'キャンセル'}
           </button>
           {emailSent ? (
             <button
               onClick={() => { setEmailSent(false); setEmailSending(false); }}
-              className="flex-1 py-2.5 rounded-xl bg-slate-600 text-white font-medium hover:bg-slate-700 transition"
+              className="flex-1 py-2.5 rounded-lg bg-slate-500 text-white font-medium hover:bg-slate-600 transition"
             >
-              別のメールで再試行
+              再試行
             </button>
           ) : (
-            <button onClick={handleSave} disabled={emailSending} className="flex-1 py-2.5 rounded-xl bg-teal-600 text-white font-medium hover:bg-teal-700 transition disabled:opacity-50">
-              {emailSending ? '送信中...' : '保存'}
+            <button onClick={handleSave} disabled={emailSending} className="flex-1 py-2.5 rounded-lg bg-teal-600 text-white font-medium hover:bg-teal-700 transition disabled:opacity-50">
+              {emailSending ? '中...' : '保存'}
             </button>
           )}
         </div>
