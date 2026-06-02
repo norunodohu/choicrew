@@ -2254,86 +2254,103 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                 <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">チェックしている予定</h2>
                 <div className="space-y-3">
                   {activeVisitedShares.slice(0, 20).map(entry => {
-                    // 日曜始まりで1週間の日付を計算
                     const today = new Date();
                     const dayOfWeek = today.getDay();
                     const thisSunday = new Date(today);
                     thisSunday.setDate(today.getDate() - dayOfWeek);
-                    
-                    const weekDays = Array.from({ length: 7 }, (_, i) => {
-                      const d = new Date(thisSunday);
-                      d.setDate(thisSunday.getDate() + i);
-                      return d;
-                    });
-                    
-                    const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
                     const todayStr = format(new Date(), 'yyyy-MM-dd');
-                    
+                    const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
+
+                    // スロット最終日の土曜まで表示
+                    const lastSlotDate = entry.lastDate ? parseISO(entry.lastDate) : null;
+                    const endSaturday = lastSlotDate ? (() => {
+                      const d = new Date(lastSlotDate);
+                      d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+                      return d;
+                    })() : new Date(thisSunday.getTime() + 6 * 86400000);
+
+                    // 日曜〜最終土曜まで全日生成（最大28日）
+                    const allDays: Date[] = [];
+                    const cur = new Date(thisSunday);
+                    while (cur <= endSaturday && allDays.length < 28) {
+                      allDays.push(new Date(cur));
+                      cur.setDate(cur.getDate() + 1);
+                    }
+                    // 7日ごとに行分け
+                    const weeks: Date[][] = [];
+                    for (let i = 0; i < allDays.length; i += 7) weeks.push(allDays.slice(i, i + 7));
+
+                    // 自分の依頼一覧
+                    const myRequests = entry.slots?.filter(s => (s as any).isMyRequest) || [];
+
                     return (
                       <a
                         key={entry.id}
                         href={`/mini/s/${entry.id}`}
-                        className="group flex flex-col bg-white border border-slate-200 hover:border-teal-400 hover:shadow-md rounded-xl p-4 transition"
+                        className="group flex flex-col bg-white border border-slate-200 hover:border-slate-400 hover:shadow-md rounded-xl p-4 transition"
                       >
-                        <div className="mb-3 px-1">
-                          <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition line-clamp-2 mb-1.5">{entry.name}</p>
-                          <div className="flex items-center gap-3">
-                            {entry.creatorName && (
-                              <p className="text-[10px] px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded font-medium truncate max-w-[120px]">
-                                {entry.creatorName}
-                              </p>
-                            )}
-                            {entry.dateRange && (
-                              <p className="text-[10px] text-slate-400 font-medium">📅 {entry.dateRange}</p>
-                            )}
-                          </div>
+                        {/* タイトル行：左タイトル、右作成者名 */}
+                        <div className="flex items-center justify-between gap-2 mb-3 px-1">
+                          <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition line-clamp-2">{entry.name}</p>
+                          {entry.creatorName && (
+                            <p className="text-sm text-slate-400 shrink-0">{entry.creatorName}</p>
+                          )}
                         </div>
-                        
-                        {/* 1週間（日曜始まり）のスロット表示 */}
-                        <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-1">
-                          {weekDays.map((date, idx) => {
-                            const dateStr = format(date, 'yyyy-MM-dd');
-                            const isToday = idx === dayOfWeek;
-                            const isPast = dateStr < todayStr;
-                            
-                            // entry.slots から直接判定
-                            const slotForDate = entry.slots?.find(s => s.date === dateStr);
-                            const requestStatus = slotForDate ? (slotForDate as any).requestStatus : null; // null, 'pending', 'approved'
-                            const isMyRequest = slotForDate && (slotForDate as any).isMyRequest;
-                            const hasSlot = !!slotForDate;
-                            
-                            return (
-                              <div key={idx} className={`flex flex-col items-center gap-1 flex-1 min-w-0 ${isPast ? 'opacity-50' : ''}`}>
-                                <span className={`text-[10px] font-bold ${isPast ? 'text-slate-300' : isToday ? 'text-teal-600' : 'text-slate-600'}`}>{dayLabels[idx]}</span>
-                                <span className={`text-[9px] ${isPast ? 'text-slate-300' : isToday ? 'text-teal-500/70' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
-                                <div className="mt-1 h-5 flex items-center justify-center">
-                                  {isPast ? (
-                                    <span className="text-slate-200 text-xs">-</span>
-                                  ) : isMyRequest && requestStatus === 'approved' ? (
-                                    // 自分が承認された → 赤✓
-                                    <span className="text-red-500 text-sm font-black">✓</span>
-                                  ) : isMyRequest && requestStatus === 'pending' ? (
-                                    // 自分が依頼中 → -
-                                    <span className="text-slate-300 text-xs">-</span>
-                                  ) : requestStatus === 'approved' ? (
-                                    // 他人が承認 → 黒✕
-                                    <span className="text-slate-800 text-sm font-black">✕</span>
-                                  ) : hasSlot ? (
-                                    // 空き → 黒◯
-                                    <span className="text-slate-800 text-sm font-black">◯</span>
-                                  ) : (
-                                    <span className="text-slate-200 text-xs">-</span>
-                                  )}
+
+                        {/* 週カレンダー */}
+                        <div className="border border-slate-100 rounded-xl overflow-hidden">
+                          {weeks.map((week, wi) => (
+                            <div key={wi} className={`flex ${wi > 0 ? 'border-t border-slate-100' : ''}`}>
+                              {week.map((date, idx) => {
+                                const dateStr = format(date, 'yyyy-MM-dd');
+                                const isPast = dateStr < todayStr;
+                                const isToday = dateStr === todayStr;
+                                const slotForDate = entry.slots?.find(s => s.date === dateStr);
+                                const requestStatus = slotForDate ? (slotForDate as any).requestStatus : null;
+                                const isMyRequest = slotForDate && (slotForDate as any).isMyRequest;
+                                const hasSlot = !!slotForDate;
+
+                                return (
+                                  <div key={idx} className={`flex flex-col items-center py-2 flex-1 min-w-0 ${idx > 0 ? 'border-l border-slate-100' : ''} ${isToday ? 'bg-slate-50' : ''}`}>
+                                    <span className={`text-[10px] font-bold ${isPast || !hasSlot ? 'text-slate-300' : 'text-slate-800'}`}>{dayLabels[date.getDay()]}</span>
+                                    <span className={`text-[9px] mt-0.5 ${isPast || !hasSlot ? 'text-slate-200' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
+                                    <div className="mt-1 h-4 flex items-center justify-center">
+                                      {isPast || !hasSlot ? (
+                                        <span className="text-slate-200 text-[10px]">-</span>
+                                      ) : isMyRequest && requestStatus === 'approved' ? (
+                                        <span className="text-red-500 text-xs font-black">✓</span>
+                                      ) : requestStatus === 'approved' ? (
+                                        <span className="text-slate-800 text-xs font-black">✕</span>
+                                      ) : (
+                                        <span className="text-slate-800 text-xs font-black">◯</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* 自分の依頼一覧 */}
+                        {myRequests.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            {myRequests.map((s, i) => {
+                              const slotDate = parseISO(s.date);
+                              const dateLabel = format(slotDate, 'M/d(eee)', { locale: ja });
+                              const timeLabel = `${s.start}–${s.end}`;
+                              const status = (s as any).requestStatus;
+                              return (
+                                <div key={i} className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-600 font-medium">{dateLabel} {timeLabel}</span>
+                                  <span className={`font-bold ${status === 'approved' ? 'text-red-500' : 'text-slate-400'}`}>
+                                    {status === 'approved' ? '承認' : '未承認'}
+                                  </span>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        
-                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100/50">
-                          <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">Detail</span>
-                          <span className="text-slate-300 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all">→</span>
-                        </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </a>
                     );
                   })}
