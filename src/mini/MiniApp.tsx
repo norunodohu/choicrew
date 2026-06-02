@@ -2219,28 +2219,84 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
             {!loadingVisited && activeVisitedShares.length > 0 && (
               <section>
                 <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">チェックしている予定</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {activeVisitedShares.slice(0, 12).map(entry => (
-                    <a
-                      key={entry.id}
-                      href={`/mini/s/${entry.id}`}
-                      className="group flex flex-col bg-white border border-slate-200 hover:border-teal-400 hover:shadow-md rounded-xl p-4 transition min-w-0"
-                    >
-                      <div className="flex-1 min-w-0 mb-2">
-                        <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition line-clamp-2 mb-1.5">{entry.name}</p>
-                        {entry.dateRange && (
-                          <p className="text-xs text-slate-500 font-medium">📅 {entry.dateRange}</p>
-                        )}
-                        {entry.creatorName && (
-                          <p className="text-xs text-slate-400 mt-1">by {entry.creatorName}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <span className="text-xs text-slate-400">チェック中</span>
-                        <span className="text-slate-300 group-hover:text-teal-500 transition">→</span>
-                      </div>
-                    </a>
-                  ))}
+                <div className="space-y-3">
+                  {activeVisitedShares.slice(0, 20).map(entry => {
+                    // 今週の日付を計算（月〜日）
+                    const today = new Date();
+                    const dayOfWeek = today.getDay();
+                    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+                    const thisMonday = new Date(today);
+                    thisMonday.setDate(today.getDate() + mondayOffset);
+                    
+                    const weekDays = Array.from({ length: 7 }, (_, i) => {
+                      const d = new Date(thisMonday);
+                      d.setDate(thisMonday.getDate() + i);
+                      return d;
+                    });
+                    
+                    const dayLabels = ['月', '火', '水', '木', '金', '土', '日'];
+                    
+                    return (
+                      <a
+                        key={entry.id}
+                        href={`/mini/s/${entry.id}`}
+                        className="group flex flex-col bg-white border border-slate-200 hover:border-teal-400 hover:shadow-md rounded-xl p-4 transition"
+                      >
+                        <div className="mb-3">
+                          <p className="text-sm font-bold text-slate-800 group-hover:text-teal-700 transition line-clamp-2 mb-1.5">{entry.name}</p>
+                          {entry.creatorName && (
+                            <p className="text-xs text-slate-400">by {entry.creatorName}</p>
+                          )}
+                          {entry.dateRange && (
+                            <p className="text-xs text-slate-500 font-medium mt-1.5">📅 {entry.dateRange}</p>
+                          )}
+                        </div>
+                        
+                        {/* 今週のスロット表示 */}
+                        <div className="bg-slate-50 rounded-lg p-3 flex items-center justify-between gap-2">
+                          {weekDays.map((date, idx) => {
+                            const dateStr = format(date, 'yyyy-MM-dd');
+                            const todayStr = format(new Date(), 'yyyy-MM-dd');
+                            const isPast = dateStr < todayStr;
+                            
+                            // dateRange をパース (例: "6/15-6/20")
+                            let isInRange = false;
+                            if (entry.dateRange) {
+                              try {
+                                const [startStr, endStr] = entry.dateRange.split('-');
+                                const [sMonth, sDay] = startStr.trim().split('/').map(Number);
+                                const [eMonth, eDay] = endStr.trim().split('/').map(Number);
+                                const year = new Date().getFullYear();
+                                
+                                const startDate = new Date(year, sMonth - 1, sDay);
+                                const endDate = new Date(year, eMonth - 1, eDay);
+                                
+                                isInRange = date >= startDate && date <= endDate;
+                              } catch {}
+                            }
+                            
+                            return (
+                              <div key={idx} className="flex flex-col items-center gap-1 flex-1">
+                                <span className={`text-xs font-medium ${isPast ? 'text-slate-300' : 'text-slate-600'}`}>{dayLabels[idx]}</span>
+                                {isPast ? (
+                                  <span className="text-slate-200 text-lg">-</span>
+                                ) : isInRange ? (
+                                  <span className="text-teal-500 text-lg">◯</span>
+                                ) : (
+                                  <span className="text-slate-200 text-xs">-</span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        
+                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-slate-100">
+                          <span className="text-xs text-slate-400">チェック中</span>
+                          <span className="text-slate-300 group-hover:text-teal-500 transition">→</span>
+                        </div>
+                      </a>
+                    );
+                  })}
                 </div>
               </section>
             )}
