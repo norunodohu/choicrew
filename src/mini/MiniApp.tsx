@@ -690,10 +690,18 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
         onLogin(data.user);
         handleReset();
       } else {
-        setError(data.error || 'ログインに失敗しました（メール/パスワードを確認してください）');
+        let errorMsg = data.error || 'ログインに失敗しました（メール/パスワードを確認してください）';
+        if (errorMsg.includes('user-not-found') || errorMsg.includes('invalid-email')) {
+          errorMsg = '❌ メールアドレスまたはパスワードが正しくありません。';
+        } else if (errorMsg.includes('wrong-password')) {
+          errorMsg = '❌ パスワードが正しくありません。';
+        } else if (errorMsg.includes('user-disabled')) {
+          errorMsg = '❌ このアカウントは無効化されています。';
+        }
+        setError(errorMsg);
       }
     } catch (err) {
-      setError('ネットワークエラー');
+      setError('❌ ネットワークエラー');
     } finally {
       setLoading(false);
     }
@@ -726,13 +734,21 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
         setStep('confirm');
       } else if (res.status === 409) {
         setEmailAlreadyRegistered(true);
-        setError('このメールアドレスは既に登録されています。');
+        setError('❌ このメールアドレスは既に登録されています。');
       } else {
         setEmailAlreadyRegistered(false);
-        setError(data.error || '登録に失敗しました');
+        let errorMsg = data.error || '登録に失敗しました';
+        if (errorMsg.includes('email-already-exists') || errorMsg.includes('already-in-use')) {
+          errorMsg = '❌ このメールアドレスは既に登録されています。';
+        } else if (errorMsg.includes('weak-password')) {
+          errorMsg = '❌ パスワードが弱すぎます（6文字以上で構成してください）。';
+        } else if (errorMsg.includes('invalid-email')) {
+          errorMsg = '❌ メールアドレスが正しくありません。';
+        }
+        setError(errorMsg);
       }
     } catch (err) {
-      setError('ネットワークエラー');
+      setError('❌ ネットワークエラー');
     } finally {
       setLoading(false);
     }
@@ -756,10 +772,14 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
       if (res.ok) {
         setStep('forgot-confirm');
       } else {
-        setError(data.error || 'リクエストに失敗しました');
+        let errorMsg = data.error || 'リクエストに失敗しました';
+        if (errorMsg.includes('user-not-found') || errorMsg.includes('invalid-email')) {
+          errorMsg = '❌ このメールアドレスで登録されたアカウントが見つかりません。';
+        }
+        setError(errorMsg);
       }
     } catch (err) {
-      setError('ネットワークエラー');
+      setError('❌ ネットワークエラー');
     } finally {
       setLoading(false);
     }
@@ -784,10 +804,16 @@ function LoginModal({ isOpen, onClose, onLogin }: { isOpen: boolean; onClose: ()
       if (res.ok) {
         setStep('forgot-confirm');
       } else {
-        setError(data.error || 'パスワード再設定に失敗しました');
+        let errorMsg = data.error || 'パスワード再設定に失敗しました';
+        if (errorMsg.includes('invalid-token') || errorMsg.includes('expired')) {
+          errorMsg = '❌ リセットリンクが無効または期限切れです。もう一度パスワードリセットをリクエストしてください。';
+        } else if (errorMsg.includes('weak-password')) {
+          errorMsg = '❌ パスワードが弱すぎます（6文字以上で構成してください）。';
+        }
+        setError(errorMsg);
       }
     } catch (err) {
-      setError('ネットワークエラー');
+      setError('❌ ネットワークエラー');
     } finally {
       setLoading(false);
     }
