@@ -2936,6 +2936,7 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
   };
 
   const handleCopy = async () => {
+    if (!currentUser) { onNeedLogin?.(); return; }
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -2953,6 +2954,7 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
   };
 
   const handleShare = async () => {
+    if (!currentUser) { onNeedLogin?.(); return; }
     const shared = await nativeShare(`${share?.name}さんの空き時間`, url);
     if (!shared) handleCopy();
   };
@@ -3468,8 +3470,21 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin 
         {/* Just-created banner */}
         {justCreated && (
           <div className="bg-teal-50 border border-teal-100 rounded-2xl p-4 mb-5 print:hidden">
-            <p className="font-semibold text-teal-900">作成しました</p>
-            <p className="text-sm text-teal-700 mt-1">リンクを相手に共有してください</p>
+            <p className="font-semibold text-teal-900">作成しました 🎉</p>
+            {currentUser ? (
+              <p className="text-sm text-teal-700 mt-1">リンクを相手に共有してください</p>
+            ) : (
+              <div className="mt-2">
+                <p className="text-sm text-teal-800">この予定を共有するには、ログインまたは新規登録が必要です。</p>
+                <p className="text-xs text-teal-600 mt-1">登録後、この予定は自動的にアカウントに引き継がれます。</p>
+                <button
+                  onClick={() => onNeedLogin?.()}
+                  className="mt-3 bg-teal-600 text-white text-sm font-bold rounded-xl px-4 py-2 hover:bg-teal-700 transition"
+                >
+                  ログイン / 新規登録
+                </button>
+              </div>
+            )}
           </div>
         )}
 
