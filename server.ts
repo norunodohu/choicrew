@@ -7,7 +7,7 @@ import nodemailer from "nodemailer";
 import bcryptjs from "bcryptjs";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getAuth as getAdminAuth } from "firebase-admin/auth";
-import { getFirestore, collection, query, where, getDocs, updateDoc, getDoc, setDoc, doc } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { fileURLToPath } from "url";
 
@@ -451,15 +451,15 @@ app.get("/api/mini/verify-email", async (req, res) => {
     
     if (register) {
       // 新規登録のメール確認
-      const userRef = doc(adminDb, 'mini_users', email);
-      const userSnap = await getDoc(userRef);
+      const userRef = adminDb.collection('mini_users').doc(email);
+      const userSnap = await userRef.get();
       
-      if (!userSnap.exists()) {
+      if (!userSnap.exists) {
         return res.status(404).json({ error: "ユーザーが見つかりません" });
       }
 
       // メール確認を完了
-      await updateDoc(userRef, { email_verified: true });
+      await userRef.update({ email_verified: true });
 
       const user = userSnap.data();
       const sessionToken = Buffer.from(`${email}:${Date.now()}`).toString('base64');
@@ -477,12 +477,10 @@ app.get("/api/mini/verify-email", async (req, res) => {
     } else {
       // 既存ユーザーのメール通知確認（互換性維持）
       // メールアドレスでクエリ → 該当する全予定の email_verified も true に
-      const sharesSnap = await getDocs(
-        query(collection(adminDb, 'mini_shares'), where('notify_email', '==', email))
-      );
+      const sharesSnap = await adminDb.collection('mini_shares').where('notify_email', '==', email).get();
 
       if (sharesSnap.size > 0) {
-        const updates = sharesSnap.docs.map(doc => updateDoc(doc.ref, { email_verified: true }));
+        const updates = sharesSnap.docs.map(d => d.ref.update({ email_verified: true }));
         await Promise.all(updates);
       }
 
@@ -531,10 +529,10 @@ app.post("/api/mini/check-email", async (req, res) => {
 
   try {
     const adminDb = getFirestore();
-    const userRef = doc(adminDb, 'mini_users', email);
-    const userSnap = await getDoc(userRef);
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const userSnap = await userRef.get();
 
-    res.json({ isNew: !userSnap.exists() });
+    res.json({ isNew: !userSnap.exists });
   } catch (err) {
     console.error("Check email error:", err);
     res.status(500).json({ error: String(err) });
@@ -549,10 +547,10 @@ app.post("/api/mini/register", async (req, res) => {
 
   try {
     const adminDb = getFirestore();
-    const userRef = doc(adminDb, 'mini_users', email);
-    const userSnap = await getDoc(userRef);
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const userSnap = await userRef.get();
 
-    if (userSnap.exists()) {
+    if (userSnap.exists) {
       return res.status(409).json({ error: "このメールアドレスは既に登録されています" });
     }
 
@@ -560,7 +558,7 @@ app.post("/api/mini/register", async (req, res) => {
     const passwordHash = await bcryptjs.hash(password, 10);
 
     // ユーザー情報を保存
-    await setDoc(userRef, {
+    await userRef.set({
       email,
       name,
       password_hash: passwordHash,
@@ -601,10 +599,10 @@ app.post("/api/mini/login", async (req, res) => {
 
   try {
     const adminDb = getFirestore();
-    const userRef = doc(adminDb, 'mini_users', email);
-    const userSnap = await getDoc(userRef);
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const userSnap = await userRef.get();
 
-    if (!userSnap.exists()) {
+    if (!userSnap.exists) {
       return res.status(401).json({ error: "ユーザーが見つかりません" });
     }
 
@@ -645,10 +643,10 @@ app.post("/api/mini/request-password-reset", async (req, res) => {
 
   try {
     const adminDb = getFirestore();
-    const userRef = doc(adminDb, 'mini_users', email);
-    const userSnap = await getDoc(userRef);
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const userSnap = await userRef.get();
 
-    if (!userSnap.exists()) {
+    if (!userSnap.exists) {
       // セキュリティのため、ユーザーが存在しない場合も「送信しました」と返す
       return res.json({ ok: true });
     }
@@ -703,8 +701,8 @@ app.post("/api/mini/reset-password", async (req, res) => {
     const passwordHash = await bcryptjs.hash(password, 10);
 
     // パスワード更新
-    const userRef = doc(adminDb, 'mini_users', email);
-    await updateDoc(userRef, { password_hash: passwordHash });
+    const userRef = adminDb.collection('mini_users').doc(email);
+    await userRef.update({ password_hash: passwordHash });
 
     res.json({ ok: true });
   } catch (err) {
@@ -720,10 +718,10 @@ app.post("/api/mini/migrate-existing-user", async (req, res) => {
 
   try {
     const adminDb = getFirestore();
-    const userRef = doc(adminDb, 'mini_users', email);
-    const userSnap = await getDoc(userRef);
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const userSnap = await userRef.get();
 
-    if (userSnap.exists()) {
+    if (userSnap.exists) {
       return res.status(409).json({ error: "このメールアドレスは既に登録されています" });
     }
 
@@ -732,7 +730,7 @@ app.post("/api/mini/migrate-existing-user", async (req, res) => {
     const passwordHash = await bcryptjs.hash(tempPassword, 10);
 
     // mini_users に登録（email_verified=true で自動認証）
-    await setDoc(userRef, {
+    await userRef.set({
       email,
       name,
       password_hash: passwordHash,
