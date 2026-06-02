@@ -2272,19 +2272,20 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                 <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">チェックしている予定</h2>
                 <div className="space-y-3">
                   {activeVisitedShares.slice(0, 20).map(entry => {
-                    // 今週の日付を計算（日〜土）
+                    // 日曜始まりで1週間の日付を計算
                     const today = new Date();
                     const dayOfWeek = today.getDay();
                     const thisSunday = new Date(today);
                     thisSunday.setDate(today.getDate() - dayOfWeek);
                     
                     const weekDays = Array.from({ length: 7 }, (_, i) => {
-                      const d = new Date(today);
-                      d.setDate(today.getDate() + i);
+                      const d = new Date(thisSunday);
+                      d.setDate(thisSunday.getDate() + i);
                       return d;
                     });
                     
                     const dayLabels = ['日', '月', '火', '水', '木', '金', '土'];
+                    const todayStr = format(new Date(), 'yyyy-MM-dd');
                     
                     return (
                       <a
@@ -2328,22 +2329,39 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                           </div>
                         )}
                         
-                        {/* 1週間（今日から7日間）のスロット表示 */}
+                        {/* 1週間（日曜始まり）のスロット表示 */}
                         <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-1">
                           {weekDays.map((date, idx) => {
                             const dateStr = format(date, 'yyyy-MM-dd');
-                            const isToday = idx === 0;
-                            const hasSlot = entry.slots?.some(s => s.date === dateStr);
-                            if (idx === 0) {
-                              console.log(`[widget] ${entry.id} today=${dateStr}, entry.slots=`, entry.slots?.map(s => s.date), 'hasSlot=', hasSlot);
+                            const isToday = idx === dayOfWeek;
+                            const isPast = dateStr < todayStr;
+                            
+                            // dateRange をパース (例: "6/15-6/20")
+                            let isInRange = false;
+                            if (entry.dateRange) {
+                              try {
+                                const [startStr, endStr] = entry.dateRange.split('-');
+                                const [sMonth, sDay] = startStr.trim().split('/').map(Number);
+                                const [eMonth, eDay] = endStr.trim().split('/').map(Number);
+                                const year = new Date().getFullYear();
+                                
+                                const startDate = new Date(year, sMonth - 1, sDay);
+                                const endDate = new Date(year, eMonth - 1, eDay);
+                                
+                                isInRange = date >= startDate && date <= endDate;
+                              } catch {}
                             }
                             
+                            const hasSlot = entry.slots?.some(s => s.date === dateStr);
+                            
                             return (
-                              <div key={idx} className="flex flex-col items-center gap-1 flex-1 min-w-0">
-                                <span className={`text-[10px] font-bold ${isToday ? 'text-teal-600' : 'text-slate-400'}`}>{dayLabels[date.getDay()]}</span>
-                                <span className={`text-[9px] ${isToday ? 'text-teal-500/70' : 'text-slate-300'}`}>{format(date, 'M/d')}</span>
+                              <div key={idx} className={`flex flex-col items-center gap-1 flex-1 min-w-0 ${isPast ? 'opacity-50' : ''}`}>
+                                <span className={`text-[10px] font-bold ${isPast ? 'text-slate-300' : isToday ? 'text-teal-600' : 'text-slate-600'}`}>{dayLabels[idx]}</span>
+                                <span className={`text-[9px] ${isPast ? 'text-slate-300' : isToday ? 'text-teal-500/70' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
                                 <div className="mt-1 h-5 flex items-center justify-center">
-                                  {hasSlot ? (
+                                  {isPast ? (
+                                    <span className="text-slate-200 text-xs">-</span>
+                                  ) : isInRange && hasSlot ? (
                                     <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center shadow-sm shadow-teal-200">
                                       <span className="text-white text-[10px] font-black">◯</span>
                                     </div>
