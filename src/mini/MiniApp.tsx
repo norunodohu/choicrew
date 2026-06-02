@@ -2270,13 +2270,19 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                       ? format(addDays(new Date(), 365), 'yyyy-MM-dd')
                       : format(addDays(new Date(), viewerExpireDays - 1), 'yyyy-MM-dd');
 
-                    // スロット最終日の土曜まで表示
-                    const lastSlotDate = entry.lastDate ? parseISO(entry.lastDate) : null;
-                    const endSaturday = lastSlotDate ? (() => {
-                      const d = new Date(lastSlotDate);
+                    // 公開スロットの最終日の土曜まで（非公開スロットは含めない）
+                    const lastPublicSlotDate = (() => {
+                      const pub = entry.slots?.filter(s =>
+                        entry.shareForcePublic === true || (s as any).force_public === true || s.date <= expireDateStr
+                      );
+                      return pub?.length ? parseISO(pub[pub.length - 1].date) : null;
+                    })();
+                    const endSaturday = (() => {
+                      const base = lastPublicSlotDate ?? new Date(thisSunday.getTime() + 6 * 86400000);
+                      const d = new Date(base);
                       d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
                       return d;
-                    })() : new Date(thisSunday.getTime() + 6 * 86400000);
+                    })();
 
                     // 日曜〜最終土曜まで全日生成（最大28日）
                     const allDays: Date[] = [];
@@ -2308,6 +2314,15 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
 
                         {/* 週カレンダー */}
                         <div className="border border-slate-100 rounded-xl overflow-hidden">
+                          {/* 曜日ヘッダー（1行目のみ） */}
+                          <div className="flex border-b border-slate-100">
+                            {dayLabels.map((label, idx) => (
+                              <div key={idx} className={`flex-1 text-center py-1.5 ${idx > 0 ? 'border-l border-slate-100' : ''}`}>
+                                <span className="text-[10px] font-bold text-slate-400">{label}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {/* データ行（日付＋シンボル） */}
                           {weeks.map((week, wi) => (
                             <div key={wi} className={`flex ${wi > 0 ? 'border-t border-slate-100' : ''}`}>
                               {week.map((date, idx) => {
@@ -2317,7 +2332,6 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                 const slotForDate = entry.slots?.find(s => s.date === dateStr);
                                 const requestStatus = slotForDate ? (slotForDate as any).requestStatus : null;
                                 const isMyRequest = slotForDate && (slotForDate as any).isMyRequest;
-                                // 公開ウィンドウ内かどうか（非公開スロットはグレー）
                                 const isPublic = !slotForDate ? false
                                   : entry.shareForcePublic === true || (slotForDate as any).force_public === true
                                   ? true
@@ -2325,10 +2339,9 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
                                 const hasSlot = !!slotForDate && isPublic;
 
                                 return (
-                                  <div key={idx} className={`flex flex-col items-center py-2 flex-1 min-w-0 ${idx > 0 ? 'border-l border-slate-100' : ''} ${isToday ? 'bg-slate-50' : ''}`}>
-                                    <span className={`text-[10px] font-bold ${isPast || !hasSlot ? 'text-slate-300' : 'text-slate-800'}`}>{dayLabels[date.getDay()]}</span>
-                                    <span className={`text-[9px] mt-0.5 ${isPast || !hasSlot ? 'text-slate-200' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
-                                    <div className="mt-1 h-4 flex items-center justify-center">
+                                  <div key={idx} className={`flex flex-col items-center py-1.5 flex-1 min-w-0 ${idx > 0 ? 'border-l border-slate-100' : ''} ${isToday ? 'bg-slate-50' : ''}`}>
+                                    <span className={`text-[9px] ${isPast || !hasSlot ? 'text-slate-200' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
+                                    <div className="mt-0.5 h-4 flex items-center justify-center">
                                       {isPast || !hasSlot ? (
                                         <span className="text-slate-200 text-[10px]">-</span>
                                       ) : isMyRequest && requestStatus === 'approved' ? (
