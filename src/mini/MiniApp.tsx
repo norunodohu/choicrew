@@ -471,6 +471,74 @@ function saveSentRequestId(shareId: string, key: string, requestId: string) {
   try { localStorage.setItem(`mini_sent_ids_${shareId}`, JSON.stringify([...map.entries()])); } catch { /* */ }
 }
 
+/**
+ * ログイン後に呼ぶ: Firestoreで自分のメールアドレスの依頼を全検索し、
+ * localStorage の mini_sent_ids_* を復元する（データ引継ぎ用）
+ */
+async function syncRequestsByEmail(email: string): Promise<void> {
+  if (!email) return;
+  try {
+    const snap = await getDocs(
+      query(collection(db, 'mini_requests'), where('requester_email', '==', email.trim()))
+    );
+    snap.docs.forEach(docSnap => {
+      const data = docSnap.data() as RequestEntry;
+      const shareId = data.share_id;
+      if (!shareId) return;
+      const key = `${data.slot_date}_${data.slot_start}_${data.slot_end}`;
+      // 既にlocalStorageにあるなら上書きしない（最新IDを優先）
+      const existing = loadSentRequestIds(shareId);
+      if (!existing.has(key)) {
+        saveSentRequestId(shareId, key, docSnap.id);
+      }
+      // mini_sent_* (slotKey Set) にも追加
+      const sentSlots = loadSentSlots(shareId);
+      if (!sentSlots.has(key)) {
+        saveSentSlot(shareId, key, sentSlots);
+      }
+    });
+  } catch (err) {
+    console.warn('[syncRequestsByEmail] failed:', err);
+  }
+}
+
+/**
+ * ログイン済みユーザーのメールアドレスで、自分が作成したシェアをFirestoreから復元する。
+ * creator_email（新規）または notify_email（既存シェア）でマッチする。
+ * 別ブラウザや端末変更時でもオーナー状態を引き継げるようにする。
+ */
+async function syncOwnedSharesByEmail(email: string): Promise<void> {
+  if (!email) return;
+  try {
+    const normalizedEmail = email.trim().toLowerCase();
+    // creator_email（新方式）と notify_email（旧方式）の両方でクエリ
+    const [byCreator, byNotify] = await Promise.all([
+      getDocs(query(collection(db, 'mini_shares'), where('creator_email', '==', normalizedEmail))),
+      getDocs(query(collection(db, 'mini_shares'), where('notify_email', '==', normalizedEmail))),
+    ]);
+    const seen = new Set<string>();
+    const allDocs = [...byCreator.docs, ...byNotify.docs];
+    for (const snapDoc of allDocs) {
+      if (seen.has(snapDoc.id)) continue;
+      seen.add(snapDoc.id);
+      const data = snapDoc.data();
+      const token: string | undefined = data.owner_token;
+      if (!token) continue;
+      // owner_token を localStorage に復元
+      saveOwnerToken(snapDoc.id, token);
+      // mini_owned_shares に追加（重複しない）
+      if (!isOwnedShare(snapDoc.id)) {
+        const slots: { date: string }[] = data.slots || [];
+        const dateRange = computeDateRange(slots);
+        const lastDate = slots.length > 0 ? [...slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '';
+        saveOwnedShare(snapDoc.id, data.title || data.name || '', dateRange, lastDate);
+      }
+    }
+  } catch (err) {
+    console.warn('[syncOwnedSharesByEmail] failed:', err);
+  }
+}
+
 function saveOwnerToken(shareId: string, token: string) {
   try { localStorage.setItem(`mini_owner_token_${shareId}`, token); } catch { /* */ }
 }
@@ -1583,6 +1651,12 @@ function CreateView({ onCreated, currentUser, onNeedLogin }: { onCreated: (id: s
               lastDate: slots.length > 0 ? [...slots].sort((a, b) => b.date.localeCompare(a.date))[0]?.date || '' : '',
               stats: { availableSlots, pendingCount, approvedCount },
             });
+            // マイグレーション：ログイン済みかつ creator_email 未設定のシェアに付与
+            if (currentUser?.email && !data.creator_email) {
+              updateDoc(doc(db, 'mini_shares', entry.id), {
+                creator_email: currentUser.email.trim().toLowerCase(),
+              }).catch(() => { /* ignore */ });
+            }
           }
         } catch { /* ignore individual errors */ }
       }
@@ -1676,6 +1750,7 @@ function CreateView({ onCreated, currentUser, onNeedLogin }: { onCreated: (id: s
         owner_token: ownerToken,
         created_at: Timestamp.fromDate(now),
         expires_at: Timestamp.fromDate(expires),
+        ...(currentUser?.email ? { creator_email: currentUser.email.trim().toLowerCase() } : {}),
       });
       saveOwnerToken(id, ownerToken);
       saveDraftData(title.trim(), displayName.trim());
@@ -4431,6 +4506,9 @@ export default function MiniApp() {
     // セッショントークンとユーザー情報がある場合、ログイン状態を復元
     if (sessionToken && user) {
       setCurrentUser(user);
+      // バックグラウンドでデータ引継ぎ（ブラウザ変更や別デバイス対応）
+      syncRequestsByEmail(user.email).catch(() => {});
+      syncOwnedSharesByEmail(user.email).catch(() => {});
     } else if (!user && !sessionToken) {
       // 両方ない場合はログイン未了
       setCurrentUser(null);
@@ -4621,7 +4699,15 @@ export default function MiniApp() {
         </div>
       </div>
 
-      {isInitialized && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={(user) => { setCurrentUser(user); saveCurrentUser(user); setShowLoginModal(false); setShowLegacyPrompt(false); }} />}
+      {isInitialized && <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={(user) => {
+        setCurrentUser(user);
+        saveCurrentUser(user);
+        setShowLoginModal(false);
+        setShowLegacyPrompt(false);
+        // メールアドレス一致の過去依頼とシェア（オーナー状態）をlocalStorageに復元
+        syncRequestsByEmail(user.email).catch(() => {});
+        syncOwnedSharesByEmail(user.email).catch(() => {});
+      }} />}
       {isInitialized && showLegacyPrompt && !currentUser && (
         <LegacyUserPromptModal
           onLogin={() => { setShowLegacyPrompt(false); setShowLoginModal(true); }}
