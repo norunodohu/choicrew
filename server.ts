@@ -405,7 +405,7 @@ app.post("/api/mini/notify-email", async (req, res) => {
     }
   } catch (err) {
     console.error("Email notify error:", err);
-    res.status(500).json({ error: String(err) });
+    res.status(500).json({ error: localizeErrorMessage(err) });
   }
 });
 
