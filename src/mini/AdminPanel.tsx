@@ -343,15 +343,21 @@ export default function AdminPanel() {
   // 予定を削除
   const handleDeleteShare = async (shareId: string, title: string) => {
     if (!window.confirm(`「${title}」を削除しますか？\nこの操作は取り消せません。`)) return;
+    setLoading(true);
     try {
-      await updateDoc(doc(db, 'mini_shares', shareId), {
-        deleted: true,
-        deleted_at: Timestamp.now(),
+      const res = await fetch('/api/mini/admin/delete-share', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+        body: JSON.stringify({ shareId }),
       });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || '削除失敗'); return; }
       setShares(prev => prev.filter(s => s.id !== shareId));
-      alert('予定を削除しました');
+      alert(`予定を削除しました（依頼 ${data.deletedRequests} 件も削除）`);
     } catch (err) {
       setError(`削除失敗: ${err instanceof Error ? err.message : '不明'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1108,7 +1114,10 @@ export default function AdminPanel() {
           ) : (
             <>
               <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
-                <strong>💡 アカウント管理について：</strong> ここは登録済みユーザーアカウントの管理です。編集・削除ができます。
+                <strong>💡 アカウント管理について：</strong> ここは登録済みユーザーアカウント（mini_users）の管理です。編集・削除ができます。
+                <div className="mt-2 text-xs">
+                  ℹ️ email_verified は mini_users の値で判定しています。予定（mini_shares）の email_verified は使用していません。
+                </div>
               </div>
 
               {/* 有効化済み */}
@@ -1140,14 +1149,26 @@ export default function AdminPanel() {
                   </h2>
                   <div className="space-y-2">
                     {miniUsers.filter(u => !u.email_verified).map(user => (
-                      <AccountCard
-                        key={user.email}
-                        user={user}
-                        onUpdated={(oldEmail, updated) =>
-                          setMiniUsers(prev => prev.map(u => u.email === oldEmail ? { ...u, ...updated, email: updated.email ?? u.email } : u))
-                        }
-                        onDeleted={(email) => setMiniUsers(prev => prev.filter(u => u.email !== email))}
-                      />
+                      <div key={user.email} className="relative">
+                        <AccountCard
+                          user={user}
+                          onUpdated={(oldEmail, updated) =>
+                            setMiniUsers(prev => prev.map(u => u.email === oldEmail ? { ...u, ...updated, email: updated.email ?? u.email } : u))
+                          }
+                          onDeleted={(email) => setMiniUsers(prev => prev.filter(u => u.email !== email))}
+                        />
+                        <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700 flex gap-2">
+                          <span>ℹ️</span>
+                          <button
+                            onClick={() => handleVerifyEmail(user)}
+                            disabled={loading}
+                            className="font-bold underline hover:text-yellow-900"
+                          >
+                            クリック
+                          </button>
+                          <span>で有効化</span>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </section>
