@@ -710,7 +710,7 @@ export default function AdminPanel() {
                     <div className="font-semibold text-red-900">オーナー未設定の予定</div>
                     <div className="text-sm text-red-700 mt-1">
                       {shares.filter(s => !s.creator_email && !s.notify_email).length} 件の予定がオーナーメールアドレスなしです。
-                      <a href="#shares" onClick={() => setActiveTab('shares')} className="font-bold underline ml-1">予定一覧で設定</a>
+                      <a href="#shares" onClick={e => { e.preventDefault(); setActiveTab('shares'); }} className="font-bold underline ml-1">予定一覧で設定</a>
                     </div>
                   </div>
                 </div>
@@ -726,7 +726,7 @@ export default function AdminPanel() {
                     <div className="font-semibold text-amber-900">メール未確認ユーザー</div>
                     <div className="text-sm text-amber-700 mt-1">
                       {miniUsers.filter(u => !u.email_verified).length} 人のユーザーがメール確認を完了していません。
-                      <a href="#accounts" onClick={() => setActiveTab('accounts')} className="font-bold underline ml-1">アカウント一覧で確認</a>
+                      <a href="#accounts" onClick={e => { e.preventDefault(); setActiveTab('accounts'); }} className="font-bold underline ml-1">アカウント一覧で確認</a>
                     </div>
                   </div>
                 </div>
@@ -742,7 +742,7 @@ export default function AdminPanel() {
                     <div className="font-semibold text-purple-900">ユーザー移行が待機中</div>
                     <div className="text-sm text-purple-700 mt-1">
                       {existingUsers.length} 人のレガシーユーザーが新しいシステムに移行待ちです。
-                      <a href="#migrate" onClick={() => setActiveTab('migrate')} className="font-bold underline ml-1">ユーザー移行で実行</a>
+                      <a href="#migrate" onClick={e => { e.preventDefault(); setActiveTab('migrate'); }} className="font-bold underline ml-1">ユーザー移行で実行</a>
                     </div>
                   </div>
                 </div>
