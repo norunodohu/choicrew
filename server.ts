@@ -628,6 +628,25 @@ app.post("/api/mini/register", async (req, res) => {
   }
 });
 
+// プロフィール更新（名前）
+app.post("/api/mini/update-profile", async (req, res) => {
+  const { sessionToken, name } = req.body as { sessionToken?: string; name?: string };
+  if (!sessionToken || !name) return res.status(400).json({ error: "sessionToken and name required" });
+  try {
+    const decoded = Buffer.from(sessionToken, 'base64').toString('utf-8');
+    const email = decoded.split(':')[0];
+    if (!email) return res.status(400).json({ error: "invalid sessionToken" });
+    const adminDb = getFirestore();
+    const userRef = adminDb.collection('mini_users').doc(email);
+    const snap = await userRef.get();
+    if (!snap.exists) return res.status(404).json({ error: "ユーザーが見つかりません" });
+    await userRef.update({ name: name.trim(), updated_at: new Date() });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: localizeErrorMessage(err) });
+  }
+});
+
 // ログイン
 app.post("/api/mini/login", async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };

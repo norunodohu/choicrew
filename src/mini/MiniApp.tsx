@@ -1165,6 +1165,15 @@ function UserSettingsModal({ onClose, share, setShare, currentUser, onLogout }: 
       if (share && setShare) {
         setShare({ ...share, displayName: name.trim() });
       }
+      // サーバー側の mini_users も更新（ログイン後も名前が反映されるよう）
+      const sessionToken = localStorage.getItem('mini_session_token');
+      if (sessionToken) {
+        fetch('/api/mini/update-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionToken, name: name.trim() }),
+        }).catch(() => {});
+      }
     }
     
     // 新しいメールが設定された場合
@@ -4123,9 +4132,15 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
                                 再依頼する
                               </button>
                             ) : myReqStatus?.status === 'cancelled' ? (
-                              <span className="text-sm text-red-400 font-medium bg-red-50 px-3 py-1.5 rounded-lg">
-                                キャンセル済み
-                              </span>
+                              <button
+                                onClick={() => {
+                                  if (!currentUser) { onNeedLogin?.(); return; }
+                                  setRequestSlot(slot);
+                                }}
+                                className={`${T.accentBtn} text-sm font-medium rounded-xl px-4 py-2.5 transition-all`}
+                              >
+                                再依頼する
+                              </button>
                             ) : sent ? (() => {
                               const sentReq = requests.find(r => r.id === myReqStatus?.id);
                               const hasEmail = !!sentReq?.email_notified_at;
