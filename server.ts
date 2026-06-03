@@ -838,6 +838,31 @@ function checkAdminSecret(req: any, res: any): boolean {
   return true;
 }
 
+// Admin: アカウント作成（メール確認不要・即有効化）
+app.post("/api/mini/admin/create-user", async (req, res) => {
+  if (!checkAdminSecret(req, res)) return;
+  const { email, password, name } = req.body as { email?: string; password?: string; name?: string };
+  if (!email || !password || !name) return res.status(400).json({ error: "email, password, name required" });
+  if (password.length < 6) return res.status(400).json({ error: "パスワードは6文字以上にしてください" });
+  try {
+    const adminDb = getFirestore();
+    const userRef = adminDb.collection('mini_users').doc(email.trim().toLowerCase());
+    const snap = await userRef.get();
+    if (snap.exists) return res.status(409).json({ error: "このメールアドレスは既に登録されています" });
+    const passwordHash = await bcryptjs.hash(password, 10);
+    await userRef.set({
+      email: email.trim().toLowerCase(),
+      name: name.trim(),
+      password_hash: passwordHash,
+      email_verified: true,
+      created_at: new Date(),
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: localizeErrorMessage(err) });
+  }
+});
+
 // アカウント一覧取得
 app.get("/api/mini/admin/users", async (req, res) => {
   if (!checkAdminSecret(req, res)) return;

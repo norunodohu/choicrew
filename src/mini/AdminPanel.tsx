@@ -207,6 +207,13 @@ export default function AdminPanel() {
   // アカウント一覧
   const [miniUsers, setMiniUsers] = useState<MiniUser[]>([]);
   const [miniUsersLoading, setMiniUsersLoading] = useState(false);
+  // アカウント新規作成フォーム
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [createEmail, setCreateEmail] = useState('');
+  const [createName, setCreateName] = useState('');
+  const [createPassword, setCreatePassword] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createError, setCreateError] = useState('');
 
   // Firestore リスナー - 依頼
   useEffect(() => {
@@ -296,33 +303,30 @@ export default function AdminPanel() {
     loadShares();
   }, [authenticated]);
 
-  // アカウント一覧（mini_users）を取得
+  // アカウント一覧（mini_users）を取得 — サーバーAPI経由（Firestoreルール制限回避）
   useEffect(() => {
     if (!authenticated) return;
     const loadMiniUsers = async () => {
       setMiniUsersLoading(true);
       try {
-        const [usersSnap, sharesSnap] = await Promise.all([
-          getDocs(query(collection(db, 'mini_users'), orderBy('created_at', 'desc'))),
+        const [usersRes, sharesSnap] = await Promise.all([
+          fetch('/api/mini/admin/users', { headers: { 'x-admin-secret': ADMIN_SECRET } }),
           getDocs(collection(db, 'mini_shares')),
         ]);
+        const usersData = await usersRes.json();
         // メール → シェア数のマップ
         const shareCountMap: Record<string, number> = {};
         sharesSnap.forEach(d => {
           const email = (d.data().creator_email || d.data().notify_email || '').toLowerCase();
           if (email) shareCountMap[email] = (shareCountMap[email] || 0) + 1;
         });
-        const items: MiniUser[] = [];
-        usersSnap.forEach(d => {
-          const data = d.data();
-          items.push({
-            email: d.id,
-            name: data.name || '',
-            created_at: data.created_at,
-            email_verified: data.email_verified ?? false,
-            shareCount: shareCountMap[d.id.toLowerCase()] || 0,
-          });
-        });
+        const items: MiniUser[] = (usersData.users || []).map((u: any) => ({
+          email: u.email,
+          name: u.name || '',
+          created_at: u.created_at,
+          email_verified: u.email_verified ?? false,
+          shareCount: shareCountMap[u.email.toLowerCase()] || 0,
+        }));
         setMiniUsers(items);
       } catch (err) {
         console.error(err);
@@ -1150,6 +1154,55 @@ export default function AdminPanel() {
         {/* アカウント一覧タブ */}
         {activeTab === 'accounts' && (
         <div className="space-y-6">
+          {/* アカウント新規作成 */}
+          <div className="bg-white rounded-xl shadow-md p-4 border border-slate-200">
+            <button
+              onClick={() => { setShowCreateUser(v => !v); setCreateError(''); }}
+              className="w-full text-left font-semibold text-teal-700 flex items-center gap-2"
+            >
+              <span className="text-xl">➕</span> アカウントを追加
+            </button>
+            {showCreateUser && (
+              <div className="mt-4 space-y-3">
+                <input
+                  type="text" placeholder="名前" value={createName} onChange={e => setCreateName(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                />
+                <input
+                  type="email" placeholder="メールアドレス" value={createEmail} onChange={e => setCreateEmail(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                />
+                <input
+                  type="text" placeholder="パスワード（6文字以上）" value={createPassword} onChange={e => setCreatePassword(e.target.value)}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-400"
+                />
+                {createError && <p className="text-xs text-red-600">{createError}</p>}
+                <button
+                  disabled={createLoading || !createEmail || !createName || !createPassword}
+                  onClick={async () => {
+                    setCreateLoading(true); setCreateError('');
+                    try {
+                      const res = await fetch('/api/mini/admin/create-user', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'x-admin-secret': ADMIN_SECRET },
+                        body: JSON.stringify({ email: createEmail.trim(), name: createName.trim(), password: createPassword }),
+                      });
+                      const data = await res.json();
+                      if (!res.ok) { setCreateError(data.error || '作成失敗'); return; }
+                      setMiniUsers(prev => [{ email: createEmail.trim().toLowerCase(), name: createName.trim(), email_verified: true, shareCount: 0 }, ...prev]);
+                      setCreateEmail(''); setCreateName(''); setCreatePassword('');
+                      setShowCreateUser(false);
+                    } catch { setCreateError('ネットワークエラー'); }
+                    finally { setCreateLoading(false); }
+                  }}
+                  className="w-full py-2 rounded-lg bg-teal-600 text-white font-semibold hover:bg-teal-700 transition disabled:opacity-50 text-sm"
+                >
+                  {createLoading ? '作成中...' : '作成する'}
+                </button>
+              </div>
+            )}
+          </div>
+
           {miniUsersLoading ? (
             <div className="bg-white rounded-xl shadow-md p-8 text-center text-slate-500">読み込み中...</div>
           ) : miniUsers.length === 0 ? (
