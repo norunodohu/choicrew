@@ -171,7 +171,12 @@ function AccountCard({
             <div className="text-xs text-slate-500 mt-0.5">{user.email}</div>
             {user.created_at && (
               <div className="text-xs text-slate-400 mt-0.5">
-                登録: {format(user.created_at.toDate(), 'yyyy/MM/dd HH:mm', { locale: ja })}
+                登録: {format(
+                  typeof user.created_at.toDate === 'function'
+                    ? user.created_at.toDate()
+                    : new Date((user.created_at as any)._seconds * 1000),
+                  'yyyy/MM/dd HH:mm', { locale: ja }
+                )}
               </div>
             )}
           </div>
@@ -190,7 +195,7 @@ function AccountCard({
 }
 
 export default function AdminPanel() {
-  const [authenticated, setAuthenticated] = useState(false);
+  const [authenticated, setAuthenticated] = useState(() => sessionStorage.getItem('admin_auth') === '1');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState<'dashboard' | 'requests' | 'migrate' | 'shares' | 'accounts'>('dashboard');
@@ -395,6 +400,7 @@ export default function AdminPanel() {
   const handleAuth = (e: React.FormEvent) => {    e.preventDefault();
     if (password === '1234') {
       setAuthenticated(true);
+      sessionStorage.setItem('admin_auth', '1');
       setError('');
     } else {
       setError('パスワードが間違っています');
@@ -594,7 +600,7 @@ export default function AdminPanel() {
             </div>
           </div>
           <button
-            onClick={() => setAuthenticated(false)}
+            onClick={() => { setAuthenticated(false); sessionStorage.removeItem('admin_auth'); }}
             className="px-4 py-2 text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition font-medium"
           >
             ログアウト
