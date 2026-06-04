@@ -4803,7 +4803,6 @@ export default function MiniApp() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [showLegacyPrompt, setShowLegacyPrompt] = useState(false);
 
   useEffect(() => {
     const update = () => {
@@ -4843,16 +4842,6 @@ export default function MiniApp() {
       setCurrentUser(null);
     }
 
-    // 未ログインで既存データがある場合 → アカウント設定促進ポップアップ
-    const isLoggedIn = !!(sessionToken && user);
-    if (!isLoggedIn) {
-      const hasLegacyData = loadOwnedShares().length > 0 || loadDraftData().displayName !== '';
-      const dismissed = sessionStorage.getItem('mini_legacy_prompt_dismissed');
-      if (hasLegacyData && !dismissed) {
-        setShowLegacyPrompt(true);
-      }
-    }
-    
     setIsInitialized(true);
   }, []);
 
@@ -4988,7 +4977,7 @@ export default function MiniApp() {
     localStorage.removeItem('mini_current_user');
     localStorage.removeItem('mini_session_token');
     Object.keys(localStorage)
-      .filter(k => k === 'mini_owned_shares' || k.startsWith('mini_sent_ids_') || k.startsWith('owner_token_'))
+      .filter(k => k === 'mini_owned_shares' || k === 'choicrew_mini_draft' || k.startsWith('mini_sent_ids_') || k.startsWith('owner_token_'))
       .forEach(k => localStorage.removeItem(k));
     setCurrentUser(null);
   };
@@ -5015,20 +5004,10 @@ export default function MiniApp() {
         setCurrentUser(user);
         saveCurrentUser(user);
         setShowLoginModal(false);
-        setShowLegacyPrompt(false);
         // メールアドレス一致の過去依頼とシェア（オーナー状態）をlocalStorageに復元
         syncRequestsByEmail(user.email).catch(() => {});
         syncOwnedSharesByEmail(user.email).catch(() => {});
       }} />}
-      {isInitialized && showLegacyPrompt && !currentUser && (
-        <LegacyUserPromptModal
-          onLogin={() => { setShowLegacyPrompt(false); setShowLoginModal(true); }}
-          onDismiss={() => {
-            setShowLegacyPrompt(false);
-            sessionStorage.setItem('mini_legacy_prompt_dismissed', '1');
-          }}
-        />
-      )}
       {content}
       <BadgeModal />
     </ErrorBoundary>
