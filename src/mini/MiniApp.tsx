@@ -2364,16 +2364,16 @@ function CreateView({ onCreated, currentUser, onNeedLogin, onLogout }: { onCreat
 
                                 return (
                                   <div key={idx} className={`flex flex-col items-center py-1 flex-1 min-w-0 rounded-lg ${isToday ? 'bg-slate-50' : ''}`}>
-                                    <span className={`text-[9px] ${isPast ? 'text-slate-200' : !hasSlot ? 'text-slate-200' : isSun ? 'text-rose-300' : isSat ? 'text-sky-300' : 'text-slate-400'}`}>{format(date, 'M/d')}</span>
+                                    <span className={`text-[9px] ${isPast ? 'text-slate-300' : !hasSlot ? 'text-slate-300' : isSun ? 'text-rose-400' : isSat ? 'text-sky-400' : 'text-slate-500'}`}>{format(date, 'M/d')}</span>
                                     <div className="mt-0.5 h-4 flex items-center justify-center">
                                       {isPast || !hasSlot ? (
-                                        <span className="text-slate-200 text-[9px]">·</span>
+                                        <span className="text-slate-300 text-[9px]">·</span>
                                       ) : isMyRequest && requestStatus === 'approved' ? (
-                                        <span className="text-rose-400 text-[11px] font-bold">✓</span>
+                                        <span className="text-rose-500 text-[11px] font-bold">✓</span>
                                       ) : requestStatus === 'approved' ? (
-                                        <span className="text-slate-300 text-[11px] font-bold">✕</span>
+                                        <span className="text-slate-400 text-[11px] font-bold">✕</span>
                                       ) : (
-                                        <span className="text-teal-400 text-[11px] font-bold">○</span>
+                                        <span className="text-teal-500 text-[11px] font-bold">○</span>
                                       )}
                                     </div>
                                   </div>
