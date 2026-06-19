@@ -3173,7 +3173,6 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
           if (req) {
             const prevStatus = myStatusRef.current.get(key);
             const newStatus = req.status || 'pending';
-            newStatusMap.set(key, { status: newStatus, id: reqId });
             if (newStatus === 'approved') {
               const approvedKey = slotKey({
                 date: req.slot_date,
@@ -3181,6 +3180,8 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
                 end: normalizeTime(req.requested_end || req.slot_end),
               });
               newStatusMap.set(approvedKey, { status: newStatus, id: reqId });
+            } else {
+              newStatusMap.set(key, { status: newStatus, id: reqId });
             }
             if (prevStatus !== undefined && prevStatus !== newStatus) {
               const startTime = req.requested_start || req.slot_start;
@@ -3405,6 +3406,20 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
         requested_end: nextEnd,
       });
 
+      fetch('/api/mini/notify-time-change', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          shareId,
+          requestId,
+          changedBy: isOwner ? 'owner' : 'requester',
+          oldStart: currentStart,
+          oldEnd: currentEnd,
+          newStart: nextStart,
+          newEnd: nextEnd,
+        }),
+      }).catch(() => {});
+
       setShare(prev => prev ? { ...prev, slots: nextSlots } : prev);
       const updatedReq = { ...req, requested_start: nextStart, requested_end: nextEnd };
       setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
@@ -3412,7 +3427,14 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
 
       const nextKey = slotKey({ date: req.slot_date, start: nextStart, end: nextEnd });
       saveSentRequestId(shareId, nextKey, requestId);
-      setMyRequestStatuses(prev => new Map([...prev, [nextKey, { status: 'approved', id: requestId }]]));
+      setMyRequestStatuses(prev => {
+        const next = new Map(prev);
+        for (const [key, value] of next.entries()) {
+          if (value.id === requestId) next.delete(key);
+        }
+        next.set(nextKey, { status: 'approved', id: requestId });
+        return next;
+      });
 
       setEditingRequestTime(null);
       setConfirmCancelId(null);
