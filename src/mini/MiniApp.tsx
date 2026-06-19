@@ -2801,6 +2801,7 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
   const [share, setShare] = useState<ShareData | null>(null);
   const [requests, setRequests] = useState<RequestEntry[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<RequestEntry | null>(null);
+  const [editingRequestTime, setEditingRequestTime] = useState<{ id: string; start: string; end: string } | null>(null);
     // 期限切れ依頼をDBから削除
     useEffect(() => {
       const deleteExpiredRequests = async () => {
@@ -3173,6 +3174,14 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
             const prevStatus = myStatusRef.current.get(key);
             const newStatus = req.status || 'pending';
             newStatusMap.set(key, { status: newStatus, id: reqId });
+            if (newStatus === 'approved') {
+              const approvedKey = slotKey({
+                date: req.slot_date,
+                start: normalizeTime(req.requested_start || req.slot_start),
+                end: normalizeTime(req.requested_end || req.slot_end),
+              });
+              newStatusMap.set(approvedKey, { status: newStatus, id: reqId });
+            }
             if (prevStatus !== undefined && prevStatus !== newStatus) {
               const startTime = req.requested_start || req.slot_start;
               const endTime = req.requested_end || req.slot_end;
@@ -3357,6 +3366,62 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
   };
 
   const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
+
+  const handleChangeApprovedTime = async (requestId: string, start: string, end: string) => {
+    try {
+      const req = requests.find(r => r.id === requestId);
+      if (!req || req.status !== 'approved') return;
+
+      const nextStart = normalizeTime(start);
+      const nextEnd = normalizeTime(end);
+      if (!isValidSlotRange(nextStart, nextEnd)) {
+        toast.show('有効な時間帯を入力してください', 'error');
+        return;
+      }
+
+      const currentStart = normalizeTime(req.requested_start || req.slot_start);
+      const currentEnd = normalizeTime(req.requested_end || req.slot_end);
+      const originalStart = normalizeTime(req.slot_start);
+      const originalEnd = normalizeTime(req.slot_end);
+      const currentSlots = share?.slots || [];
+
+      let nextSlots = replaceShareSlot(
+        currentSlots,
+        { date: req.slot_date, start: currentStart, end: currentEnd },
+        { start: nextStart, end: nextEnd }
+      );
+      const changedCurrentSlot = JSON.stringify(nextSlots) !== JSON.stringify(currentSlots);
+      if (!changedCurrentSlot) {
+        nextSlots = replaceShareSlot(
+          currentSlots,
+          { date: req.slot_date, start: originalStart, end: originalEnd },
+          { start: nextStart, end: nextEnd }
+        );
+      }
+
+      await updateDoc(doc(db, 'mini_shares', shareId), { slots: nextSlots });
+      await updateDoc(doc(db, 'mini_requests', requestId), {
+        requested_start: nextStart,
+        requested_end: nextEnd,
+      });
+
+      setShare(prev => prev ? { ...prev, slots: nextSlots } : prev);
+      const updatedReq = { ...req, requested_start: nextStart, requested_end: nextEnd };
+      setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
+      setSelectedRequest(prev => prev?.id === requestId ? updatedReq : prev);
+
+      const nextKey = slotKey({ date: req.slot_date, start: nextStart, end: nextEnd });
+      saveSentRequestId(shareId, nextKey, requestId);
+      setMyRequestStatuses(prev => new Map([...prev, [nextKey, { status: 'approved', id: requestId }]]));
+
+      setEditingRequestTime(null);
+      setConfirmCancelId(null);
+      toast.show('時間を変更しました', 'success');
+    } catch (err) {
+      console.error(err);
+      toast.show('時間の変更に失敗しました', 'error');
+    }
+  };
 
   // exclusiveモード時、同じ枠のdeclinedをpendingに戻す
   const handleCancel = async (requestId: string) => {
@@ -4048,14 +4113,18 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
                       ? 'border-slate-100'
                       : 'border-slate-200';
                     const firstReq = reqs.length > 0 ? reqs[0] : undefined;
+                    const myApprovedReq = !isOwner && myReqStatus?.status === 'approved'
+                      ? requests.find(r => r.id === myReqStatus.id)
+                      : undefined;
+                    const openReq = isOwner ? firstReq : myApprovedReq;
                     return (
                       <div
                         key={i}
-                        className={`${isFilledByOther ? 'bg-slate-100 border border-slate-100' : T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${isOwner && firstReq ? 'cursor-pointer hover:shadow-md hover:scale-[1.01]' : ''} ${isFilledByOther ? '' : borderClass} ${isFilledByOther ? 'text-slate-400' : ''}`}
-                        onClick={() => isOwner && firstReq && setSelectedRequest(firstReq)}
-                        role={isOwner ? 'button' : undefined}
-                        tabIndex={isOwner ? 0 : undefined}
-                        onKeyDown={(e) => { if (isOwner && (e.key === 'Enter' || e.key === ' ')) firstReq && setSelectedRequest(firstReq); }}
+                        className={`${isFilledByOther ? 'bg-slate-100 border border-slate-100' : T.card} rounded-2xl p-4 print:border-slate-300 transition-colors ${openReq ? 'cursor-pointer hover:shadow-md hover:scale-[1.01]' : ''} ${isFilledByOther ? '' : borderClass} ${isFilledByOther ? 'text-slate-400' : ''}`}
+                        onClick={() => openReq && setSelectedRequest(openReq)}
+                        role={openReq ? 'button' : undefined}
+                        tabIndex={openReq ? 0 : undefined}
+                        onKeyDown={(e) => { if (openReq && (e.key === 'Enter' || e.key === ' ')) setSelectedRequest(openReq); }}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1 min-w-0">
@@ -4399,7 +4468,7 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
 
       {/* 依頼詳細モーダル */}
       {selectedRequest && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedRequest(null); setConfirmCancelId(null); }}>
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => { setSelectedRequest(null); setConfirmCancelId(null); setEditingRequestTime(null); }}>
           <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
 
             {/* Header */}
@@ -4430,6 +4499,59 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
               <p className="text-sm text-slate-500 bg-slate-50 rounded-xl px-3 py-2.5 mb-5 leading-relaxed">
                 {selectedRequest.message}
               </p>
+            )}
+
+            {selectedRequest.status === 'approved' && (
+              <div className="mb-3">
+                {editingRequestTime?.id === selectedRequest.id ? (
+                  <div className="rounded-xl border border-teal-100 bg-teal-50/50 p-3">
+                    <p className="text-xs font-bold text-slate-500 mb-2">時間変更</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="time"
+                        value={editingRequestTime.start}
+                        onChange={e => setEditingRequestTime(prev => prev ? { ...prev, start: e.target.value } : prev)}
+                        className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:border-teal-400"
+                      />
+                      <span className="text-slate-300 font-bold">-</span>
+                      <input
+                        type="time"
+                        value={editingRequestTime.end}
+                        onChange={e => setEditingRequestTime(prev => prev ? { ...prev, end: e.target.value } : prev)}
+                        className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 focus:outline-none focus:border-teal-400"
+                      />
+                    </div>
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => setEditingRequestTime(null)}
+                        className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50 transition"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        onClick={() => handleChangeApprovedTime(selectedRequest.id, editingRequestTime.start, editingRequestTime.end)}
+                        className="flex-1 rounded-lg bg-teal-500 py-2 text-xs font-semibold text-white hover:bg-teal-600 active:scale-95 transition-all"
+                      >
+                        変更
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setConfirmCancelId(null);
+                      setEditingRequestTime({
+                        id: selectedRequest.id,
+                        start: normalizeTime(selectedRequest.requested_start || selectedRequest.slot_start),
+                        end: normalizeTime(selectedRequest.requested_end || selectedRequest.slot_end),
+                      });
+                    }}
+                    className="w-full bg-teal-50 border border-teal-200 text-teal-700 rounded-xl py-2.5 text-sm font-semibold hover:bg-teal-100 active:scale-95 transition-all"
+                  >
+                    時間変更
+                  </button>
+                )}
+              </div>
             )}
 
             {/* Action buttons */}
