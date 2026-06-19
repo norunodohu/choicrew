@@ -1068,6 +1068,62 @@ app.post("/api/mini/notify-requester", async (req, res) => {
   }
 });
 
+app.post("/api/mini/notify-time-change", async (req, res) => {
+  const { shareId, requestId, changedBy, oldStart, oldEnd, newStart, newEnd } = req.body as {
+    shareId?: string; requestId?: string; changedBy?: "owner" | "requester";
+    oldStart?: string; oldEnd?: string; newStart?: string; newEnd?: string;
+  };
+  if (!shareId || !requestId) return res.status(400).json({ error: "shareId and requestId required" });
+  if (!getApps().length) return res.status(503).json({ error: "admin not configured" });
+
+  try {
+    const adminDb = getFirestore();
+    const [shareSnap, requestSnap] = await Promise.all([
+      adminDb.doc(`mini_shares/${shareId}`).get(),
+      adminDb.doc(`mini_requests/${requestId}`).get(),
+    ]);
+    if (!shareSnap.exists) return res.status(404).json({ error: "share not found" });
+    if (!requestSnap.exists) return res.status(404).json({ error: "request not found" });
+
+    const share = shareSnap.data()!;
+    const requestData = requestSnap.data()!;
+    const requesterEmail = requestData.requester_email as string | undefined;
+    const ownerEmail = (share.notify_email || share.creator_email) as string | undefined;
+    const to = changedBy === "requester" ? ownerEmail : requesterEmail;
+    if (!to) return res.json({ ok: false, reason: "no_email" });
+
+    const appUrl = (process.env.APP_URL || "https://choicrew.com").replace(/\/$/, "");
+    const shareUrl = `${appUrl}/mini/s/${shareId}`;
+    const dateLabel = (requestData.slot_date as string | undefined) || "";
+    const requesterName = (requestData.requester_name as string | undefined) || "依頼者";
+    const ownerName = (share.displayName || share.name || "オーナー") as string;
+    const actualTo = process.env.SMTP_TO || to;
+    const senderLabel = changedBy === "requester" ? requesterName : ownerName;
+    const receiverLabel = changedBy === "requester" ? ownerName : requesterName;
+    const subject = `${dateLabel}の予定時間が変更されました`;
+    const bodyLines = [
+      `${receiverLabel}さん`,
+      "",
+      `${senderLabel}さんが予定時間を変更しました。`,
+      "",
+      `日付: ${dateLabel}`,
+      `変更前: ${oldStart || ""}〜${oldEnd || ""}`,
+      `変更後: ${newStart || ""}〜${newEnd || ""}`,
+      "",
+      "詳細はこちら:",
+      shareUrl,
+      "",
+      "※ このメールは自動送信です。返信しても届きません。",
+    ];
+
+    await sendResendEmail(actualTo, subject, bodyLines.join("\n"));
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("notify-time-change error:", err);
+    res.status(500).json({ error: localizeErrorMessage(err) });
+  }
+});
+
 /* ================================================================
    Cleanup — 期限切れ予定・過去スロット依頼の削除
    ================================================================ */
