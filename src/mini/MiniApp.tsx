@@ -3138,6 +3138,20 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
     };
     load();
 
+    const shareUnsub = onSnapshot(doc(db, 'mini_shares', shareId), (snap) => {
+      if (!snap.exists()) {
+        setNotFound(true);
+        return;
+      }
+      const data = snap.data() as ShareData;
+      setExpired(!!data.expires_at?.toDate && data.expires_at.toDate() < new Date());
+      setIsPaused(!!data.paused);
+      setIsDraft(!!data.draft);
+      setShare(data);
+    }, (err) => {
+      console.error('Failed to subscribe share:', err);
+    });
+
     const reqQ = query(collection(db, 'mini_requests'), where('share_id', '==', shareId));
     const unsub = onSnapshot(reqQ, (snap) => {
       const reqArr = snap.docs.map(d => ({ id: d.id, ...d.data() } as RequestEntry));
@@ -3202,7 +3216,10 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
         if (newStatusMap.size > 0) setMyRequestStatuses(newStatusMap);
       }
     });
-    return () => unsub();
+    return () => {
+      shareUnsub();
+      unsub();
+    };
   }, [shareId]);
 
   // FCM Web Push: オーナーのみ、許可済みならトークンを取得
@@ -3660,7 +3677,25 @@ function ShareView({ shareId, justCreated, ownerToken, currentUser, onNeedLogin,
   const todayStr = format(new Date(), 'yyyy-MM-dd');
   const slotExpireDays = localExpireDays;
   const expireDateStr = slotExpireDays === null ? format(addDays(new Date(), 365), 'yyyy-MM-dd') : format(addDays(new Date(), slotExpireDays - 1), 'yyyy-MM-dd');
-  const sortedSlots = [...share.slots]
+  const visibleSlots = [...share.slots];
+  const myRequestIds = new Set([...myRequestStatuses.values()].map(v => v.id));
+  requests
+    .filter(r => r.status === 'approved' && r.slot_date >= todayStr && (isOwner || myRequestIds.has(r.id)))
+    .forEach(r => {
+      const approvedSlot = {
+        date: r.slot_date,
+        start: normalizeTime(r.requested_start || r.slot_start),
+        end: normalizeTime(r.requested_end || r.slot_end),
+        force_public: true,
+      };
+      const exists = visibleSlots.some(s =>
+        s.date === approvedSlot.date &&
+        normalizeTime(s.start) === approvedSlot.start &&
+        normalizeTime(s.end) === approvedSlot.end
+      );
+      if (!exists) visibleSlots.push(approvedSlot);
+    });
+  const sortedSlots = visibleSlots
     .filter(s => s.date >= todayStr && (isOwner || s.force_public === true || s.date <= expireDateStr))
     .sort((a, b) => {
       if (a.date !== b.date) return a.date.localeCompare(b.date);
